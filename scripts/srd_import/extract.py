@@ -22,16 +22,16 @@ from pathlib import Path
 # ---------------------------------------------------------------------------
 
 SECTION_PAGES: dict[str, tuple[int, int]] = {
-    "species": (11, 20),
-    "classes": (21, 80),
-    "backgrounds": (81, 97),
-    "feats": (98, 120),
-    "equipment": (121, 155),
-    "spells": (156, 260),
-    "monsters": (261, 349),
-    "conditions": (350, 355),
-    "magic_items": (356, 370),
-    "rules_tables": (1, 10),
+    "rules_tables": (1, 27),  # Introduction, reference tables, character creation
+    "classes": (28, 82),  # Class descriptions (Barbarian → Wizard)
+    "backgrounds": (83, 83),  # Character Backgrounds (Acolyte, Criminal, Sage, Soldier)
+    "species": (84, 86),  # Character Species (Dragonborn → Tiefling; page 84 is first entry)
+    "feats": (87, 88),  # Feat Descriptions
+    "equipment": (89, 106),  # Equipment: weapons, armor, adventuring gear
+    "spells": (107, 175),  # Spell Descriptions (Acid Arrow → Wish)
+    "conditions": (176, 203),  # Rules Glossary (conditions defined here)
+    "magic_items": (204, 257),  # Magic Items
+    "monsters": (258, 364),  # Monsters A–Z
 }
 
 CHUNK_SIZE = 20  # pages per chunk

@@ -45,6 +45,45 @@ UNIQUE_KEY: dict[str, str] = {
     "rules_tables": "table_name",
 }
 
+# Indexed columns that must be extracted from the record and set on the model instance.
+# Each value is a list of (record_field, default) pairs.
+MODEL_INDEXED_COLUMNS: dict[str, list[tuple[str, object]]] = {
+    "SrdSpecies": [("size", "medium"), ("speed", 30), ("darkvision", 0)],
+    "SrdClass": [("hit_die", 8), ("subclass_level", 3)],
+    "SrdClassFeature": [("class_name", ""), ("level", 1)],
+    "SrdSubclass": [("class_name", "")],
+    "SrdFeat": [("category", "general")],
+    "SrdWeapon": [
+        ("category", "simple"),
+        ("damage_dice", "1d4"),
+        ("damage_type", "bludgeoning"),
+    ],
+    "SrdArmor": [("type", "light"), ("base_ac", 10)],
+    "SrdEquipment": [("category", "adventuring gear")],
+    "SrdSpell": [
+        ("level", 0),
+        ("school", "evocation"),
+        ("requires_concentration", False),
+        ("ritual", False),
+    ],
+    "SrdMonster": [("size", "medium"), ("type", "beast"), ("cr", 0.0), ("xp", 0)],
+    "SrdMonsterAction": [("monster_name", "")],
+    "SrdMagicItem": [
+        ("type", "wondrous item"),
+        ("rarity", "common"),
+        ("requires_attunement", False),
+    ],
+    "SrdRulesTable": [("description", None)],
+}
+
+
+def _extra_kwargs(model_name: str, rec: dict) -> dict:
+    """Extract indexed column values from *rec* for models that have non-data columns."""
+    kwargs: dict = {}
+    for field, default in MODEL_INDEXED_COLUMNS.get(model_name, []):
+        kwargs[field] = rec.get(field, default)
+    return kwargs
+
 
 def _get_model(section: str) -> type:
     """Import and return the SQLAlchemy model class for *section*."""
@@ -107,7 +146,13 @@ def _get_model(section: str) -> type:
     return model_map[model_name]
 
 
-def _upsert(session: object, model: type, records: list[dict], unique_key: str) -> tuple[int, int]:
+def _upsert(
+    session: object,
+    model: type,
+    model_name: str,
+    records: list[dict],
+    unique_key: str,
+) -> tuple[int, int]:
     """Upsert *records* into the table backing *model*.
 
     Returns (inserted, updated) counts.
@@ -125,12 +170,15 @@ def _upsert(session: object, model: type, records: list[dict], unique_key: str) 
             getattr(model, unique_key) == key_value
         )
         existing = session.execute(stmt).scalar_one_or_none()  # type: ignore[union-attr]
+        extra = _extra_kwargs(model_name, rec)
         if existing is None:
-            obj = model(data=rec, **{unique_key: key_value})
+            obj = model(data=rec, **{unique_key: key_value}, **extra)
             session.add(obj)  # type: ignore[union-attr]
             inserted += 1
         else:
             existing.data = rec  # type: ignore[assignment]
+            for k, v in extra.items():
+                setattr(existing, k, v)
             updated += 1
     return inserted, updated
 
@@ -178,6 +226,9 @@ def main() -> None:
 
     model = _get_model(section)
     unique_key = UNIQUE_KEY.get(section, "name")
+    model_name_str = SECTION_MODEL_MAP.get(section) or SECTION_MODEL_MAP.get(
+        section.rstrip("s"), ""
+    )
 
     database_url = os.environ.get(
         "DATABASE_URL",
@@ -189,7 +240,7 @@ def main() -> None:
         async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
         async with async_session() as session:
             async with session.begin():
-                inserted, updated = _upsert(session, model, records, unique_key)
+                inserted, updated = _upsert(session, model, model_name_str, records, unique_key)
         await engine.dispose()
         return inserted, updated
 

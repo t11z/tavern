@@ -105,10 +105,24 @@ def _build_user_prompt(schema: dict, chunk_text: str) -> str:
 
 
 def _parse_raw(raw: str, chunk_name: str) -> list[dict] | None:
-    """Strip markdown fences, parse JSON array. Returns None on failure."""
-    if raw.startswith("```"):
+    """Extract and parse a JSON array from a Claude response.
+
+    Handles:
+    - Responses that are a bare JSON array
+    - Responses wrapped in markdown fences (```json ... ```)
+    - Responses with leading/trailing prose (e.g. MCP tool warnings)
+    """
+    # Strip markdown fences
+    if "```" in raw:
         lines = raw.splitlines()
         raw = "\n".join(line for line in lines if not line.startswith("```"))
+
+    # Find outermost JSON array in the response
+    start = raw.find("[")
+    end = raw.rfind("]")
+    if start != -1 and end > start:
+        raw = raw[start : end + 1]
+
     try:
         records = json.loads(raw.strip())
     except json.JSONDecodeError as exc:
@@ -133,7 +147,10 @@ def _parse_chunk_cli(
     chunk_name: str,
     retry: int = 3,
 ) -> list[dict]:
-    """Call `claude -p` subprocess and return extracted records."""
+    """Call `claude -p` subprocess and return extracted records.
+
+    Prompt is passed via stdin to avoid ARG_MAX limits on large chunks.
+    """
     user_prompt = _build_user_prompt(schema, chunk_text)
     for attempt in range(1, retry + 1):
         try:
@@ -141,7 +158,6 @@ def _parse_chunk_cli(
                 [
                     "claude",
                     "-p",
-                    user_prompt,
                     "--system-prompt",
                     SYSTEM_PROMPT,
                     "--model",
@@ -149,10 +165,14 @@ def _parse_chunk_cli(
                     "--tools",
                     "",
                     "--no-session-persistence",
+                    "--strict-mcp-config",
+                    "--mcp-config",
+                    '{"mcpServers":{}}',
                 ],
+                input=user_prompt,
                 capture_output=True,
                 text=True,
-                timeout=300,
+                timeout=600,
             )
             if result.returncode != 0:
                 raise RuntimeError(result.stderr.strip() or f"exit {result.returncode}")

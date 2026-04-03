@@ -4,7 +4,7 @@
   "title": "Species",
   "description": "SRD 5.2.1 species (race) definition",
   "type": "object",
-  "required": ["name", "size", "speed", "traits", "languages"],
+  "required": ["name", "size", "speed", "traits"],
   "additionalProperties": false,
   "properties": {
     "name": {
