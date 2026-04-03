@@ -64,6 +64,55 @@ When reviewing PRs:
 3. Do `core/` changes include tests?
 4. Is the dependency direction maintained?
 
+## Architecture Snapshot
+
+The file `docs/architecture-snapshot.md` is a structured summary of the
+current system architecture. It exists to bridge context between Claude Code
+(which sees the codebase) and the architecture consultant (which does not).
+The architecture consultant uses this document to make informed decisions
+without needing direct code access.
+
+### When to update
+
+Update `docs/architecture-snapshot.md` as part of the same commit when any
+of the following changes occur:
+
+- A new module or package is created (new directory under `backend/tavern/`
+  or `frontend/src/`)
+- An external dependency is added or removed in `pyproject.toml` or
+  `package.json`
+- An API endpoint is added, removed, or its contract changes
+- A database model is added, removed, or its schema changes
+- A WebSocket event type is added or its payload changes
+- The dependency direction between modules changes
+- An ADR is added, superseded, or deprecated
+- A deviation from an accepted ADR is introduced intentionally
+
+Do **not** update the snapshot for: bug fixes, test additions, documentation
+changes, refactors that preserve interfaces, dependency version bumps, or
+code style changes.
+
+### How to update
+
+Follow the structure defined in `docs/architecture-snapshot.md`. Update only
+the sections affected by the change. Do not rewrite unchanged sections —
+unnecessary rewrites obscure what actually changed in the diff.
+
+When updating, include a `Last updated` timestamp and reference the commit
+scope (e.g., "Added `/api/v1/sessions` endpoint" or "New dependency:
+`redis`").
+
+### What not to put in the snapshot
+
+- Implementation details (function signatures, internal algorithms)
+- TODOs or speculative plans
+- Opinions or recommendations — the snapshot is descriptive, not prescriptive
+- Anything that belongs in an ADR
+
+The snapshot answers "what exists and how it connects." It does not answer
+"why it was built this way" (that's ADRs) or "how to use it" (that's API
+docs).
+
 ## What This File Is Not
 
 - Not a substitute for reading the ADRs
