@@ -129,6 +129,16 @@ class TavernAPI:
         )
         return await self._json(r)
 
+    async def get_recap(self, campaign_id: str | UUID) -> dict[str, Any]:
+        """GET /api/campaigns/{id}/recap — triggers a Haiku narrative summary."""
+        r = await self._client.get(f"/api/campaigns/{_id(campaign_id)}/recap")
+        return await self._json(r)
+
+    async def get_scene(self, campaign_id: str | UUID) -> dict[str, Any]:
+        """GET /api/campaigns/{id}/scene — current scene state and points of interest."""
+        r = await self._client.get(f"/api/campaigns/{_id(campaign_id)}/scene")
+        return await self._json(r)
+
     # ------------------------------------------------------------------
     # Rolls  (ADR-0009)
     # ------------------------------------------------------------------
