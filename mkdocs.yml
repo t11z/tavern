@@ -66,4 +66,5 @@ nav:
     - ADR-0005 — Client Architecture: adr/ADR-0005-client-architecture.md
     - ADR-0006 — Authentication: adr/ADR-0006-authentication-and-authorization.md
     - ADR-0007 — Multiplayer: adr/ADR-0007-multiplayer-and-realtime-communication.md
+  - Architecture Snapshot: architecture-snapshot.md
   - Contributing: contributing.md
