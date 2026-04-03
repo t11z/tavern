@@ -33,10 +33,12 @@ class TavernBot(commands.Bot):
         self.state = BotState()
 
     async def setup_hook(self) -> None:
+        from .cogs.campaign import CampaignCog
         from .cogs.lfg import LFGCog
-        from .cogs.ping import PingCog
+        from .services.identity import IdentityService
 
-        await self.add_cog(PingCog(self))
+        identity = IdentityService(self.api)
+        await self.add_cog(CampaignCog(self, self.api, self.channel_manager, self.state, identity))
         await self.add_cog(LFGCog(self, self.api, self.channel_manager, self.state))
         await self.tree.sync()
 
