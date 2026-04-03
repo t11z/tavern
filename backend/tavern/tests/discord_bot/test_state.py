@@ -99,23 +99,17 @@ class TestReactionWindow:
     ) -> None:
         assert not reaction_window.all_responded
 
-    def test_all_responded_true_when_all_marked(
-        self, reaction_window: ReactionWindow
-    ) -> None:
+    def test_all_responded_true_when_all_marked(self, reaction_window: ReactionWindow) -> None:
         for char_id in list(reaction_window.eligible_reactors):
             reaction_window.mark_responded(char_id)
         assert reaction_window.all_responded
 
-    def test_mark_responded_adds_to_set(
-        self, reaction_window: ReactionWindow
-    ) -> None:
+    def test_mark_responded_adds_to_set(self, reaction_window: ReactionWindow) -> None:
         char_id = next(iter(reaction_window.eligible_reactors))
         reaction_window.mark_responded(char_id)
         assert char_id in reaction_window.responded
 
-    def test_all_responded_false_when_only_partial(
-        self, reaction_window: ReactionWindow
-    ) -> None:
+    def test_all_responded_false_when_only_partial(self, reaction_window: ReactionWindow) -> None:
         assert len(reaction_window.eligible_reactors) >= 2
         char_id = next(iter(reaction_window.eligible_reactors))
         reaction_window.mark_responded(char_id)
@@ -132,9 +126,7 @@ class TestReactionWindow:
 
 
 class TestChannelBindings:
-    def test_bind_channel_stores_binding(
-        self, state: BotState, binding: ChannelBinding
-    ) -> None:
+    def test_bind_channel_stores_binding(self, state: BotState, binding: ChannelBinding) -> None:
         state.bind_channel(binding)
         assert state.get_binding(CHANNEL_ID) == binding
 
@@ -151,9 +143,7 @@ class TestChannelBindings:
     def test_unbind_channel_is_idempotent(self, state: BotState) -> None:
         state.unbind_channel(CHANNEL_ID)  # should not raise
 
-    def test_bind_second_channel(
-        self, state: BotState, binding: ChannelBinding
-    ) -> None:
+    def test_bind_second_channel(self, state: BotState, binding: ChannelBinding) -> None:
         other_channel = 999999999
         other = ChannelBinding(
             channel_id=other_channel, campaign_id=uuid.uuid4(), guild_id=GUILD_ID

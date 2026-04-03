@@ -104,9 +104,7 @@ class TavernAPI:
         self, campaign_id: str | UUID, settings: dict[str, Any]
     ) -> dict[str, Any]:
         """PATCH /api/campaigns/{id}/config"""
-        r = await self._client.patch(
-            f"/api/campaigns/{_id(campaign_id)}/config", json=settings
-        )
+        r = await self._client.patch(f"/api/campaigns/{_id(campaign_id)}/config", json=settings)
         return await self._json(r)
 
     # ------------------------------------------------------------------
@@ -123,9 +121,7 @@ class TavernAPI:
         )
         return await self._json(r)
 
-    async def get_turn_history(
-        self, campaign_id: str | UUID, limit: int = 5
-    ) -> dict[str, Any]:
+    async def get_turn_history(self, campaign_id: str | UUID, limit: int = 5) -> dict[str, Any]:
         """GET /api/campaigns/{id}/turns?limit=N"""
         r = await self._client.get(
             f"/api/campaigns/{_id(campaign_id)}/turns",
@@ -146,8 +142,7 @@ class TavernAPI:
     ) -> dict[str, Any]:
         """POST /api/campaigns/{id}/turns/{turn_id}/rolls/{roll_id}/execute"""
         r = await self._client.post(
-            f"/api/campaigns/{_id(campaign_id)}/turns/{_id(turn_id)}"
-            f"/rolls/{_id(roll_id)}/execute",
+            f"/api/campaigns/{_id(campaign_id)}/turns/{_id(turn_id)}/rolls/{_id(roll_id)}/execute",
             json={"pre_roll_options": pre_roll_options or []},
         )
         return await self._json(r)
@@ -162,8 +157,7 @@ class TavernAPI:
     ) -> dict[str, Any]:
         """POST /api/campaigns/{id}/turns/{turn_id}/rolls/{roll_id}/react"""
         r = await self._client.post(
-            f"/api/campaigns/{_id(campaign_id)}/turns/{_id(turn_id)}"
-            f"/rolls/{_id(roll_id)}/react",
+            f"/api/campaigns/{_id(campaign_id)}/turns/{_id(turn_id)}/rolls/{_id(roll_id)}/react",
             json={"character_id": _id(character_id), "reaction_id": reaction_id},
         )
         return await self._json(r)
@@ -177,15 +171,12 @@ class TavernAPI:
     ) -> dict[str, Any]:
         """POST /api/campaigns/{id}/turns/{turn_id}/rolls/{roll_id}/pass"""
         r = await self._client.post(
-            f"/api/campaigns/{_id(campaign_id)}/turns/{_id(turn_id)}"
-            f"/rolls/{_id(roll_id)}/pass",
+            f"/api/campaigns/{_id(campaign_id)}/turns/{_id(turn_id)}/rolls/{_id(roll_id)}/pass",
             json={"character_id": _id(character_id)},
         )
         return await self._json(r)
 
-    async def standalone_roll(
-        self, campaign_id: str | UUID, expression: str
-    ) -> dict[str, Any]:
+    async def standalone_roll(self, campaign_id: str | UUID, expression: str) -> dict[str, Any]:
         """POST /api/campaigns/{id}/rolls/standalone"""
         r = await self._client.post(
             f"/api/campaigns/{_id(campaign_id)}/rolls/standalone",
@@ -206,9 +197,7 @@ class TavernAPI:
         self, campaign_id: str | UUID, data: dict[str, Any]
     ) -> dict[str, Any]:
         """POST /api/campaigns/{id}/characters"""
-        r = await self._client.post(
-            f"/api/campaigns/{_id(campaign_id)}/characters", json=data
-        )
+        r = await self._client.post(f"/api/campaigns/{_id(campaign_id)}/characters", json=data)
         return await self._json(r)
 
     async def get_character(
@@ -224,9 +213,7 @@ class TavernAPI:
     # Members  (ADR-0006)
     # ------------------------------------------------------------------
 
-    async def invite_player(
-        self, campaign_id: str | UUID, user_id: str | UUID
-    ) -> dict[str, Any]:
+    async def invite_player(self, campaign_id: str | UUID, user_id: str | UUID) -> dict[str, Any]:
         """POST /api/campaigns/{id}/members"""
         r = await self._client.post(
             f"/api/campaigns/{_id(campaign_id)}/members",
@@ -234,13 +221,9 @@ class TavernAPI:
         )
         return await self._json(r)
 
-    async def remove_player(
-        self, campaign_id: str | UUID, user_id: str | UUID
-    ) -> None:
+    async def remove_player(self, campaign_id: str | UUID, user_id: str | UUID) -> None:
         """DELETE /api/campaigns/{id}/members/{user_id}"""
-        r = await self._client.delete(
-            f"/api/campaigns/{_id(campaign_id)}/members/{_id(user_id)}"
-        )
+        r = await self._client.delete(f"/api/campaigns/{_id(campaign_id)}/members/{_id(user_id)}")
         await self._raise_for_status(r)
 
     # ------------------------------------------------------------------

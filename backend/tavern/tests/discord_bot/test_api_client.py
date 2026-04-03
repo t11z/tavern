@@ -173,12 +173,8 @@ class TestExecuteRoll:
     async def test_posts_to_execute_url(self, api: TavernAPI) -> None:
         api._client.post = AsyncMock(return_value=ok({"roll_id": ROLL_ID}))
         await api.execute_roll(CAMPAIGN_ID, TURN_ID, ROLL_ID)
-        expected_url = (
-            f"/api/campaigns/{CAMPAIGN_ID}/turns/{TURN_ID}/rolls/{ROLL_ID}/execute"
-        )
-        api._client.post.assert_called_once_with(
-            expected_url, json={"pre_roll_options": []}
-        )
+        expected_url = f"/api/campaigns/{CAMPAIGN_ID}/turns/{TURN_ID}/rolls/{ROLL_ID}/execute"
+        api._client.post.assert_called_once_with(expected_url, json={"pre_roll_options": []})
 
     async def test_passes_pre_roll_options(self, api: TavernAPI) -> None:
         api._client.post = AsyncMock(return_value=ok({}))
@@ -197,9 +193,7 @@ class TestSubmitReaction:
     async def test_posts_to_react_url(self, api: TavernAPI) -> None:
         api._client.post = AsyncMock(return_value=ok({}))
         await api.submit_reaction(CAMPAIGN_ID, TURN_ID, ROLL_ID, CHARACTER_ID, "shield_spell")
-        expected_url = (
-            f"/api/campaigns/{CAMPAIGN_ID}/turns/{TURN_ID}/rolls/{ROLL_ID}/react"
-        )
+        expected_url = f"/api/campaigns/{CAMPAIGN_ID}/turns/{TURN_ID}/rolls/{ROLL_ID}/react"
         api._client.post.assert_called_once_with(
             expected_url,
             json={"character_id": CHARACTER_ID, "reaction_id": "shield_spell"},
@@ -210,12 +204,8 @@ class TestSubmitPass:
     async def test_posts_to_pass_url(self, api: TavernAPI) -> None:
         api._client.post = AsyncMock(return_value=ok({}))
         await api.submit_pass(CAMPAIGN_ID, TURN_ID, ROLL_ID, CHARACTER_ID)
-        expected_url = (
-            f"/api/campaigns/{CAMPAIGN_ID}/turns/{TURN_ID}/rolls/{ROLL_ID}/pass"
-        )
-        api._client.post.assert_called_once_with(
-            expected_url, json={"character_id": CHARACTER_ID}
-        )
+        expected_url = f"/api/campaigns/{CAMPAIGN_ID}/turns/{TURN_ID}/rolls/{ROLL_ID}/pass"
+        api._client.post.assert_called_once_with(expected_url, json={"character_id": CHARACTER_ID})
 
 
 class TestStandaloneRoll:
@@ -237,9 +227,7 @@ class TestGetCharacters:
     async def test_calls_correct_url(self, api: TavernAPI) -> None:
         api._client.get = AsyncMock(return_value=ok([]))
         await api.get_characters(CAMPAIGN_ID)
-        api._client.get.assert_called_once_with(
-            f"/api/campaigns/{CAMPAIGN_ID}/characters"
-        )
+        api._client.get.assert_called_once_with(f"/api/campaigns/{CAMPAIGN_ID}/characters")
 
 
 class TestCreateCharacter:

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -123,9 +123,7 @@ class TestGetTavernUserCacheMissFound:
             params={"external_id": str(DISCORD_USER_ID), "auth_provider": "discord"},
         )
 
-    async def test_returns_parsed_user(
-        self, service: IdentityService, api: TavernAPI
-    ) -> None:
+    async def test_returns_parsed_user(self, service: IdentityService, api: TavernAPI) -> None:
         api._client.get = AsyncMock(return_value=ok(_USER_PAYLOAD))
 
         result = await service.get_tavern_user(DISCORD_USER_ID, "Alice")
@@ -152,9 +150,7 @@ class TestGetTavernUserCacheMissFound:
 
 
 class TestGetTavernUserCacheMissCreate:
-    async def test_creates_user_when_404(
-        self, service: IdentityService, api: TavernAPI
-    ) -> None:
+    async def test_creates_user_when_404(self, service: IdentityService, api: TavernAPI) -> None:
         api._client.get = AsyncMock(return_value=not_found())
         api._client.post = AsyncMock(return_value=ok(_USER_PAYLOAD))
 
@@ -170,9 +166,7 @@ class TestGetTavernUserCacheMissCreate:
         )
         assert isinstance(result, TavernUser)
 
-    async def test_caches_created_user(
-        self, service: IdentityService, api: TavernAPI
-    ) -> None:
+    async def test_caches_created_user(self, service: IdentityService, api: TavernAPI) -> None:
         api._client.get = AsyncMock(return_value=not_found())
         api._client.post = AsyncMock(return_value=ok(_USER_PAYLOAD))
 
@@ -244,9 +238,7 @@ class TestGetCharacter:
 
         assert result is None
 
-    async def test_caches_character_lookup(
-        self, service: IdentityService, api: TavernAPI
-    ) -> None:
+    async def test_caches_character_lookup(self, service: IdentityService, api: TavernAPI) -> None:
         service._user_cache[DISCORD_USER_ID] = TavernUser(
             id=uuid.UUID(TAVERN_USER_ID),
             display_name="Alice",
@@ -287,18 +279,14 @@ class TestGetCharacter:
 
 
 class TestClearCache:
-    async def test_clears_user_cache(
-        self, service: IdentityService, api: TavernAPI
-    ) -> None:
+    async def test_clears_user_cache(self, service: IdentityService, api: TavernAPI) -> None:
         service._user_cache[DISCORD_USER_ID] = TavernUser(
             id=uuid.uuid4(), display_name="Alice", auth_provider="discord"
         )
         service.clear_cache()
         assert service._user_cache == {}
 
-    async def test_clears_character_cache(
-        self, service: IdentityService, api: TavernAPI
-    ) -> None:
+    async def test_clears_character_cache(self, service: IdentityService, api: TavernAPI) -> None:
         service._character_cache[(DISCORD_USER_ID, CAMPAIGN_ID)] = None
         service.clear_cache()
         assert service._character_cache == {}
