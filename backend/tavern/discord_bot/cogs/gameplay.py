@@ -9,13 +9,17 @@ Handles:
   • /map             — current scene description embed
 
   WebSocket event listeners (dispatched by WebSocketCog):
-  • on_tavern_turn_roll_required   — post roll prompt embed + buttons
-  • on_tavern_turn_roll_executed   — post roll result embed
-  • on_tavern_turn_narrative_end   — post narrative + optional combat embed
-  • on_tavern_character_updated    — log only; HP reflected in next turn status
-  • on_tavern_player_joined        — post join notice
-  • on_tavern_player_left          — post leave notice
-  • on_tavern_system_error         — post error warning
+  • on_tavern_turn_roll_required          — post roll prompt embed + buttons
+  • on_tavern_turn_roll_executed          — post roll result embed
+  • on_tavern_turn_self_reaction_window   — post self-reaction embed (Lucky etc.)
+  • on_tavern_turn_reaction_window        — post cross-player reaction embed
+  • on_tavern_turn_reaction_used          — edit reaction window in-place
+  • on_tavern_turn_reaction_window_closed — finalise reaction window
+  • on_tavern_turn_narrative_end          — post narrative + optional combat embed
+  • on_tavern_character_updated           — log only; HP reflected in next turn status
+  • on_tavern_player_joined               — post join notice
+  • on_tavern_player_left                 — post leave notice
+  • on_tavern_system_error                — post error warning
 """
 
 from __future__ import annotations
@@ -29,8 +33,19 @@ from discord import app_commands
 from discord.ext import commands
 
 from ..embeds.combat import build_combat_embed, build_party_status
-from ..embeds.rolls import RollPromptView, build_roll_prompt_embed, build_roll_result_embed
-from ..models.state import BotState, PendingRoll
+from ..embeds.rolls import (
+    ReactionWindowView,
+    RollPromptView,
+    SelfReactionView,
+    _reaction_emoji,
+    build_reaction_used_embed,
+    build_reaction_window_closed_embed,
+    build_reaction_window_embed,
+    build_roll_prompt_embed,
+    build_roll_result_embed,
+    build_self_reaction_embed,
+)
+from ..models.state import BotState, PendingRoll, ReactionWindow
 from ..services.api_client import TavernAPI, TavernAPIError
 from ..services.identity import IdentityService
 
@@ -403,6 +418,308 @@ class GameplayCog(commands.Cog):
 
         embed = build_roll_result_embed(payload)
         await channel.send(embed=embed)
+
+    # ------------------------------------------------------------------
+    # WebSocket event listeners — reaction windows
+    # ------------------------------------------------------------------
+
+    @commands.Cog.listener("on_tavern_turn_self_reaction_window")
+    async def on_tavern_turn_self_reaction_window(
+        self,
+        payload: dict,  # type: ignore[type-arg]
+    ) -> None:
+        """Post a self-reaction embed (Lucky, Flash of Genius, etc.).
+
+        Only the rolling player can interact.  The embed is ephemeral in that
+        it is posted in the channel but only the roller's buttons work.
+        """
+        channel_id: int | None = payload.get("_channel_id")
+        if channel_id is None:
+            return
+
+        channel = await self._get_text_channel(channel_id)
+        if channel is None:
+            return
+
+        binding = self.state.get_binding(channel_id)
+        if binding is None:
+            return
+
+        campaign_id = str(binding.campaign_id)
+        character_id: str = payload.get("character_id", "")
+        turn_id: str = payload.get("turn_id", "")
+        roll_id: str = payload.get("roll_id", "")
+        self_reactions: list[dict] = payload.get("self_reactions") or []  # type: ignore[assignment]
+        window_seconds: int = payload.get("self_reaction_window_seconds", 10)
+
+        rolling_discord_id = self._find_discord_user_for_character(character_id, campaign_id)
+
+        embed = build_self_reaction_embed(payload)
+        view = SelfReactionView(
+            api=self.api,
+            campaign_id=campaign_id,
+            turn_id=turn_id,
+            roll_id=roll_id,
+            character_id=character_id,
+            rolling_player_id=rolling_discord_id or 0,
+            self_reactions=self_reactions,
+            timeout=float(window_seconds),
+        )
+
+        mention = f"<@{rolling_discord_id}> " if rolling_discord_id else ""
+        await channel.send(f"{mention}Do you want to use a self-reaction?", embed=embed, view=view)
+
+    @commands.Cog.listener("on_tavern_turn_reaction_window")
+    async def on_tavern_turn_reaction_window(
+        self,
+        payload: dict,  # type: ignore[type-arg]
+    ) -> None:
+        """Post a cross-player reaction window embed and record it in state."""
+        channel_id: int | None = payload.get("_channel_id")
+        if channel_id is None:
+            return
+
+        channel = await self._get_text_channel(channel_id)
+        if channel is None:
+            return
+
+        binding = self.state.get_binding(channel_id)
+        if binding is None:
+            return
+
+        campaign_id = str(binding.campaign_id)
+        turn_id: str = payload.get("turn_id", "")
+        roll_id: str = payload.get("roll_id", "")
+        available_reactions: list[dict] = payload.get("available_reactions") or []  # type: ignore[assignment]
+        window_seconds: int = payload.get("window_seconds", 15)
+
+        # Resolve Discord user IDs for all reactors.
+        identity_map: dict[str, int] = {}
+        for reactor in available_reactions:
+            char_id: str = reactor.get("reactor_character_id", "")
+            uid = self._find_discord_user_for_character(char_id, campaign_id)
+            if uid is not None:
+                identity_map[char_id] = uid
+
+        # Record window in state for /pass and in-place editing.
+        try:
+            from uuid import UUID
+
+            roll_uuid = UUID(roll_id)
+            turn_uuid = UUID(turn_id)
+            eligible: set[UUID] = set()
+            for reactor in available_reactions:
+                char_id = reactor.get("reactor_character_id", "")
+                if char_id:
+                    eligible.add(UUID(char_id))
+            window = ReactionWindow(
+                roll_id=roll_uuid,
+                channel_id=channel_id,
+                turn_id=turn_uuid,
+                eligible_reactors=eligible,
+                expires_at=datetime.now(UTC) + timedelta(seconds=window_seconds),
+            )
+            self.state.set_reaction_window(window)
+        except (ValueError, AttributeError):
+            logger.warning("Could not parse reaction window UUIDs: %s", payload)
+            window = None
+
+        embed = build_reaction_window_embed(payload)
+        view = ReactionWindowView(
+            api=self.api,
+            campaign_id=campaign_id,
+            turn_id=turn_id,
+            roll_id=roll_id,
+            available_reactions=available_reactions,
+            identity_map=identity_map,
+            timeout=float(window_seconds),
+        )
+
+        mentions = " ".join(f"<@{uid}>" for uid in identity_map.values())
+        content = f"{mentions} Reactions available!" if mentions else "Reactions available!"
+        msg = await channel.send(content, embed=embed, view=view)
+
+        # Store message ID so we can edit in-place on reaction_used.
+        if window is not None:
+            window.message_id = msg.id
+
+    @commands.Cog.listener("on_tavern_turn_reaction_used")
+    async def on_tavern_turn_reaction_used(
+        self,
+        payload: dict,  # type: ignore[type-arg]
+    ) -> None:
+        """Edit the reaction window message in-place to reflect a used reaction.
+
+        Handles both player and NPC reactions.  If the stored message cannot
+        be fetched (e.g. deleted), posts a new message instead.
+        """
+        channel_id: int | None = payload.get("_channel_id")
+        if channel_id is None:
+            return
+
+        channel = await self._get_text_channel(channel_id)
+        if channel is None:
+            return
+
+        roll_id: str = payload.get("roll_id", "")
+        is_npc: bool = bool(payload.get("is_npc", False))
+
+        # Mark the reactor as responded in state (player only; NPCs don't hold
+        # player reaction slots).
+        window = self.state.get_reaction_window(roll_id)
+        if not is_npc and window is not None:
+            char_id_str: str = payload.get("reactor_character_id", "")
+            try:
+                from uuid import UUID
+
+                window.mark_responded(UUID(char_id_str))
+            except (ValueError, AttributeError):
+                pass
+
+        binding = self.state.get_binding(channel_id)
+        campaign_id = str(binding.campaign_id) if binding else ""
+
+        # Rebuild the view for the remaining reactors.
+        remaining_reactions: list[dict] = payload.get("remaining_reactions") or []  # type: ignore[assignment]
+        remaining_identity_map: dict[str, int] = {}
+        for reactor in remaining_reactions:
+            char_id = reactor.get("reactor_character_id", "")
+            uid = self._find_discord_user_for_character(char_id, campaign_id)
+            if uid is not None:
+                remaining_identity_map[char_id] = uid
+
+        updated_embed = build_reaction_used_embed(payload)
+        updated_view = ReactionWindowView(
+            api=self.api,
+            campaign_id=campaign_id,
+            turn_id=str(window.turn_id)
+            if (window and window.turn_id)
+            else payload.get("turn_id", ""),
+            roll_id=roll_id,
+            available_reactions=remaining_reactions,
+            identity_map=remaining_identity_map,
+            timeout=float(payload.get("window_seconds", 15)),
+        )
+
+        if window is not None and window.message_id is not None:
+            try:
+                msg = await channel.fetch_message(window.message_id)
+                await msg.edit(embed=updated_embed, view=updated_view)
+                return
+            except (discord.NotFound, discord.Forbidden):
+                logger.warning(
+                    "Could not fetch reaction window message %s for in-place edit",
+                    window.message_id,
+                )
+
+        # Fallback: post as a new message.
+        reactor_name: str = payload.get("reactor_name", "?")
+        reaction_name: str = payload.get("reaction_name", "?")
+        new_outcome: str = payload.get("new_outcome", "unknown")
+        emoji = _reaction_emoji(payload.get("reaction_id", ""))
+        await channel.send(
+            f"{emoji} **{reactor_name}** uses **{reaction_name}**! "
+            f"Outcome: **{new_outcome.upper()}**",
+            embed=updated_embed,
+        )
+
+    @commands.Cog.listener("on_tavern_turn_reaction_window_closed")
+    async def on_tavern_turn_reaction_window_closed(
+        self,
+        payload: dict,  # type: ignore[type-arg]
+    ) -> None:
+        """Finalise the reaction window: remove buttons, show final outcome."""
+        channel_id: int | None = payload.get("_channel_id")
+        if channel_id is None:
+            return
+
+        channel = await self._get_text_channel(channel_id)
+        if channel is None:
+            return
+
+        roll_id: str = payload.get("roll_id", "")
+        window = self.state.get_reaction_window(roll_id)
+        final_embed = build_reaction_window_closed_embed(payload)
+
+        if window is not None and window.message_id is not None:
+            try:
+                msg = await channel.fetch_message(window.message_id)
+                await msg.edit(embed=final_embed, view=None)
+            except (discord.NotFound, discord.Forbidden):
+                logger.warning(
+                    "Could not edit reaction window message %s on close", window.message_id
+                )
+                await channel.send(embed=final_embed)
+        else:
+            await channel.send(embed=final_embed)
+
+        self.state.clear_reaction_window(roll_id)
+
+    # ------------------------------------------------------------------
+    # /pass
+    # ------------------------------------------------------------------
+
+    @app_commands.command(name="pass", description="Pass on a pending reaction.")
+    async def pass_(self, interaction: discord.Interaction) -> None:
+        """Submit a pass for the caller's pending reaction in the active window."""
+        channel_id: int = interaction.channel_id  # type: ignore[assignment]
+        binding = self.state.get_binding(channel_id)
+        if binding is None:
+            await interaction.response.send_message("No campaign in this channel.", ephemeral=True)
+            return
+
+        campaign_id = str(binding.campaign_id)
+
+        # Resolve the caller's character in this campaign.
+        character = await self.identity.get_character(interaction.user.id, campaign_id)
+        if character is None:
+            await interaction.response.send_message(
+                "You don't have a character in this campaign.", ephemeral=True
+            )
+            return
+
+        char_uuid = character.id
+
+        # Find the first reaction window in this channel where the character
+        # has an outstanding (un-responded) reaction.
+        pending_window: ReactionWindow | None = None
+        for win in self.state.reaction_windows.values():
+            if (
+                win.channel_id == channel_id
+                and char_uuid in win.eligible_reactors
+                and char_uuid not in win.responded
+            ):
+                pending_window = win
+                break
+
+        if pending_window is None:
+            await interaction.response.send_message(
+                "You don't have any pending reactions.", ephemeral=True
+            )
+            return
+
+        if pending_window.turn_id is None:
+            await interaction.response.send_message(
+                "Reaction window data is incomplete — try clicking Pass in the embed.",
+                ephemeral=True,
+            )
+            return
+
+        await interaction.response.defer(thinking=True)
+
+        try:
+            await self.api.submit_pass(
+                campaign_id,
+                str(pending_window.turn_id),
+                str(pending_window.roll_id),
+                str(char_uuid),
+            )
+            pending_window.mark_responded(char_uuid)
+        except TavernAPIError as exc:
+            await interaction.followup.send(f"❌ {exc.message}", ephemeral=True)
+            return
+
+        await interaction.followup.send("⏭️ Passed on your reaction.", ephemeral=True)
 
     # ------------------------------------------------------------------
     # WebSocket event listeners — narrative and presence
