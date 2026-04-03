@@ -21,6 +21,7 @@ dev = [
     "ruff>=0.8.0",
     "mypy>=1.13.0",
     "aiosqlite>=0.20.0",
+    "pypdf>=6.9.2",
 ]
 
 [tool.ruff]
