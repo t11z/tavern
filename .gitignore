@@ -20,6 +20,9 @@ frontend/node_modules/
 backend/tavern/static/*
 !backend/tavern/static/.gitkeep
 
+# Docs static
+site/
+
 # OS
 .DS_Store
 Thumbs.db
