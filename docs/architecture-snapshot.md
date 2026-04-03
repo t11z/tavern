@@ -1,6 +1,6 @@
 # Architecture Snapshot
 
-> Last updated: 2026-04-03 — Expanded `discord_bot/` to full implementation (cogs, embeds, services, models); added `websockets` dependency; added `discord-bot` dependency group; activated `discord-bot` Docker service
+> Last updated: 2026-04-03 — Full regeneration — all sections verified against codebase
 >
 > This document is maintained by Claude Code per the rules in CLAUDE.md.
 > It is consumed by the architecture consultant to inform decisions without
@@ -11,29 +11,38 @@
 
 ```
 backend/tavern/
-├── core/           # Rules Engine — SRD 5.2.1 mechanics, no LLM dependency
-├── dm/             # DM layer — Narrator, Context Builder, LLM provider
-├── api/            # FastAPI REST endpoints and WebSocket handler
-│   ├── campaigns.py    # Campaign CRUD + session lifecycle
-│   ├── characters.py   # Character creation and retrieval
-│   ├── turns.py        # Turn submission (202) and retrieval
-│   ├── ws.py           # WebSocket endpoint + ConnectionManager
-│   ├── dependencies.py # Shared FastAPI dependencies (get_db_session, get_narrator, get_session_factory)
-│   ├── schemas.py      # Pydantic request/response schemas
-│   └── errors.py       # APIError + error handlers
-├── discord_bot/    # Discord client — connects to Tavern API, translates Discord interactions
-│   ├── bot.py          # TavernBot (commands.Bot subclass); loads cogs, syncs slash commands
-│   ├── config.py       # BotConfig dataclass; validates required env vars on init
-│   ├── __main__.py     # Entry point: python -m tavern.discord_bot
-│   ├── cogs/           # discord.py Cog modules (one per command group)
-│   │   ├── campaign.py     # /campaign create|info|config|recap|scene; /session start|end
-│   │   ├── character.py    # /character create|sheet|inventory|spells; guided creation threads
-│   │   ├── gameplay.py     # /action, /roll, /pass; WebSocket event → Discord message routing
-│   │   ├── lfg.py          # /lfg — bind a campaign to a Discord text channel
-│   │   ├── ping.py         # /tavern ping — health check for bot + API
-│   │   ├── voice.py        # Voice channel integration (stub)
-│   │   └── websocket.py    # WebSocketCog — persistent WS connection; dispatches bot events
-│   ├── embeds/         # Pure functions: raw API dict → discord.Embed
+├── main.py             # FastAPI app factory; mounts routers, static files, error handlers
+├── db.py               # Async SQLAlchemy engine and session factory
+├── core/               # Rules Engine — SRD 5.2.1 mechanics, no LLM dependency
+│   ├── dice.py             # Dice rolling, advantage/disadvantage, NdX notation parser, deterministic seeds
+│   ├── characters.py       # Ability modifiers, HP, spell slots, proficiency bonus, standard array validation
+│   ├── combat.py           # Attack resolution, damage application, initiative, grapple/shove, death saves
+│   ├── conditions.py       # 15 SRD conditions, attack/save modifiers, speed, incapacitation logic
+│   └── srd_tables.py       # All SRD 5.2.1 game data: classes, species, backgrounds, spell slots, XP
+├── dm/                 # DM layer — Narrator, Context Builder, LLM provider abstraction
+│   ├── narrator.py         # Narrator class; model routing (Sonnet/Haiku); streaming narration and summary compression
+│   └── context_builder.py  # StateSnapshot, TurnContext; builds and serializes game state for the Narrator
+├── api/                # FastAPI REST endpoints and WebSocket handler
+│   ├── campaigns.py        # Campaign CRUD + session lifecycle
+│   ├── characters.py       # Character creation and retrieval
+│   ├── turns.py            # Turn submission (202) and retrieval
+│   ├── ws.py               # WebSocket endpoint + ConnectionManager
+│   ├── dependencies.py     # Shared FastAPI dependencies (get_db_session, get_narrator, get_session_factory)
+│   ├── schemas.py          # Pydantic request/response schemas
+│   └── errors.py           # APIError + error handlers
+├── discord_bot/        # Discord client — connects to Tavern API, translates Discord interactions
+│   ├── bot.py              # TavernBot (commands.Bot subclass); loads cogs, syncs slash commands
+│   ├── config.py           # BotConfig dataclass; validates required env vars on init
+│   ├── __main__.py         # Entry point: python -m tavern.discord_bot
+│   ├── cogs/               # discord.py Cog modules (one per command group)
+│   │   ├── campaign.py         # /campaign create|info|config|recap|scene; /session start|end
+│   │   ├── character.py        # /character create|sheet|inventory|spells; guided creation threads
+│   │   ├── gameplay.py         # /action, /roll, /pass; WebSocket event → Discord message routing
+│   │   ├── lfg.py              # /lfg — bind a campaign to a Discord text channel
+│   │   ├── ping.py             # /tavern ping — health check for bot + API
+│   │   ├── voice.py            # Voice channel integration (stub)
+│   │   └── websocket.py        # WebSocketCog — persistent WS connection; dispatches bot events
+│   ├── embeds/             # Pure functions: raw API dict → discord.Embed
 │   │   ├── character_sheet.py  # build_character_sheet_embed, build_inventory_embed, build_spells_embed
 │   │   ├── combat.py           # build_combat_embed, build_party_status
 │   │   ├── lfg.py              # build_lfg_embed
@@ -41,20 +50,55 @@ backend/tavern/
 │   │   ├── rolls.py            # build_roll_embed, build_reaction_window_embed, ReactionWindowView, SelfReactionView
 │   │   └── status.py           # build_status_embed
 │   ├── models/
-│   │   └── state.py        # BotState, ChannelBinding, ReactionWindow — in-memory runtime state
+│   │   └── state.py            # BotState, ChannelBinding, PendingRoll, ReactionWindow — in-memory runtime state
 │   └── services/
-│       ├── api_client.py   # TavernAPI — async httpx client wrapping all REST endpoints
+│       ├── api_client.py       # TavernAPI — async httpx client wrapping all REST endpoints
 │       ├── channel_manager.py  # ChannelManager — Discord channel lifecycle helpers
-│       └── identity.py     # IdentityService — Discord user ↔ Tavern user/character mapping (cached)
-├── models/         # SQLAlchemy ORM models (database schema)
-└── alembic/        # Database migrations
+│       └── identity.py         # IdentityService — Discord user ↔ Tavern user/character mapping (cached)
+├── models/             # SQLAlchemy ORM models (database schema)
+│   ├── base.py             # DeclarativeBase; JSONB custom type (JSONB on PostgreSQL, JSON on SQLite)
+│   ├── campaign.py         # Campaign, CampaignState
+│   ├── character.py        # Character, InventoryItem, CharacterCondition
+│   ├── session.py          # Session
+│   └── turn.py             # Turn
+├── alembic/            # Database migrations
+│   ├── env.py              # Async migration runner (asyncpg)
+│   ├── script.py.mako      # Migration file template
+│   └── versions/
+│       ├── 0001_initial.py                                     # Initial schema
+│       └── 0002_add_campaign_session_character_turn_models.py  # Campaign, Session, Character, Turn tables
+├── auth/               # Placeholder — Phase 6 authentication (not yet implemented)
+└── multiplayer/        # Placeholder — future multiplayer support
 
 frontend/src/
-├── hooks/          # useWebSocket (WS lifecycle + reconnect)
-├── components/     # CampaignHeader, CharacterPanel, ChatLog, ChatInput
-├── App.tsx         # Root component — campaign/character selection, WS integration
-├── types.ts        # Shared TypeScript types
-└── index.css       # Tavern design tokens and global resets
+├── App.tsx             # Root component — campaign/character selection, WS integration
+├── main.tsx            # Vite entry point
+├── types.ts            # Shared TypeScript types: Campaign, CharacterState, SessionState, WsEvent union
+├── index.css           # Tavern design tokens and global resets
+├── hooks/
+│   └── useWebSocket.ts     # WS lifecycle, reconnect with configurable delay, JSON parsing
+└── components/
+    ├── CampaignHeader.tsx  # Campaign title, status, scene context
+    ├── CharacterPanel.tsx  # Character sheet, HP, spell slots, conditions
+    ├── ChatLog.tsx         # Turn history with narratives
+    └── ChatInput.tsx       # Player action submission
+
+scripts/
+└── setup-repo.sh       # GitHub repository configuration (labels, branch protection, issue templates)
+
+Infrastructure/
+├── Dockerfile          # Multi-stage: Node 20 frontend build → Python 3.12 runtime; serves on :3000
+├── docker-compose.yml  # Three services: tavern (app), postgres (16), discord-bot
+└── .github/
+    ├── workflows/
+    │   ├── ci.yml              # Lint (ruff), type check (mypy), test (pytest) on push/PR
+    │   ├── claude-review.yml   # Claude Code automated PR review
+    │   └── deploy-docs.yml     # MkDocs site deploy to GitHub Pages
+    └── ISSUE_TEMPLATE/
+        ├── bug_report.yml
+        ├── feature_request.yml
+        ├── srd_correction.yml
+        └── world_preset.yml
 ```
 
 ## Dependency Graph
@@ -62,8 +106,10 @@ frontend/src/
 ```
 api/ ──→ core/
 api/ ──→ dm/
-dm/  ──→ core/
+api/ ──→ models/
+dm/  ──→ models/
 core/ ──→ (no internal dependencies)
+models/ ──→ (no internal dependencies)
 ```
 
 > Constraint: core/ must never import from dm/ (see ADR-0001).
@@ -98,8 +144,9 @@ core/ ──→ (no internal dependencies)
 |---|---|---|
 | react | UI framework | ^18.3.1 |
 | react-dom | DOM bindings | ^18.3.1 |
-| vite | Build tool + dev server proxy | ^5.x |
-| typescript | Type checking | ^5.x |
+| vite | Build tool + dev server proxy | ^5.4.10 |
+| typescript | Type checking | ^5.6.2 |
+| @vitejs/plugin-react | Vite plugin for React/JSX transform | ^4.3.3 |
 
 ## API Surface
 
@@ -112,7 +159,6 @@ core/ ──→ (no internal dependencies)
 | POST | /api/campaigns | Create campaign | 201 |
 | GET | /api/campaigns/{id} | Get campaign detail | 200 |
 | PATCH | /api/campaigns/{id} | Update campaign name/status | 200 |
-| DELETE | /api/campaigns/{id} | Delete campaign | 204 |
 | POST | /api/campaigns/{id}/sessions | Start session (activates campaign) | 201 |
 | POST | /api/campaigns/{id}/sessions/end | End session (pauses campaign) | 200 |
 | GET | /api/campaigns/{id}/characters | List characters | 200 |
@@ -157,10 +203,12 @@ Events the discord_bot `gameplay.py` cog is ready to handle (not yet emitted by 
 
 | Model | Table | Key relations |
 |---|---|---|
-| Campaign | campaigns | has one CampaignState, has many Character, has many Session |
-| CampaignState | campaign_states | belongs to Campaign |
+| Campaign | campaigns | has one CampaignState, has many Session, has many Character |
+| CampaignState | campaign_states | belongs to Campaign (unique FK) |
 | Session | sessions | belongs to Campaign, has many Turn |
-| Character | characters | belongs to Campaign, has many InventoryItem, has many CharacterCondition |
+| Character | characters | belongs to Campaign, has many InventoryItem, has many CharacterCondition, has many Turn |
+| InventoryItem | inventory_items | belongs to Character |
+| CharacterCondition | character_conditions | belongs to Character |
 | Turn | turns | belongs to Session, belongs to Character |
 
 ## ADR Status
