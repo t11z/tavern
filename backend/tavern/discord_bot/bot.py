@@ -4,6 +4,9 @@ import discord
 from discord.ext import commands
 
 from .config import BotConfig
+from .models.state import BotState
+from .services.api_client import TavernAPI
+from .services.channel_manager import ChannelManager
 
 logger = logging.getLogger(__name__)
 
@@ -13,6 +16,9 @@ class TavernBot(commands.Bot):
 
     Intents: message_content, guilds, members.
     Cogs are loaded in setup_hook; slash commands are synced globally on startup.
+
+    Shared services (api, channel_manager, state) are attached to the bot
+    instance so cogs can access them without circular imports.
     """
 
     def __init__(self, config: BotConfig) -> None:
@@ -22,12 +28,21 @@ class TavernBot(commands.Bot):
         intents.members = True
         super().__init__(command_prefix="!", intents=intents)
         self.config = config
+        self.api = TavernAPI(config.tavern_api_url)
+        self.channel_manager = ChannelManager()
+        self.state = BotState()
 
     async def setup_hook(self) -> None:
+        from .cogs.lfg import LFGCog
         from .cogs.ping import PingCog
 
         await self.add_cog(PingCog(self))
+        await self.add_cog(LFGCog(self, self.api, self.channel_manager, self.state))
         await self.tree.sync()
 
     async def on_ready(self) -> None:
         logger.info("Tavern bot ready. Guilds: %d", len(self.guilds))
+
+    async def close(self) -> None:
+        await self.api.aclose()
+        await super().close()
