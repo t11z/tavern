@@ -17,7 +17,6 @@ from __future__ import annotations
 import logging
 import uuid
 from collections import defaultdict
-
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
@@ -27,7 +26,6 @@ from sqlalchemy.orm import selectinload
 
 from tavern.api.dependencies import get_db_session
 from tavern.models.campaign import Campaign
-from tavern.models.character import Character
 from tavern.models.session import Session
 from tavern.models.turn import Turn
 
@@ -54,7 +52,8 @@ class ConnectionManager:
     async def connect(self, websocket: WebSocket, campaign_id: uuid.UUID) -> None:
         await websocket.accept()
         self._connections[campaign_id].add(websocket)
-        logger.debug("WS connect: campaign=%s total=%d", campaign_id, len(self._connections[campaign_id]))
+        count = len(self._connections[campaign_id])
+        logger.debug("WS connect: campaign=%s total=%d", campaign_id, count)
 
     def disconnect(self, websocket: WebSocket, campaign_id: uuid.UUID) -> None:
         self._connections[campaign_id].discard(websocket)

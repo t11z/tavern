@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from httpx import AsyncClient
 
-
 _VALID_FIGHTER = {
     "name": "Aldric",
     "species": "Human",
@@ -123,7 +122,6 @@ class TestSubmitTurn:
         self, api_client: AsyncClient, mock_narrator
     ) -> None:
         """narrate_turn_stream must be invoked (background task uses it, not narrate_turn)."""
-        from unittest.mock import AsyncMock, patch
 
         called_with: list = []
         original_stream = mock_narrator.narrate_turn_stream

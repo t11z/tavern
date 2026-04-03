@@ -24,7 +24,12 @@ from sqlalchemy.orm import selectinload
 
 from tavern.api.dependencies import get_db_session, get_narrator, get_session_factory
 from tavern.api.errors import bad_request, conflict, not_found
-from tavern.api.schemas import TurnCreateRequest, TurnListItem, TurnListResponse, TurnSubmitResponse
+from tavern.api.schemas import (
+    TurnCreateRequest,
+    TurnListItem,
+    TurnListResponse,
+    TurnSubmitResponse,
+)
 from tavern.dm.context_builder import TurnContext, build_snapshot
 from tavern.dm.narrator import Narrator
 from tavern.models.campaign import Campaign, CampaignState
