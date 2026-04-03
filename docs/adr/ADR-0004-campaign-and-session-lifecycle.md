@@ -260,3 +260,9 @@ This is a simplification over realistic tabletop behaviour (where a DM might run
 - If campaign resumption quality is consistently poor after gaps of 30+ days, evaluate storing a richer resumption context (key plot points, major NPC relationships, unresolved quests) alongside the rolling summary.
 - If the community requests cross-campaign character portability, evaluate a character export/import mechanism (JSON-based, player-initiated) rather than a shared roster — this preserves campaign isolation while enabling the use case.
 - If campaign count per instance exceeds 100 and list/query performance degrades, evaluate database indexing strategy and consider pagination for campaign listing endpoints.
+
+## Amendments
+
+### Extended by ADR-0009: Interactive Dice Rolling and Reaction System
+
+The turn lifecycle defined in this ADR models turns as atomic operations: action submitted → rules resolved → narrative generated → turn complete. ADR-0009 extends this model with intermediate states for interactive dice rolling and cross-player reactions. A turn that requires dice rolls transitions through `awaiting_roll`, `roll_executed`, `reaction_window`, and `reactions_resolved` states before reaching resolution. The atomic model described in this ADR remains valid for turns that require no rolls (e.g., pure narrative actions, movement, dialogue) and for campaigns configured with `automatic` rolling mode. See ADR-0009 for the extended state machine.
