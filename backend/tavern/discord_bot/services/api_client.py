@@ -186,6 +186,35 @@ class TavernAPI:
         )
         return await self._json(r)
 
+    async def start_character_creation(
+        self, campaign_id: str | UUID, user_id: str | UUID, display_name: str
+    ) -> dict[str, Any]:
+        """POST /api/campaigns/{id}/characters/creation — start guided (Path 1) creation.
+
+        Returns a dict with at minimum ``session_id``, ``message`` (Claude's first
+        question), and ``status`` (``"in_progress"`` or ``"complete"``).
+        """
+        r = await self._client.post(
+            f"/api/campaigns/{_id(campaign_id)}/characters/creation",
+            json={"user_id": _id(user_id), "display_name": display_name},
+        )
+        return await self._json(r)
+
+    async def submit_creation_step(
+        self, campaign_id: str | UUID, session_id: str, message: str
+    ) -> dict[str, Any]:
+        """POST /api/campaigns/{id}/characters/creation/{session_id} — send player reply.
+
+        Returns a dict with ``message`` (Claude's next question or summary),
+        ``status`` (``"in_progress"`` or ``"complete"``), and on completion
+        a ``character`` key with the full character data.
+        """
+        r = await self._client.post(
+            f"/api/campaigns/{_id(campaign_id)}/characters/creation/{session_id}",
+            json={"message": message},
+        )
+        return await self._json(r)
+
     async def standalone_roll(self, campaign_id: str | UUID, expression: str) -> dict[str, Any]:
         """POST /api/campaigns/{id}/rolls/standalone"""
         r = await self._client.post(

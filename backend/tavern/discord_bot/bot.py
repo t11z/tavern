@@ -34,6 +34,7 @@ class TavernBot(commands.Bot):
 
     async def setup_hook(self) -> None:
         from .cogs.campaign import CampaignCog
+        from .cogs.character import CharacterCog
         from .cogs.gameplay import GameplayCog
         from .cogs.lfg import LFGCog
         from .cogs.websocket import WebSocketCog
@@ -44,6 +45,7 @@ class TavernBot(commands.Bot):
         await self.add_cog(LFGCog(self, self.api, self.channel_manager, self.state))
         await self.add_cog(WebSocketCog(self, self.api, self.config.tavern_ws_url))
         await self.add_cog(GameplayCog(self, self.api, self.state, identity))
+        await self.add_cog(CharacterCog(self, self.api, self.state, identity))
         await self.tree.sync()
 
     async def on_ready(self) -> None:
