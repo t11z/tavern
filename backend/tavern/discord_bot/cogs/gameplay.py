@@ -3,11 +3,14 @@
 Handles:
   • Message interception in Game Mode channels (on_message)
   • /action <text>   — explicit turn submission
+  • /roll [expr]     — trigger pending turn roll, or standalone dice roll
   • /history [n]     — condensed turn history embed
   • /recap           — narrative recap from Claude (Haiku)
   • /map             — current scene description embed
 
   WebSocket event listeners (dispatched by WebSocketCog):
+  • on_tavern_turn_roll_required   — post roll prompt embed + buttons
+  • on_tavern_turn_roll_executed   — post roll result embed
   • on_tavern_turn_narrative_end   — post narrative + optional combat embed
   • on_tavern_character_updated    — log only; HP reflected in next turn status
   • on_tavern_player_joined        — post join notice
@@ -19,13 +22,15 @@ from __future__ import annotations
 
 import logging
 import re
+from datetime import UTC, datetime, timedelta
 
 import discord
 from discord import app_commands
 from discord.ext import commands
 
 from ..embeds.combat import build_combat_embed, build_party_status
-from ..models.state import BotState
+from ..embeds.rolls import RollPromptView, build_roll_prompt_embed, build_roll_result_embed
+from ..models.state import BotState, PendingRoll
 from ..services.api_client import TavernAPI, TavernAPIError
 from ..services.identity import IdentityService
 
@@ -258,7 +263,149 @@ class GameplayCog(commands.Cog):
         await interaction.followup.send(embed=embed)
 
     # ------------------------------------------------------------------
-    # WebSocket event listeners
+    # /roll
+    # ------------------------------------------------------------------
+
+    @app_commands.command(
+        name="roll",
+        description="Trigger a pending turn roll, or roll a dice expression.",
+    )
+    @app_commands.describe(expression="Dice expression for a standalone roll, e.g. '2d6+3'")
+    async def roll(self, interaction: discord.Interaction, expression: str | None = None) -> None:
+        channel_id: int = interaction.channel_id  # type: ignore[assignment]
+        pending = self.state.get_pending_roll(channel_id)
+
+        if pending is not None:
+            # A turn roll is waiting — trigger it via API.
+            binding = self.state.get_binding(channel_id)
+            if binding is None:
+                await interaction.response.send_message(
+                    "No campaign in this channel.", ephemeral=True
+                )
+                return
+
+            await interaction.response.defer(thinking=True)
+            try:
+                await self.api.execute_roll(
+                    str(binding.campaign_id),
+                    str(pending.turn_id),
+                    str(pending.roll_id),
+                    [],
+                )
+            except TavernAPIError as exc:
+                await interaction.followup.send(f"❌ {exc.message}", ephemeral=True)
+                return
+
+            self.state.clear_pending_roll(channel_id)
+            await interaction.followup.send("🎲 Roll triggered!", ephemeral=True)
+
+        elif expression is not None:
+            # Standalone roll.
+            binding = self.state.get_binding(channel_id)
+            if binding is None:
+                await interaction.response.send_message(
+                    "No campaign in this channel.", ephemeral=True
+                )
+                return
+
+            await interaction.response.defer(thinking=True)
+            try:
+                result = await self.api.standalone_roll(str(binding.campaign_id), expression)
+            except TavernAPIError as exc:
+                await interaction.followup.send(f"❌ {exc.message}", ephemeral=True)
+                return
+
+            total = result.get("total") or result.get("result", "?")
+            await interaction.followup.send(
+                f"🎲 {interaction.user.display_name} rolls {expression}: **{total}**"
+            )
+
+        else:
+            await interaction.response.send_message(
+                "No roll pending. Use `/roll <expression>` for a standalone roll, "
+                "e.g. `/roll 2d6+3`.",
+                ephemeral=True,
+            )
+
+    # ------------------------------------------------------------------
+    # WebSocket event listeners — dice rolling
+    # ------------------------------------------------------------------
+
+    @commands.Cog.listener("on_tavern_turn_roll_required")
+    async def on_tavern_turn_roll_required(self, payload: dict) -> None:  # type: ignore[type-arg]
+        """Post an interactive roll prompt and record the pending roll in state."""
+        channel_id: int | None = payload.get("_channel_id")
+        if channel_id is None:
+            return
+
+        channel = await self._get_text_channel(channel_id)
+        if channel is None:
+            return
+
+        binding = self.state.get_binding(channel_id)
+        if binding is None:
+            return
+
+        campaign_id = str(binding.campaign_id)
+        turn_id: str = payload.get("turn_id", "")
+        roll_id: str = payload.get("roll_id", "")
+        character_id: str = payload.get("character_id", "")
+        pre_roll_options: list[dict] = payload.get("pre_roll_options") or []  # type: ignore[assignment]
+        timeout_seconds: int = payload.get("timeout_seconds", 120)
+
+        # Resolve the active player's Discord user ID for button gating and mention.
+        active_discord_id = self._find_discord_user_for_character(character_id, campaign_id)
+
+        # Record the pending roll in state (for /roll command fallback).
+        try:
+            from uuid import UUID
+
+            self.state.set_pending_roll(
+                PendingRoll(
+                    channel_id=channel_id,
+                    turn_id=UUID(turn_id),
+                    roll_id=UUID(roll_id),
+                    character_id=UUID(character_id),
+                    expires_at=datetime.now(UTC) + timedelta(seconds=timeout_seconds),
+                )
+            )
+        except (ValueError, AttributeError):
+            logger.warning("Could not parse roll UUIDs from payload: %s", payload)
+
+        # Build embed and view.
+        embed = build_roll_prompt_embed(payload)
+        view = RollPromptView(
+            api=self.api,
+            campaign_id=campaign_id,
+            turn_id=turn_id,
+            roll_id=roll_id,
+            active_player_id=active_discord_id or 0,
+            pre_roll_options=pre_roll_options,
+            timeout=float(timeout_seconds),
+        )
+
+        # Mention the active player if we could resolve them.
+        mention = f"<@{active_discord_id}> " if active_discord_id else ""
+        await channel.send(f"{mention}Your turn to roll!", embed=embed, view=view)
+
+    @commands.Cog.listener("on_tavern_turn_roll_executed")
+    async def on_tavern_turn_roll_executed(self, payload: dict) -> None:  # type: ignore[type-arg]
+        """Post the roll result embed and clear the pending roll from state."""
+        channel_id: int | None = payload.get("_channel_id")
+        if channel_id is None:
+            return
+
+        channel = await self._get_text_channel(channel_id)
+        if channel is None:
+            return
+
+        self.state.clear_pending_roll(channel_id)
+
+        embed = build_roll_result_embed(payload)
+        await channel.send(embed=embed)
+
+    # ------------------------------------------------------------------
+    # WebSocket event listeners — narrative and presence
     # ------------------------------------------------------------------
 
     @commands.Cog.listener("on_tavern_turn_narrative_end")
@@ -418,6 +565,19 @@ class GameplayCog(commands.Cog):
             except (discord.NotFound, discord.Forbidden):
                 return None
         return channel if isinstance(channel, discord.TextChannel) else None
+
+    def _find_discord_user_for_character(self, character_id: str, campaign_id: str) -> int | None:
+        """Return the Discord user ID whose character matches character_id in campaign_id.
+
+        Iterates the identity service's character cache — O(n) over cached characters,
+        acceptable for the expected number of concurrent campaign members.
+        Returns None if the character is not in cache (e.g. user has never interacted).
+        """
+        for (discord_user_id, camp_id), character in self.identity._character_cache.items():
+            if camp_id == campaign_id and character is not None:
+                if str(character.id) == character_id:
+                    return discord_user_id
+        return None
 
 
 # ---------------------------------------------------------------------------
