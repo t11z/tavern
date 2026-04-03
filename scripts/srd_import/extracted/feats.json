@@ -1,0 +1,175 @@
+[
+  {
+    "name": "Alert",
+    "category": "origin",
+    "repeatable": false,
+    "description": "You gain the following benefits.\n Initiative Proficiency. When you roll Initiative, you can add your Proficiency Bonus to the roll.\n Initiative Swap. Immediately after you roll Initiative, you can swap your Initiative with the Initiative of one willing ally in the same combat. You can't make this swap if you or the ally has the Incapacitated condition.",
+    "mechanical_effects": [
+      {
+        "type": "initiative_bonus",
+        "notes": "Add Proficiency Bonus to Initiative rolls"
+      },
+      {
+        "type": "initiative_swap",
+        "notes": "Immediately after rolling Initiative, swap your Initiative with one willing ally in the same combat; not allowed if you or the ally has the Incapacitated condition"
+      }
+    ]
+  },
+  {
+    "name": "Magic Initiate",
+    "category": "origin",
+    "repeatable": true,
+    "description": "You gain the following benefits.\n Two Cantrips. You learn two cantrips of your choice from the Cleric, Druid, or Wizard spell list. Intelligence, Wisdom, or Charisma is your spellcasting ability for this feat's spells (choose when you select this feat).\n Level 1 Spell. Choose a level 1 spell from the same list you selected for this feat's cantrips. You always have that spell prepared. You can cast it once without a spell slot, and you regain the ability to cast it in that way when you finish a Long Rest. You can also cast the spell using any spell slots you have.\n Spell Change. Whenever you gain a new level, you can replace one of the spells you chose for this feat with a different spell of the same level from the chosen spell list.\n Repeatable. You can take this feat more than once, but you must choose a different spell list each time.",
+    "mechanical_effects": [
+      {
+        "type": "learn_cantrips",
+        "value": 2,
+        "notes": "Two cantrips of your choice from the Cleric, Druid, or Wizard spell list; spellcasting ability is Intelligence, Wisdom, or Charisma (chosen at feat selection)"
+      },
+      {
+        "type": "learn_spell",
+        "value": 1,
+        "notes": "One level 1 spell from the chosen spell list; always prepared; can cast once without a spell slot per Long Rest; can also cast using spell slots"
+      },
+      {
+        "type": "spell_change",
+        "notes": "On each new level gained, may replace one chosen spell with a different spell of the same level from the chosen spell list"
+      }
+    ]
+  },
+  {
+    "name": "Savage Attacker",
+    "category": "origin",
+    "repeatable": false,
+    "description": "You've trained to deal particularly damaging strikes. Once per turn when you hit a target with a weapon, you can roll the weapon's damage dice twice and use either roll against the target.",
+    "mechanical_effects": [
+      {
+        "type": "damage_reroll",
+        "notes": "Once per turn when you hit a target with a weapon, roll the weapon's damage dice twice and use either result"
+      }
+    ]
+  },
+  {
+    "name": "Skilled",
+    "category": "origin",
+    "repeatable": true,
+    "description": "You gain proficiency in any combination of three skills or tools of your choice.\n Repeatable. You can take this feat more than once.",
+    "mechanical_effects": [
+      {
+        "type": "skill_proficiency",
+        "value": 3,
+        "notes": "Gain proficiency in any combination of three skills or tools of your choice"
+      }
+    ]
+  },
+  {
+    "name": "Ability Score Improvement",
+    "category": "general",
+    "prerequisite": {
+      "type": "level",
+      "value": 4
+    },
+    "repeatable": true,
+    "description": "Increase one ability score of your choice by 2, or increase two ability scores of your choice by 1. This feat can't increase an ability score above 20.\n Repeatable. You can take this feat more than once.",
+    "mechanical_effects": [
+      {
+        "type": "ability_score_increase",
+        "notes": "Increase one ability score by 2, or two ability scores by 1 each; cannot increase any score above 20"
+      }
+    ]
+  },
+  {
+    "name": "Grappler",
+    "category": "general",
+    "prerequisite": {
+      "type": "compound",
+      "value": "Level 4+, Strength or Dexterity 13+"
+    },
+    "repeatable": false,
+    "description": "You gain the following benefits.\n Ability Score Increase. Increase your Strength or Dexterity score by 1, to a maximum of 20.\n Punch and Grab. When you hit a creature with an Unarmed Strike as part of the Attack action on your turn, you can use both the Damage and the Grapple option. You can use this benefit only once per turn.\n Attack Advantage. You have Advantage on attack rolls against a creature Grappled by you.\n Fast Wrestler. You don't have to spend extra movement to move a creature Grappled by you if the creature is your size or smaller.",
+    "mechanical_effects": [
+      {
+        "type": "ability_score_increase",
+        "notes": "Increase Strength or Dexterity by 1, to a maximum of 20"
+      },
+      {
+        "type": "special_action",
+        "notes": "Punch and Grab: When hitting with an Unarmed Strike as part of the Attack action, can use both the Damage and the Grapple option; once per turn"
+      },
+      {
+        "type": "attack_advantage",
+        "notes": "Advantage on attack rolls against a creature Grappled by you"
+      },
+      {
+        "type": "movement_benefit",
+        "notes": "Fast Wrestler: No extra movement cost to move a Grappled creature that is your size or smaller"
+      }
+    ]
+  },
+  {
+    "name": "Archery",
+    "category": "fighting_style",
+    "prerequisite": {
+      "type": "feature",
+      "value": "Fighting Style Feature"
+    },
+    "repeatable": false,
+    "description": "You gain a +2 bonus to attack rolls you make with Ranged weapons.",
+    "mechanical_effects": [
+      {
+        "type": "attack_bonus",
+        "value": 2,
+        "notes": "Bonus applies to attack rolls with Ranged weapons"
+      }
+    ]
+  },
+  {
+    "name": "Defense",
+    "category": "fighting_style",
+    "prerequisite": {
+      "type": "feature",
+      "value": "Fighting Style Feature"
+    },
+    "repeatable": false,
+    "description": "While you're wearing Light, Medium, or Heavy armor, you gain a +1 bonus to Armor Class.",
+    "mechanical_effects": [
+      {
+        "type": "armor_class_bonus",
+        "value": 1,
+        "notes": "Bonus applies while wearing Light, Medium, or Heavy armor"
+      }
+    ]
+  },
+  {
+    "name": "Great Weapon Fighting",
+    "category": "fighting_style",
+    "prerequisite": {
+      "type": "feature",
+      "value": "Fighting Style Feature"
+    },
+    "repeatable": false,
+    "description": "When you roll damage for an attack you make with a Melee weapon that you are holding with two hands, you can treat any 1 or 2 on a damage die as a 3. The weapon must have the Two-Handed or Versatile property to gain this benefit.",
+    "mechanical_effects": [
+      {
+        "type": "damage_reroll",
+        "notes": "Treat any 1 or 2 on a damage die as a 3 when rolling damage with a two-handed Melee weapon; weapon must have the Two-Handed or Versatile property"
+      }
+    ]
+  },
+  {
+    "name": "Two-Weapon Fighting",
+    "category": "fighting_style",
+    "prerequisite": {
+      "type": "feature",
+      "value": "Fighting Style Feature"
+    },
+    "repeatable": false,
+    "description": "When you make an extra attack as a result of using a weapon that has the Light property, you can add your ability modifier to the damage of that attack if you aren't already adding it to the damage.",
+    "mechanical_effects": [
+      {
+        "type": "damage_bonus",
+        "notes": "Add ability modifier to the damage of an extra attack made with a Light weapon, if not already added"
+      }
+    ]
+  }
+]
