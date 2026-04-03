@@ -26,3 +26,6 @@ site/
 # OS
 .DS_Store
 Thumbs.db
+
+# Mkdocs render
+site/
