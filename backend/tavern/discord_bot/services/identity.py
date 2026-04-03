@@ -74,9 +74,7 @@ class IdentityService:
     # User resolution
     # ------------------------------------------------------------------
 
-    async def get_tavern_user(
-        self, discord_user_id: int, display_name: str
-    ) -> TavernUser:
+    async def get_tavern_user(self, discord_user_id: int, display_name: str) -> TavernUser:
         """Return the Tavern user for a Discord user, creating one if absent.
 
         Caches the result keyed by ``discord_user_id``.  On the first call the
@@ -93,9 +91,7 @@ class IdentityService:
         self._user_cache[discord_user_id] = user
         return user
 
-    async def _find_or_create_user(
-        self, discord_user_id: int, display_name: str
-    ) -> TavernUser:
+    async def _find_or_create_user(self, discord_user_id: int, display_name: str) -> TavernUser:
         try:
             data = await self._api._json(
                 await self._api._client.get(

@@ -138,9 +138,7 @@ class TestSlugify:
 
 
 class TestCreateCampaignChannels:
-    async def test_creates_category_with_correct_name(
-        self, manager: ChannelManager
-    ) -> None:
+    async def test_creates_category_with_correct_name(self, manager: ChannelManager) -> None:
         guild = make_guild()
         bot_user = make_bot_user()
         await manager.create_campaign_channels(guild, "Shattered Coast", [], bot_user)
@@ -148,9 +146,7 @@ class TestCreateCampaignChannels:
         name_arg = guild.create_category.call_args.args[0]
         assert name_arg == "Tavern: Shattered Coast"
 
-    async def test_creates_text_channel_with_slug(
-        self, manager: ChannelManager
-    ) -> None:
+    async def test_creates_text_channel_with_slug(self, manager: ChannelManager) -> None:
         guild = make_guild()
         bot_user = make_bot_user()
         await manager.create_campaign_channels(guild, "Shattered Coast", [], bot_user)
@@ -166,14 +162,10 @@ class TestCreateCampaignChannels:
         name_arg = guild.create_voice_channel.call_args.args[0]
         assert name_arg == "Shattered Coast Voice"
 
-    async def test_returns_tuple_of_three_channels(
-        self, manager: ChannelManager
-    ) -> None:
+    async def test_returns_tuple_of_three_channels(self, manager: ChannelManager) -> None:
         guild = make_guild()
         bot_user = make_bot_user()
-        result = await manager.create_campaign_channels(
-            guild, "Shattered Coast", [], bot_user
-        )
+        result = await manager.create_campaign_channels(guild, "Shattered Coast", [], bot_user)
         assert result is not None
         assert len(result) == 3
 
@@ -205,9 +197,7 @@ class TestCreateCampaignChannels:
     async def test_members_get_view_and_send(self, manager: ChannelManager) -> None:
         guild = make_guild(bot_id=1, member_ids=[200, 201])
         bot_user = make_bot_user(bot_id=1)
-        await manager.create_campaign_channels(
-            guild, "Shattered Coast", [200, 201], bot_user
-        )
+        await manager.create_campaign_channels(guild, "Shattered Coast", [200, 201], bot_user)
 
         _, kwargs = guild.create_category.call_args
         overwrites = kwargs["overwrites"]
@@ -217,30 +207,22 @@ class TestCreateCampaignChannels:
         assert member_ow.send_messages is True
         assert member_ow.connect is True
 
-    async def test_unknown_member_ids_are_skipped(
-        self, manager: ChannelManager
-    ) -> None:
+    async def test_unknown_member_ids_are_skipped(self, manager: ChannelManager) -> None:
         """guild.get_member returning None should not crash or add an overwrite."""
         guild = make_guild(bot_id=1, member_ids=[])  # no members registered
         bot_user = make_bot_user(bot_id=1)
         # Pass a user ID that guild.get_member can't resolve.
-        result = await manager.create_campaign_channels(
-            guild, "Campaign", [9999], bot_user
-        )
+        result = await manager.create_campaign_channels(guild, "Campaign", [9999], bot_user)
         assert result is not None  # should succeed, just skip the unknown member
 
     async def test_returns_none_on_forbidden(self, manager: ChannelManager) -> None:
         guild = make_guild()
         guild.create_category = AsyncMock(side_effect=discord.Forbidden(MagicMock(), "no perms"))
         bot_user = make_bot_user()
-        result = await manager.create_campaign_channels(
-            guild, "Shattered Coast", [], bot_user
-        )
+        result = await manager.create_campaign_channels(guild, "Shattered Coast", [], bot_user)
         assert result is None
 
-    async def test_text_channel_created_under_category(
-        self, manager: ChannelManager
-    ) -> None:
+    async def test_text_channel_created_under_category(self, manager: ChannelManager) -> None:
         guild = make_guild()
         bot_user = make_bot_user()
         await manager.create_campaign_channels(guild, "Shattered Coast", [], bot_user)
@@ -248,9 +230,7 @@ class TestCreateCampaignChannels:
         _, kwargs = guild.create_text_channel.call_args
         assert kwargs["category"] is guild.create_category.return_value
 
-    async def test_voice_channel_created_under_category(
-        self, manager: ChannelManager
-    ) -> None:
+    async def test_voice_channel_created_under_category(self, manager: ChannelManager) -> None:
         guild = make_guild()
         bot_user = make_bot_user()
         await manager.create_campaign_channels(guild, "Shattered Coast", [], bot_user)
@@ -265,9 +245,7 @@ class TestCreateCampaignChannels:
 
 
 class TestArchiveChannels:
-    def _make_category_with_channels(
-        self, guild: MagicMock, n: int = 2
-    ) -> MagicMock:
+    def _make_category_with_channels(self, guild: MagicMock, n: int = 2) -> MagicMock:
         cat = _make_category(guild)
         cat.name = "Tavern: Shattered Coast"
         channels = [_make_text_channel() for _ in range(n)]
@@ -281,13 +259,9 @@ class TestArchiveChannels:
         category = self._make_category_with_channels(guild, n=2)
         await manager.archive_channels(category)
         for ch in category.channels:
-            ch.set_permissions.assert_called_once_with(
-                guild.default_role, send_messages=False
-            )
+            ch.set_permissions.assert_called_once_with(guild.default_role, send_messages=False)
 
-    async def test_renames_category_with_archive_prefix(
-        self, manager: ChannelManager
-    ) -> None:
+    async def test_renames_category_with_archive_prefix(self, manager: ChannelManager) -> None:
         guild = make_guild()
         category = self._make_category_with_channels(guild)
         await manager.archive_channels(category)
@@ -318,9 +292,7 @@ class TestDeleteChannels:
         ch1.delete.assert_called_once()
         ch2.delete.assert_called_once()
 
-    async def test_deletes_category_after_channels(
-        self, manager: ChannelManager
-    ) -> None:
+    async def test_deletes_category_after_channels(self, manager: ChannelManager) -> None:
         guild = make_guild()
         category = _make_category(guild)
         category.channels = []
@@ -335,39 +307,27 @@ class TestDeleteChannels:
 
 
 class TestCheckPermissions:
-    async def test_returns_empty_when_all_perms_present(
-        self, manager: ChannelManager
-    ) -> None:
+    async def test_returns_empty_when_all_perms_present(self, manager: ChannelManager) -> None:
         guild = make_guild(missing_perms=[])
         result = await manager.check_permissions(guild)
         assert result == []
 
-    async def test_returns_missing_manage_channels(
-        self, manager: ChannelManager
-    ) -> None:
+    async def test_returns_missing_manage_channels(self, manager: ChannelManager) -> None:
         guild = make_guild(missing_perms=["manage_channels"])
         result = await manager.check_permissions(guild)
         assert "manage_channels" in result
 
-    async def test_returns_missing_move_members(
-        self, manager: ChannelManager
-    ) -> None:
+    async def test_returns_missing_move_members(self, manager: ChannelManager) -> None:
         guild = make_guild(missing_perms=["move_members"])
         result = await manager.check_permissions(guild)
         assert "move_members" in result
 
-    async def test_returns_missing_manage_roles(
-        self, manager: ChannelManager
-    ) -> None:
+    async def test_returns_missing_manage_roles(self, manager: ChannelManager) -> None:
         guild = make_guild(missing_perms=["manage_roles"])
         result = await manager.check_permissions(guild)
         assert "manage_roles" in result
 
-    async def test_returns_all_missing_when_none_present(
-        self, manager: ChannelManager
-    ) -> None:
-        guild = make_guild(
-            missing_perms=["manage_channels", "move_members", "manage_roles"]
-        )
+    async def test_returns_all_missing_when_none_present(self, manager: ChannelManager) -> None:
+        guild = make_guild(missing_perms=["manage_channels", "move_members", "manage_roles"])
         result = await manager.check_permissions(guild)
         assert set(result) == {"manage_channels", "move_members", "manage_roles"}

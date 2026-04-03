@@ -28,9 +28,7 @@ class BotConfig:
         _required = ("DISCORD_BOT_TOKEN", "TAVERN_API_URL", "TAVERN_WS_URL")
         missing = [v for v in _required if not os.environ.get(v)]
         if missing:
-            raise ValueError(
-                f"Missing required environment variables: {', '.join(missing)}"
-            )
+            raise ValueError(f"Missing required environment variables: {', '.join(missing)}")
 
         self.discord_bot_token = os.environ["DISCORD_BOT_TOKEN"]
         self.tavern_api_url = os.environ["TAVERN_API_URL"].rstrip("/")

@@ -98,9 +98,7 @@ class LFGView(discord.ui.View):
     async def join_button(
         self, interaction: discord.Interaction, button: discord.ui.Button
     ) -> None:
-        self.session.toggle_player(
-            interaction.user.id, interaction.user.display_name
-        )
+        self.session.toggle_player(interaction.user.id, interaction.user.display_name)
         embed = build_lfg_embed(
             self.session.description,
             self.session.creator_name,
@@ -161,6 +159,7 @@ class LFGView(discord.ui.View):
 
         # 3. Update bot state.
         from uuid import UUID
+
         self.cog.state.bind_channel(
             ChannelBinding(
                 channel_id=text_channel.id,
@@ -238,9 +237,7 @@ class LFGCog(commands.Cog):
         description="Post a Looking For Group listing and gather players.",
     )
     @app_commands.describe(description="Campaign description: world, schedule, level, etc.")
-    async def lfg(
-        self, interaction: discord.Interaction, description: str
-    ) -> None:
+    async def lfg(self, interaction: discord.Interaction, description: str) -> None:
         """Post an LFG embed with Join and Launch buttons."""
         session = LFGSession(
             message_id=0,  # filled in after send
@@ -251,9 +248,7 @@ class LFGCog(commands.Cog):
         # Creator joins automatically.
         session.add_player(interaction.user.id, interaction.user.display_name)
 
-        embed = build_lfg_embed(
-            description, interaction.user.display_name, session.all_players
-        )
+        embed = build_lfg_embed(description, interaction.user.display_name, session.all_players)
         view = LFGView(self, session)
 
         await interaction.response.send_message(embed=embed, view=view)
