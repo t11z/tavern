@@ -39,6 +39,15 @@ refactor(core): extract condition state machine from combat.py
 chore: update dependencies
 ```
 
+### Pull Requests
+
+When creating PRs, apply labels that match the change. Use component labels for what is affected and type labels for what kind of work it is:
+
+Component: `rules-engine`, `narrator`, `web-client`, `discord-bot`, `srd-data`, `world-preset`, `api`, `infrastructure`
+Type: `bug`, `enhancement`, `documentation`, `adr`, `refactor`, `test`
+
+A PR can have multiple labels. A bugfix in the Rules Engine gets `bug` + `rules-engine`. A new API endpoint gets `enhancement` + `api`. Use `gh pr edit --add-label` or set labels at PR creation time.
+
 ### Dependency Direction
 
 `core/` must never import from `dm/`. The Rules Engine has no knowledge of the narrator, the LLM provider, or prompt construction. The dependency is strictly one-directional: `dm/` depends on `core/`, never the reverse.
