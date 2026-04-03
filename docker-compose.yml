@@ -1,0 +1,52 @@
+services:
+  tavern:
+    build: .
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://tavern:tavern@postgres:5432/tavern}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      SECRET_KEY: ${SECRET_KEY:-change-me-in-production}
+    env_file:
+      - path: .env
+        required: false
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: tavern
+      POSTGRES_PASSWORD: tavern
+      POSTGRES_DB: tavern
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tavern -d tavern"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  # discord-bot:
+  #   Activates when DISCORD_BOT_TOKEN is set in .env.
+  #   Uncomment and configure once the bot service is implemented (Phase 5+).
+  #
+  # discord-bot:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile.bot
+  #   depends_on:
+  #     - tavern
+  #   environment:
+  #     TAVERN_API_URL: http://tavern:3000
+  #     DISCORD_BOT_TOKEN: ${DISCORD_BOT_TOKEN}
+  #   env_file:
+  #     - path: .env
+  #       required: false
+  #   restart: unless-stopped
+
+volumes:
+  postgres_data:

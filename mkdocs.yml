@@ -53,14 +53,14 @@ nav:
     - Quickstart: quickstart.md
     - How to Play: how-to-play.md
   - Architecture:
-    - ADR-0000 — ADR Process: adr/ADR-0000-meta.md
-    - ADR-0001 — Rules Engine: adr/ADR-0001-rules-engine.md
+    - ADR-0000 — ADR Process: adr/ADR-0000-adr-process-and-template.md
+    - ADR-0001 — Rules Engine: adr/ADR-0001-srd-rules-engine.md
     - ADR-0002 — Claude as Narrator: adr/ADR-0002-claude-as-narrator.md
     - ADR-0003 — Tech Stack: adr/ADR-0003-tech-stack.md
-    - ADR-0004 — Campaign Lifecycle: adr/ADR-0004-campaign-session-lifecycle.md
+    - ADR-0004 — Campaign Lifecycle: adr/ADR-0004-campaign-and-session-lifecycle.md
     - ADR-0005 — Client Architecture: adr/ADR-0005-client-architecture.md
-    - ADR-0006 — Authentication: adr/ADR-0006-auth.md
-    - ADR-0007 — Multiplayer: adr/ADR-0007-multiplayer.md
+    - ADR-0006 — Authentication: adr/ADR-0006-authentication-and-authorization.md
+    - ADR-0007 — Multiplayer: adr/ADR-0007-multiplayer-and-realtime-communication.md
   - Game Design:
     - Campaign Design: game-design/campaign-design.md
     - Character Creation: game-design/character-creation.md
