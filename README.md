@@ -51,7 +51,16 @@ Open [http://localhost:3000](http://localhost:3000) and start your adventure.
 
 **At the table**: Open the shared display on a laptop or TV. Each player joins on their phone by scanning a QR code. Claude narrates through the speakers.
 
-**On Discord**: Add the Tavern bot to your server. Start a campaign in a text channel, join a voice channel, and play — Claude speaks as the GM. Type or talk, your choice.
+**On Discord**: Add the Tavern bot to your server, start a campaign in a text channel, and play — Claude narrates as the GM.
+
+Setup:
+1. Create a Discord application at [discord.com/developers/applications](https://discord.com/developers/applications) and add a bot user.
+2. Enable the **Message Content** privileged intent under *Bot → Privileged Gateway Intents*.
+3. Copy the bot token and add it to your `.env` file: `DISCORD_BOT_TOKEN=your-token-here`
+4. Run `docker compose up` — the `discord-bot` service starts automatically alongside the API.
+5. Invite the bot to your server using the OAuth2 URL (scopes: `bot`, `applications.commands`; permissions: `Send Messages`, `Manage Threads`, `Read Message History`).
+
+See [`docs/game-design/discord-bot.md`](docs/game-design/discord-bot.md) for the full command reference and gameplay guide.
 
 ---
 

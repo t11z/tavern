@@ -745,22 +745,30 @@ class GameplayCog(commands.Cog):
 
         # Post narrative as plain message(s), split at sentence boundaries.
         chunks = _split_narrative(narrative)
-        for chunk in chunks:
-            await channel.send(chunk)
+        try:
+            for chunk in chunks:
+                await channel.send(chunk)
 
-        # Attach combat results embed if mechanical results are present.
-        mechanical_results: list[dict] = payload.get("mechanical_results") or []  # type: ignore[assignment]
-        if mechanical_results:
-            combat_embed = build_combat_embed(mechanical_results)
+            # Attach combat results embed if mechanical results are present.
+            mechanical_results: list[dict] = payload.get("mechanical_results") or []  # type: ignore[assignment]
+            if mechanical_results:
+                combat_embed = build_combat_embed(mechanical_results)
 
-            # Append party status if show_party_status is on and character
-            # updates are in the payload.
-            character_updates: list[dict] = payload.get("character_updates") or []  # type: ignore[assignment]
-            party_line = build_party_status(character_updates) if character_updates else ""
-            if party_line:
-                combat_embed.add_field(name="📊 Party Status", value=party_line, inline=False)
+                # Append party status if show_party_status is on and character
+                # updates are in the payload.
+                character_updates: list[dict] = payload.get("character_updates") or []  # type: ignore[assignment]
+                party_line = build_party_status(character_updates) if character_updates else ""
+                if party_line:
+                    combat_embed.add_field(name="📊 Party Status", value=party_line, inline=False)
 
-            await channel.send(embed=combat_embed)
+                await channel.send(embed=combat_embed)
+        except discord.HTTPException as exc:
+            logger.error(
+                "Failed to post narrative to channel %s (turn_id=%s): %s",
+                channel_id,
+                payload.get("turn_id"),
+                exc,
+            )
 
     @commands.Cog.listener("on_tavern_character_updated")
     async def on_tavern_character_updated(self, payload: dict) -> None:  # type: ignore[type-arg]
@@ -782,7 +790,10 @@ class GameplayCog(commands.Cog):
         name: str = (
             payload.get("display_name") or payload.get("character_name") or "A new adventurer"
         )
-        await channel.send(f"👋 {name} has joined the session.")
+        try:
+            await channel.send(f"👋 {name} has joined the session.")
+        except discord.HTTPException as exc:
+            logger.error("Failed to post player_joined to channel %s: %s", channel_id, exc)
 
     @commands.Cog.listener("on_tavern_player_left")
     async def on_tavern_player_left(self, payload: dict) -> None:  # type: ignore[type-arg]
@@ -793,7 +804,10 @@ class GameplayCog(commands.Cog):
         if channel is None:
             return
         name: str = payload.get("display_name") or payload.get("character_name") or "A player"
-        await channel.send(f"👋 {name} has left the session.")
+        try:
+            await channel.send(f"👋 {name} has left the session.")
+        except discord.HTTPException as exc:
+            logger.error("Failed to post player_left to channel %s: %s", channel_id, exc)
 
     @commands.Cog.listener("on_tavern_system_error")
     async def on_tavern_system_error(self, payload: dict) -> None:  # type: ignore[type-arg]
@@ -806,7 +820,10 @@ class GameplayCog(commands.Cog):
         error_msg: str = (
             payload.get("message") or payload.get("error") or "An unknown error occurred."
         )
-        await channel.send(f"⚠️ {error_msg}")
+        try:
+            await channel.send(f"⚠️ {error_msg}")
+        except discord.HTTPException as exc:
+            logger.error("Failed to post system_error to channel %s: %s", channel_id, exc)
 
     # ------------------------------------------------------------------
     # Shared helpers
