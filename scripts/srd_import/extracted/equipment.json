@@ -1,0 +1,1480 @@
+[
+  {
+    "name": "Club",
+    "category": "simple melee weapon",
+    "weight": 2,
+    "cost": "1 SP",
+    "description": "1d4 Bludgeoning. Properties: Light. Mastery: Slow."
+  },
+  {
+    "name": "Dagger",
+    "category": "simple melee weapon",
+    "weight": 1,
+    "cost": "2 GP",
+    "description": "1d4 Piercing. Properties: Finesse, Light, Thrown (Range 20/60). Mastery: Nick."
+  },
+  {
+    "name": "Greatclub",
+    "category": "simple melee weapon",
+    "weight": 10,
+    "cost": "2 SP",
+    "description": "1d8 Bludgeoning. Properties: Two-Handed. Mastery: Push."
+  },
+  {
+    "name": "Handaxe",
+    "category": "simple melee weapon",
+    "weight": 2,
+    "cost": "5 GP",
+    "description": "1d6 Slashing. Properties: Light, Thrown (Range 20/60). Mastery: Vex."
+  },
+  {
+    "name": "Javelin",
+    "category": "simple melee weapon",
+    "weight": 2,
+    "cost": "5 SP",
+    "description": "1d6 Piercing. Properties: Thrown (Range 30/120). Mastery: Slow."
+  },
+  {
+    "name": "Light Hammer",
+    "category": "simple melee weapon",
+    "weight": 2,
+    "cost": "2 GP",
+    "description": "1d4 Bludgeoning. Properties: Light, Thrown (Range 20/60). Mastery: Nick."
+  },
+  {
+    "name": "Mace",
+    "category": "simple melee weapon",
+    "weight": 4,
+    "cost": "5 GP",
+    "description": "1d6 Bludgeoning. Mastery: Sap."
+  },
+  {
+    "name": "Quarterstaff",
+    "category": "simple melee weapon",
+    "weight": 4,
+    "cost": "2 SP",
+    "description": "1d6 Bludgeoning. Properties: Versatile (1d8). Mastery: Topple."
+  },
+  {
+    "name": "Sickle",
+    "category": "simple melee weapon",
+    "weight": 2,
+    "cost": "1 GP",
+    "description": "1d4 Slashing. Properties: Light. Mastery: Nick."
+  },
+  {
+    "name": "Spear",
+    "category": "simple melee weapon",
+    "weight": 3,
+    "cost": "1 GP",
+    "description": "1d6 Piercing. Properties: Thrown (Range 20/60), Versatile (1d8). Mastery: Sap."
+  },
+  {
+    "name": "Dart",
+    "category": "simple ranged weapon",
+    "weight": 0.25,
+    "cost": "5 CP",
+    "description": "1d4 Piercing. Properties: Finesse, Thrown (Range 20/60). Mastery: Vex."
+  },
+  {
+    "name": "Light Crossbow",
+    "category": "simple ranged weapon",
+    "weight": 5,
+    "cost": "25 GP",
+    "description": "1d8 Piercing. Properties: Ammunition (Range 80/320; Bolt), Loading, Two-Handed. Mastery: Slow."
+  },
+  {
+    "name": "Shortbow",
+    "category": "simple ranged weapon",
+    "weight": 2,
+    "cost": "25 GP",
+    "description": "1d6 Piercing. Properties: Ammunition (Range 80/320; Arrow), Two-Handed. Mastery: Vex."
+  },
+  {
+    "name": "Sling",
+    "category": "simple ranged weapon",
+    "weight": null,
+    "cost": "1 SP",
+    "description": "1d4 Bludgeoning. Properties: Ammunition (Range 30/120; Bullet). Mastery: Slow."
+  },
+  {
+    "name": "Battleaxe",
+    "category": "martial melee weapon",
+    "weight": 4,
+    "cost": "10 GP",
+    "description": "1d8 Slashing. Properties: Versatile (1d10). Mastery: Topple."
+  },
+  {
+    "name": "Flail",
+    "category": "martial melee weapon",
+    "weight": 2,
+    "cost": "10 GP",
+    "description": "1d8 Bludgeoning. Mastery: Sap."
+  },
+  {
+    "name": "Glaive",
+    "category": "martial melee weapon",
+    "weight": 6,
+    "cost": "20 GP",
+    "description": "1d10 Slashing. Properties: Heavy, Reach, Two-Handed. Mastery: Graze."
+  },
+  {
+    "name": "Greataxe",
+    "category": "martial melee weapon",
+    "weight": 7,
+    "cost": "30 GP",
+    "description": "1d12 Slashing. Properties: Heavy, Two-Handed. Mastery: Cleave."
+  },
+  {
+    "name": "Greatsword",
+    "category": "martial melee weapon",
+    "weight": 6,
+    "cost": "50 GP",
+    "description": "2d6 Slashing. Properties: Heavy, Two-Handed. Mastery: Graze."
+  },
+  {
+    "name": "Halberd",
+    "category": "martial melee weapon",
+    "weight": 6,
+    "cost": "20 GP",
+    "description": "1d10 Slashing. Properties: Heavy, Reach, Two-Handed. Mastery: Cleave."
+  },
+  {
+    "name": "Lance",
+    "category": "martial melee weapon",
+    "weight": 6,
+    "cost": "10 GP",
+    "description": "1d10 Piercing. Properties: Heavy, Reach, Two-Handed (unless mounted). Mastery: Topple."
+  },
+  {
+    "name": "Longsword",
+    "category": "martial melee weapon",
+    "weight": 3,
+    "cost": "15 GP",
+    "description": "1d8 Slashing. Properties: Versatile (1d10). Mastery: Sap."
+  },
+  {
+    "name": "Maul",
+    "category": "martial melee weapon",
+    "weight": 10,
+    "cost": "10 GP",
+    "description": "2d6 Bludgeoning. Properties: Heavy, Two-Handed. Mastery: Topple."
+  },
+  {
+    "name": "Morningstar",
+    "category": "martial melee weapon",
+    "weight": 4,
+    "cost": "15 GP",
+    "description": "1d8 Piercing. Mastery: Sap."
+  },
+  {
+    "name": "Pike",
+    "category": "martial melee weapon",
+    "weight": 18,
+    "cost": "5 GP",
+    "description": "1d10 Piercing. Properties: Heavy, Reach, Two-Handed. Mastery: Push."
+  },
+  {
+    "name": "Rapier",
+    "category": "martial melee weapon",
+    "weight": 2,
+    "cost": "25 GP",
+    "description": "1d8 Piercing. Properties: Finesse. Mastery: Vex."
+  },
+  {
+    "name": "Scimitar",
+    "category": "martial melee weapon",
+    "weight": 3,
+    "cost": "25 GP",
+    "description": "1d6 Slashing. Properties: Finesse, Light. Mastery: Nick."
+  },
+  {
+    "name": "Shortsword",
+    "category": "martial melee weapon",
+    "weight": 2,
+    "cost": "10 GP",
+    "description": "1d6 Piercing. Properties: Finesse, Light. Mastery: Vex."
+  },
+  {
+    "name": "Trident",
+    "category": "martial melee weapon",
+    "weight": 4,
+    "cost": "5 GP",
+    "description": "1d8 Piercing. Properties: Thrown (Range 20/60), Versatile (1d10). Mastery: Topple."
+  },
+  {
+    "name": "Warhammer",
+    "category": "martial melee weapon",
+    "weight": 5,
+    "cost": "15 GP",
+    "description": "1d8 Bludgeoning. Properties: Versatile (1d10). Mastery: Push."
+  },
+  {
+    "name": "War Pick",
+    "category": "martial melee weapon",
+    "weight": 2,
+    "cost": "5 GP",
+    "description": "1d8 Piercing. Properties: Versatile (1d10). Mastery: Sap."
+  },
+  {
+    "name": "Whip",
+    "category": "martial melee weapon",
+    "weight": 3,
+    "cost": "2 GP",
+    "description": "1d4 Slashing. Properties: Finesse, Reach. Mastery: Slow."
+  },
+  {
+    "name": "Blowgun",
+    "category": "martial ranged weapon",
+    "weight": 1,
+    "cost": "10 GP",
+    "description": "1 Piercing. Properties: Ammunition (Range 25/100; Needle), Loading. Mastery: Vex."
+  },
+  {
+    "name": "Hand Crossbow",
+    "category": "martial ranged weapon",
+    "weight": 3,
+    "cost": "75 GP",
+    "description": "1d6 Piercing. Properties: Ammunition (Range 30/120; Bolt), Light, Loading. Mastery: Vex."
+  },
+  {
+    "name": "Heavy Crossbow",
+    "category": "martial ranged weapon",
+    "weight": 18,
+    "cost": "50 GP",
+    "description": "1d10 Piercing. Properties: Ammunition (Range 100/400; Bolt), Heavy, Loading, Two-Handed. Mastery: Push."
+  },
+  {
+    "name": "Longbow",
+    "category": "martial ranged weapon",
+    "weight": 2,
+    "cost": "50 GP",
+    "description": "1d8 Piercing. Properties: Ammunition (Range 150/600; Arrow), Heavy, Two-Handed. Mastery: Slow."
+  },
+  {
+    "name": "Musket",
+    "category": "martial ranged weapon",
+    "weight": 10,
+    "cost": "500 GP",
+    "description": "1d12 Piercing. Properties: Ammunition (Range 40/120; Bullet), Loading, Two-Handed. Mastery: Slow."
+  },
+  {
+    "name": "Pistol",
+    "category": "martial ranged weapon",
+    "weight": 3,
+    "cost": "250 GP",
+    "description": "1d10 Piercing. Properties: Ammunition (Range 30/90; Bullet), Loading. Mastery: Vex."
+  },
+  {
+    "name": "Padded Armor",
+    "category": "light armor",
+    "weight": 8,
+    "cost": "5 GP",
+    "description": "AC: 11 + Dex modifier. Stealth: Disadvantage."
+  },
+  {
+    "name": "Leather Armor",
+    "category": "light armor",
+    "weight": 10,
+    "cost": "10 GP",
+    "description": "AC: 11 + Dex modifier."
+  },
+  {
+    "name": "Studded Leather Armor",
+    "category": "light armor",
+    "weight": 13,
+    "cost": "45 GP",
+    "description": "AC: 12 + Dex modifier."
+  },
+  {
+    "name": "Hide Armor",
+    "category": "medium armor",
+    "weight": 12,
+    "cost": "10 GP",
+    "description": "AC: 12 + Dex modifier (max 2)."
+  },
+  {
+    "name": "Chain Shirt",
+    "category": "medium armor",
+    "weight": 20,
+    "cost": "50 GP",
+    "description": "AC: 13 + Dex modifier (max 2)."
+  },
+  {
+    "name": "Scale Mail",
+    "category": "medium armor",
+    "weight": 45,
+    "cost": "50 GP",
+    "description": "AC: 14 + Dex modifier (max 2). Stealth: Disadvantage."
+  },
+  {
+    "name": "Breastplate",
+    "category": "medium armor",
+    "weight": 20,
+    "cost": "400 GP",
+    "description": "AC: 14 + Dex modifier (max 2)."
+  },
+  {
+    "name": "Half Plate Armor",
+    "category": "medium armor",
+    "weight": 40,
+    "cost": "750 GP",
+    "description": "AC: 15 + Dex modifier (max 2). Stealth: Disadvantage."
+  },
+  {
+    "name": "Ring Mail",
+    "category": "heavy armor",
+    "weight": 40,
+    "cost": "30 GP",
+    "description": "AC: 14. Stealth: Disadvantage."
+  },
+  {
+    "name": "Chain Mail",
+    "category": "heavy armor",
+    "weight": 55,
+    "cost": "75 GP",
+    "description": "AC: 16. Requires Str 13. Stealth: Disadvantage."
+  },
+  {
+    "name": "Splint Armor",
+    "category": "heavy armor",
+    "weight": 60,
+    "cost": "200 GP",
+    "description": "AC: 17. Requires Str 15. Stealth: Disadvantage."
+  },
+  {
+    "name": "Plate Armor",
+    "category": "heavy armor",
+    "weight": 65,
+    "cost": "1,500 GP",
+    "description": "AC: 18. Requires Str 15. Stealth: Disadvantage."
+  },
+  {
+    "name": "Shield",
+    "category": "shield",
+    "weight": 6,
+    "cost": "10 GP",
+    "description": "AC: +2."
+  },
+  {
+    "name": "Alchemist's Supplies",
+    "category": "artisan's tool",
+    "weight": 8,
+    "cost": "50 GP",
+    "description": "Ability: Intelligence. Utilize: Identify a substance (DC 15), or start a fire (DC 15). Craft: Acid, Alchemist's Fire, Component Pouch, Oil, Paper, Perfume."
+  },
+  {
+    "name": "Brewer's Supplies",
+    "category": "artisan's tool",
+    "weight": 9,
+    "cost": "20 GP",
+    "description": "Ability: Intelligence. Utilize: Detect poisoned drink (DC 15), or identify alcohol (DC 10). Craft: Antitoxin."
+  },
+  {
+    "name": "Calligrapher's Supplies",
+    "category": "artisan's tool",
+    "weight": 5,
+    "cost": "10 GP",
+    "description": "Ability: Dexterity. Utilize: Write text with impressive flourishes that guard against forgery (DC 15). Craft: Ink, Spell Scroll."
+  },
+  {
+    "name": "Carpenter's Tools",
+    "category": "artisan's tool",
+    "weight": 6,
+    "cost": "8 GP",
+    "description": "Ability: Strength. Utilize: Seal or pry open a door or container (DC 20). Craft: Club, Greatclub, Quarterstaff, Barrel, Chest, Ladder, Pole, Portable Ram, Torch."
+  },
+  {
+    "name": "Cartographer's Tools",
+    "category": "artisan's tool",
+    "weight": 6,
+    "cost": "15 GP",
+    "description": "Ability: Wisdom. Utilize: Draft a map of a small area (DC 15). Craft: Map."
+  },
+  {
+    "name": "Cobbler's Tools",
+    "category": "artisan's tool",
+    "weight": 5,
+    "cost": "5 GP",
+    "description": "Ability: Dexterity. Utilize: Modify footwear to give Advantage on the wearer's next Dexterity (Acrobatics) check (DC 10). Craft: Climber's Kit."
+  },
+  {
+    "name": "Cook's Utensils",
+    "category": "artisan's tool",
+    "weight": 8,
+    "cost": "1 GP",
+    "description": "Ability: Wisdom. Utilize: Improve food's flavor (DC 10), or detect spoiled or poisoned food (DC 15). Craft: Rations."
+  },
+  {
+    "name": "Glassblower's Tools",
+    "category": "artisan's tool",
+    "weight": 5,
+    "cost": "30 GP",
+    "description": "Ability: Intelligence. Utilize: Discern what a glass object held in the past 24 hours (DC 15). Craft: Glass Bottle, Magnifying Glass, Spyglass, Vial."
+  },
+  {
+    "name": "Jeweler's Tools",
+    "category": "artisan's tool",
+    "weight": 2,
+    "cost": "25 GP",
+    "description": "Ability: Intelligence. Utilize: Discern a gem's value (DC 15). Craft: Arcane Focus, Holy Symbol."
+  },
+  {
+    "name": "Leatherworker's Tools",
+    "category": "artisan's tool",
+    "weight": 5,
+    "cost": "5 GP",
+    "description": "Ability: Dexterity. Utilize: Add a design to a leather item (DC 10). Craft: Sling, Whip, Hide Armor, Leather Armor, Studded Leather Armor, Backpack, Crossbow Bolt Case, Map or Scroll Case, Parchment, Pouch, Quiver, Waterskin."
+  },
+  {
+    "name": "Mason's Tools",
+    "category": "artisan's tool",
+    "weight": 8,
+    "cost": "10 GP",
+    "description": "Ability: Strength. Utilize: Chisel a symbol or hole in stone (DC 10). Craft: Block and Tackle."
+  },
+  {
+    "name": "Painter's Supplies",
+    "category": "artisan's tool",
+    "weight": 5,
+    "cost": "10 GP",
+    "description": "Ability: Wisdom. Utilize: Paint a recognizable image of something you've seen (DC 10). Craft: Druidic Focus, Holy Symbol."
+  },
+  {
+    "name": "Potter's Tools",
+    "category": "artisan's tool",
+    "weight": 3,
+    "cost": "10 GP",
+    "description": "Ability: Intelligence. Utilize: Discern what a ceramic object held in the past 24 hours (DC 15). Craft: Jug, Lamp."
+  },
+  {
+    "name": "Smith's Tools",
+    "category": "artisan's tool",
+    "weight": 8,
+    "cost": "20 GP",
+    "description": "Ability: Strength. Utilize: Pry open a door or container (DC 20). Craft: Any Melee weapon (except Club, Greatclub, Quarterstaff, and Whip), Medium armor (except Hide), Heavy armor, Ball Bearings, Bucket, Caltrops, Chain, Crowbar, Firearm Bullets, Grappling Hook, Iron Pot, Iron Spikes, Sling Bullets."
+  },
+  {
+    "name": "Tinker's Tools",
+    "category": "artisan's tool",
+    "weight": 10,
+    "cost": "50 GP",
+    "description": "Ability: Dexterity. Utilize: Assemble a Tiny item composed of scrap, which falls apart in 1 minute (DC 20). Craft: Musket, Pistol, Bell, Bullseye Lantern, Flask, Hooded Lantern, Hunting Trap, Lock, Manacles, Mirror, Shovel, Signal Whistle, Tinderbox."
+  },
+  {
+    "name": "Weaver's Tools",
+    "category": "artisan's tool",
+    "weight": 5,
+    "cost": "1 GP",
+    "description": "Ability: Dexterity. Utilize: Mend a tear in clothing (DC 10), or sew a Tiny design (DC 10). Craft: Padded Armor, Basket, Bedroll, Blanket, Fine Clothes, Net, Robe, Rope, Sack, String, Tent, Traveler's Clothes."
+  },
+  {
+    "name": "Woodcarver's Tools",
+    "category": "artisan's tool",
+    "weight": 5,
+    "cost": "1 GP",
+    "description": "Ability: Dexterity. Utilize: Carve a pattern in wood (DC 10). Craft: Club, Greatclub, Quarterstaff, Ranged weapons (except Pistol, Musket, and Sling), Arcane Focus, Arrows, Bolts, Druidic Focus, Ink Pen, Needles."
+  },
+  {
+    "name": "Disguise Kit",
+    "category": "tool",
+    "weight": 3,
+    "cost": "25 GP",
+    "description": "Ability: Charisma. Utilize: Apply makeup (DC 10). Craft: Costume."
+  },
+  {
+    "name": "Forgery Kit",
+    "category": "tool",
+    "weight": 5,
+    "cost": "15 GP",
+    "description": "Ability: Dexterity. Utilize: Mimic 10 or fewer words of someone else's handwriting (DC 15), or duplicate a wax seal (DC 20)."
+  },
+  {
+    "name": "Gaming Set",
+    "category": "tool",
+    "weight": null,
+    "cost": "Varies",
+    "description": "Ability: Wisdom. Utilize: Discern whether someone is cheating (DC 10), or win the game (DC 20). Variants: Dice (1 SP), dragonchess (1 GP), playing cards (5 SP), three-dragon ante (1 GP)."
+  },
+  {
+    "name": "Dice Set",
+    "category": "tool",
+    "weight": null,
+    "cost": "1 SP",
+    "description": "A gaming set variant. Ability: Wisdom."
+  },
+  {
+    "name": "Dragonchess Set",
+    "category": "tool",
+    "weight": null,
+    "cost": "1 GP",
+    "description": "A gaming set variant. Ability: Wisdom."
+  },
+  {
+    "name": "Playing Card Set",
+    "category": "tool",
+    "weight": null,
+    "cost": "5 SP",
+    "description": "A gaming set variant. Ability: Wisdom."
+  },
+  {
+    "name": "Three-Dragon Ante Set",
+    "category": "tool",
+    "weight": null,
+    "cost": "1 GP",
+    "description": "A gaming set variant. Ability: Wisdom."
+  },
+  {
+    "name": "Herbalism Kit",
+    "category": "tool",
+    "weight": 3,
+    "cost": "5 GP",
+    "description": "Ability: Intelligence. Utilize: Identify a plant (DC 10). Craft: Antitoxin, Candle, Healer's Kit, Potion of Healing."
+  },
+  {
+    "name": "Musical Instrument",
+    "category": "tool",
+    "weight": null,
+    "cost": "Varies",
+    "description": "Ability: Charisma. Utilize: Play a known tune (DC 10), or improvise a song (DC 15). Variants: Bagpipes (30 GP, 6 lb.), drum (6 GP, 3 lb.), dulcimer (25 GP, 10 lb.), flute (2 GP, 1 lb.), horn (3 GP, 2 lb.), lute (35 GP, 2 lb.), lyre (30 GP, 2 lb.), pan flute (12 GP, 2 lb.), shawm (2 GP, 1 lb.), viol (30 GP, 1 lb.)."
+  },
+  {
+    "name": "Bagpipes",
+    "category": "tool",
+    "weight": 6,
+    "cost": "30 GP",
+    "description": "A musical instrument variant. Ability: Charisma."
+  },
+  {
+    "name": "Drum",
+    "category": "tool",
+    "weight": 3,
+    "cost": "6 GP",
+    "description": "A musical instrument variant. Ability: Charisma."
+  },
+  {
+    "name": "Dulcimer",
+    "category": "tool",
+    "weight": 10,
+    "cost": "25 GP",
+    "description": "A musical instrument variant. Ability: Charisma."
+  },
+  {
+    "name": "Flute",
+    "category": "tool",
+    "weight": 1,
+    "cost": "2 GP",
+    "description": "A musical instrument variant. Ability: Charisma."
+  },
+  {
+    "name": "Horn",
+    "category": "tool",
+    "weight": 2,
+    "cost": "3 GP",
+    "description": "A musical instrument variant. Ability: Charisma."
+  },
+  {
+    "name": "Lute",
+    "category": "tool",
+    "weight": 2,
+    "cost": "35 GP",
+    "description": "A musical instrument variant. Ability: Charisma."
+  },
+  {
+    "name": "Lyre",
+    "category": "tool",
+    "weight": 2,
+    "cost": "30 GP",
+    "description": "A musical instrument variant. Ability: Charisma."
+  },
+  {
+    "name": "Pan Flute",
+    "category": "tool",
+    "weight": 2,
+    "cost": "12 GP",
+    "description": "A musical instrument variant. Ability: Charisma."
+  },
+  {
+    "name": "Shawm",
+    "category": "tool",
+    "weight": 1,
+    "cost": "2 GP",
+    "description": "A musical instrument variant. Ability: Charisma."
+  },
+  {
+    "name": "Viol",
+    "category": "tool",
+    "weight": 1,
+    "cost": "30 GP",
+    "description": "A musical instrument variant. Ability: Charisma."
+  },
+  {
+    "name": "Navigator's Tools",
+    "category": "tool",
+    "weight": 2,
+    "cost": "25 GP",
+    "description": "Ability: Wisdom. Utilize: Plot a course (DC 10), or determine position by stargazing (DC 15)."
+  },
+  {
+    "name": "Poisoner's Kit",
+    "category": "tool",
+    "weight": 2,
+    "cost": "50 GP",
+    "description": "Ability: Intelligence. Utilize: Detect a poisoned object (DC 10). Craft: Basic Poison."
+  },
+  {
+    "name": "Thieves' Tools",
+    "category": "tool",
+    "weight": 1,
+    "cost": "25 GP",
+    "description": "Ability: Dexterity. Utilize: Pick a lock (DC 15), or disarm a trap (DC 15)."
+  },
+  {
+    "name": "Acid",
+    "category": "adventuring gear",
+    "weight": 1,
+    "cost": "25 GP",
+    "description": "When you take the Attack action, you can replace one of your attacks with throwing a vial of Acid. Target one creature or object you can see within 20 feet. The target must succeed on a Dexterity saving throw (DC 8 plus your Dexterity modifier and Proficiency Bonus) or take 2d6 Acid damage."
+  },
+  {
+    "name": "Alchemist's Fire",
+    "category": "adventuring gear",
+    "weight": 1,
+    "cost": "50 GP",
+    "description": "When you take the Attack action, you can replace one of your attacks with throwing a flask of Alchemist's Fire. Target one creature or object within 20 feet. The target must succeed on a Dexterity saving throw (DC 8 plus your Dexterity modifier and Proficiency Bonus) or take 1d4 Fire damage and start burning."
+  },
+  {
+    "name": "Antitoxin",
+    "category": "adventuring gear",
+    "weight": null,
+    "cost": "50 GP",
+    "description": "As a Bonus Action, you can drink a vial of Antitoxin to gain Advantage on saving throws to avoid or end the Poisoned condition for 1 hour."
+  },
+  {
+    "name": "Arcane Focus",
+    "category": "adventuring gear",
+    "weight": null,
+    "cost": "Varies",
+    "description": "An Arcane Focus is bejeweled or carved to channel arcane magic. A Sorcerer, Warlock, or Wizard can use such an item as a Spellcasting Focus. Variants: Crystal (1 lb., 10 GP), Orb (3 lb., 20 GP), Rod (2 lb., 10 GP), Staff (4 lb., 5 GP), Wand (1 lb., 10 GP)."
+  },
+  {
+    "name": "Crystal",
+    "category": "arcane focus",
+    "weight": 1,
+    "cost": "10 GP",
+    "description": "An arcane focus that can be used as a Spellcasting Focus by a Sorcerer, Warlock, or Wizard."
+  },
+  {
+    "name": "Orb",
+    "category": "arcane focus",
+    "weight": 3,
+    "cost": "20 GP",
+    "description": "An arcane focus that can be used as a Spellcasting Focus by a Sorcerer, Warlock, or Wizard."
+  },
+  {
+    "name": "Rod",
+    "category": "arcane focus",
+    "weight": 2,
+    "cost": "10 GP",
+    "description": "An arcane focus that can be used as a Spellcasting Focus by a Sorcerer, Warlock, or Wizard."
+  },
+  {
+    "name": "Staff (Arcane Focus)",
+    "category": "arcane focus",
+    "weight": 4,
+    "cost": "5 GP",
+    "description": "An arcane focus (also functions as a Quarterstaff) that can be used as a Spellcasting Focus by a Sorcerer, Warlock, or Wizard."
+  },
+  {
+    "name": "Wand",
+    "category": "arcane focus",
+    "weight": 1,
+    "cost": "10 GP",
+    "description": "An arcane focus that can be used as a Spellcasting Focus by a Sorcerer, Warlock, or Wizard."
+  },
+  {
+    "name": "Backpack",
+    "category": "adventuring gear",
+    "weight": 5,
+    "cost": "2 GP",
+    "description": "Holds up to 30 pounds within 1 cubic foot. Can also serve as a saddlebag."
+  },
+  {
+    "name": "Ball Bearings",
+    "category": "adventuring gear",
+    "weight": 2,
+    "cost": "1 GP",
+    "description": "As a Utilize action, you can spill Ball Bearings to cover a level, 10-foot-square area within 10 feet. A creature entering this area must succeed on a DC 10 Dexterity saving throw or have the Prone condition. Takes 10 minutes to recover."
+  },
+  {
+    "name": "Barrel",
+    "category": "adventuring gear",
+    "weight": 70,
+    "cost": "2 GP",
+    "description": "Holds up to 40 gallons of liquid or up to 4 cubic feet of dry goods."
+  },
+  {
+    "name": "Basket",
+    "category": "adventuring gear",
+    "weight": 2,
+    "cost": "4 SP",
+    "description": "Holds up to 40 pounds within 2 cubic feet."
+  },
+  {
+    "name": "Bedroll",
+    "category": "adventuring gear",
+    "weight": 7,
+    "cost": "1 GP",
+    "description": "Sleeps one Small or Medium creature. While in a Bedroll, you automatically succeed on saving throws against extreme cold."
+  },
+  {
+    "name": "Bell",
+    "category": "adventuring gear",
+    "weight": null,
+    "cost": "1 GP",
+    "description": "When rung as a Utilize action, produces a sound that can be heard up to 60 feet away."
+  },
+  {
+    "name": "Blanket",
+    "category": "adventuring gear",
+    "weight": 3,
+    "cost": "5 SP",
+    "description": "While wrapped in a blanket, you have Advantage on saving throws against extreme cold."
+  },
+  {
+    "name": "Block and Tackle",
+    "category": "adventuring gear",
+    "weight": 5,
+    "cost": "1 GP",
+    "description": "Allows you to hoist up to four times the weight you can normally lift."
+  },
+  {
+    "name": "Book",
+    "category": "adventuring gear",
+    "weight": 5,
+    "cost": "25 GP",
+    "description": "Contains fiction or nonfiction. If you consult an accurate nonfiction Book about its topic, you gain a +5 bonus to Intelligence (Arcana, History, Nature, or Religion) checks about that topic."
+  },
+  {
+    "name": "Bottle, Glass",
+    "category": "adventuring gear",
+    "weight": 2,
+    "cost": "2 GP",
+    "description": "Holds up to 1½ pints."
+  },
+  {
+    "name": "Bucket",
+    "category": "adventuring gear",
+    "weight": 2,
+    "cost": "5 CP",
+    "description": "Holds up to half a cubic foot of contents."
+  },
+  {
+    "name": "Caltrops",
+    "category": "adventuring gear",
+    "weight": 2,
+    "cost": "1 GP",
+    "description": "As a Utilize action, spread Caltrops to cover a 5-foot-square area within 5 feet. A creature entering this area must succeed on a DC 15 Dexterity saving throw or take 1 Piercing damage and have its Speed reduced to 0 until the start of its next turn."
+  },
+  {
+    "name": "Candle",
+    "category": "adventuring gear",
+    "weight": null,
+    "cost": "1 CP",
+    "description": "For 1 hour, a lit Candle sheds Bright Light in a 5-foot radius and Dim Light for an additional 5 feet."
+  },
+  {
+    "name": "Case, Crossbow Bolt",
+    "category": "adventuring gear",
+    "weight": 1,
+    "cost": "1 GP",
+    "description": "Holds up to 20 Bolts."
+  },
+  {
+    "name": "Case, Map or Scroll",
+    "category": "adventuring gear",
+    "weight": 1,
+    "cost": "1 GP",
+    "description": "Holds up to 10 sheets of paper or 5 sheets of parchment."
+  },
+  {
+    "name": "Chain",
+    "category": "adventuring gear",
+    "weight": 10,
+    "cost": "5 GP",
+    "description": "As a Utilize action, you can wrap a Chain around an unwilling creature within 5 feet that has the Grappled, Incapacitated, or Restrained condition if you succeed on a DC 13 Strength (Athletics) check. Escaping requires a DC 18 Dexterity (Acrobatics) check; bursting requires a DC 20 Strength (Athletics) check."
+  },
+  {
+    "name": "Chest",
+    "category": "adventuring gear",
+    "weight": 25,
+    "cost": "5 GP",
+    "description": "Holds up to 12 cubic feet of contents."
+  },
+  {
+    "name": "Climber's Kit",
+    "category": "adventuring gear",
+    "weight": 12,
+    "cost": "25 GP",
+    "description": "Includes boot tips, gloves, pitons, and a harness. As a Utilize action, you can anchor yourself; you can't fall more than 25 feet from the anchor point and can't move more than 25 feet from there without undoing the anchor as a Bonus Action."
+  },
+  {
+    "name": "Clothes, Fine",
+    "category": "adventuring gear",
+    "weight": 6,
+    "cost": "15 GP",
+    "description": "Made of expensive fabrics and adorned with expertly crafted details. Some events and locations admit only people wearing these clothes."
+  },
+  {
+    "name": "Clothes, Traveler's",
+    "category": "adventuring gear",
+    "weight": 4,
+    "cost": "2 GP",
+    "description": "Resilient garments designed for travel in various environments."
+  },
+  {
+    "name": "Component Pouch",
+    "category": "adventuring gear",
+    "weight": 2,
+    "cost": "25 GP",
+    "description": "A watertight pouch filled with compartments that hold all the free Material components of your spells."
+  },
+  {
+    "name": "Costume",
+    "category": "adventuring gear",
+    "weight": 4,
+    "cost": "5 GP",
+    "description": "While wearing a Costume, you have Advantage on any ability check you make to impersonate the person or type of person it represents."
+  },
+  {
+    "name": "Crowbar",
+    "category": "adventuring gear",
+    "weight": 5,
+    "cost": "2 GP",
+    "description": "Using a Crowbar gives you Advantage on Strength checks where the Crowbar's leverage can be applied."
+  },
+  {
+    "name": "Druidic Focus",
+    "category": "adventuring gear",
+    "weight": null,
+    "cost": "Varies",
+    "description": "Carved, tied with ribbon, or painted to channel primal magic. A Druid or Ranger can use such an object as a Spellcasting Focus. Variants: Sprig of mistletoe (—, 1 GP), Wooden staff (4 lb., 5 GP), Yew wand (1 lb., 10 GP)."
+  },
+  {
+    "name": "Sprig of Mistletoe",
+    "category": "druidic focus",
+    "weight": null,
+    "cost": "1 GP",
+    "description": "A druidic focus that can be used as a Spellcasting Focus by a Druid or Ranger."
+  },
+  {
+    "name": "Wooden Staff (Druidic Focus)",
+    "category": "druidic focus",
+    "weight": 4,
+    "cost": "5 GP",
+    "description": "A druidic focus (also functions as a Quarterstaff) that can be used as a Spellcasting Focus by a Druid or Ranger."
+  },
+  {
+    "name": "Yew Wand",
+    "category": "druidic focus",
+    "weight": 1,
+    "cost": "10 GP",
+    "description": "A druidic focus that can be used as a Spellcasting Focus by a Druid or Ranger."
+  },
+  {
+    "name": "Flask",
+    "category": "adventuring gear",
+    "weight": 1,
+    "cost": "2 CP",
+    "description": "Holds up to 1 pint."
+  },
+  {
+    "name": "Grappling Hook",
+    "category": "adventuring gear",
+    "weight": 4,
+    "cost": "2 GP",
+    "description": "As a Utilize action, you can throw the Grappling Hook at a railing, ledge, or other catch within 50 feet; it catches on if you succeed on a DC 13 Dexterity (Acrobatics) check. If you tied a Rope to the hook, you can climb it."
+  },
+  {
+    "name": "Healer's Kit",
+    "category": "adventuring gear",
+    "weight": 3,
+    "cost": "5 GP",
+    "description": "Has ten uses. As a Utilize action, you can expend one use to stabilize an Unconscious creature that has 0 Hit Points without making a Wisdom (Medicine) check."
+  },
+  {
+    "name": "Holy Symbol",
+    "category": "adventuring gear",
+    "weight": null,
+    "cost": "Varies",
+    "description": "Bejeweled or painted to channel divine magic. A Cleric or Paladin can use a Holy Symbol as a Spellcasting Focus. Variants: Amulet (1 lb., 5 GP), Emblem (—, 5 GP), Reliquary (2 lb., 5 GP)."
+  },
+  {
+    "name": "Amulet",
+    "category": "holy symbol",
+    "weight": 1,
+    "cost": "5 GP",
+    "description": "A holy symbol worn or held. Can be used as a Spellcasting Focus by a Cleric or Paladin."
+  },
+  {
+    "name": "Emblem",
+    "category": "holy symbol",
+    "weight": null,
+    "cost": "5 GP",
+    "description": "A holy symbol borne on fabric or a Shield. Can be used as a Spellcasting Focus by a Cleric or Paladin."
+  },
+  {
+    "name": "Reliquary",
+    "category": "holy symbol",
+    "weight": 2,
+    "cost": "5 GP",
+    "description": "A holy symbol held. Can be used as a Spellcasting Focus by a Cleric or Paladin."
+  },
+  {
+    "name": "Holy Water",
+    "category": "adventuring gear",
+    "weight": 1,
+    "cost": "25 GP",
+    "description": "When you take the Attack action, you can replace one of your attacks with throwing a flask of Holy Water. Target one creature within 20 feet. The target must succeed on a Dexterity saving throw (DC 8 plus your Dexterity modifier and Proficiency Bonus) or take 2d8 Radiant damage if it is a Fiend or an Undead."
+  },
+  {
+    "name": "Hunting Trap",
+    "category": "adventuring gear",
+    "weight": 25,
+    "cost": "5 GP",
+    "description": "As a Utilize action, you can set a Hunting Trap. A creature that steps on the plate must succeed on a DC 13 Dexterity saving throw or take 1d4 Piercing damage and have its Speed reduced to 0. Freeing a creature requires a DC 13 Strength (Athletics) check as an action."
+  },
+  {
+    "name": "Ink",
+    "category": "adventuring gear",
+    "weight": null,
+    "cost": "10 GP",
+    "description": "Comes in a 1-ounce bottle, providing enough ink to write about 500 pages."
+  },
+  {
+    "name": "Ink Pen",
+    "category": "adventuring gear",
+    "weight": null,
+    "cost": "2 CP",
+    "description": "Using Ink, an Ink Pen is used to write or draw."
+  },
+  {
+    "name": "Jug",
+    "category": "adventuring gear",
+    "weight": 4,
+    "cost": "2 CP",
+    "description": "Holds up to 1 gallon."
+  },
+  {
+    "name": "Ladder",
+    "category": "adventuring gear",
+    "weight": 25,
+    "cost": "1 SP",
+    "description": "A Ladder is 10 feet tall. You must climb to move up or down it."
+  },
+  {
+    "name": "Lamp",
+    "category": "adventuring gear",
+    "weight": 1,
+    "cost": "5 SP",
+    "description": "Burns Oil as fuel to cast Bright Light in a 15-foot radius and Dim Light for an additional 30 feet."
+  },
+  {
+    "name": "Lantern, Bullseye",
+    "category": "adventuring gear",
+    "weight": 2,
+    "cost": "10 GP",
+    "description": "Burns Oil as fuel to cast Bright Light in a 60-foot Cone and Dim Light for an additional 60 feet."
+  },
+  {
+    "name": "Lantern, Hooded",
+    "category": "adventuring gear",
+    "weight": 2,
+    "cost": "5 GP",
+    "description": "Burns Oil as fuel to cast Bright Light in a 30-foot radius and Dim Light for an additional 30 feet. As a Bonus Action, you can lower the hood, reducing the light to Dim Light in a 5-foot radius, or raise it again."
+  },
+  {
+    "name": "Lock",
+    "category": "adventuring gear",
+    "weight": 1,
+    "cost": "10 GP",
+    "description": "Comes with a key. Without the key, a creature can use Thieves' Tools to pick the lock with a successful DC 15 Dexterity (Sleight of Hand) check."
+  },
+  {
+    "name": "Magnifying Glass",
+    "category": "adventuring gear",
+    "weight": null,
+    "cost": "100 GP",
+    "description": "Grants Advantage on any ability check made to appraise or inspect a highly detailed item. Can focus light to start a fire given bright sunlight, tinder, and about 5 minutes."
+  },
+  {
+    "name": "Manacles",
+    "category": "adventuring gear",
+    "weight": 6,
+    "cost": "2 GP",
+    "description": "As a Utilize action, bind an unwilling Small or Medium creature within 5 feet with the Grappled, Incapacitated, or Restrained condition on a DC 13 Dexterity (Sleight of Hand) check. Escaping requires a DC 20 Dexterity (Sleight of Hand) check; bursting requires a DC 25 Strength (Athletics) check."
+  },
+  {
+    "name": "Map",
+    "category": "adventuring gear",
+    "weight": null,
+    "cost": "1 GP",
+    "description": "If you consult an accurate Map, you gain a +5 bonus to Wisdom (Survival) checks to find your way in the place represented on it."
+  },
+  {
+    "name": "Mirror",
+    "category": "adventuring gear",
+    "weight": 0.5,
+    "cost": "5 GP",
+    "description": "A handheld steel Mirror useful for personal cosmetics, peeking around corners, and reflecting light as a signal."
+  },
+  {
+    "name": "Net",
+    "category": "adventuring gear",
+    "weight": 3,
+    "cost": "1 GP",
+    "description": "When you take the Attack action, you can replace one of your attacks with throwing a Net at a creature within 15 feet. The target must succeed on a Dexterity saving throw (DC 8 plus your Dexterity modifier and Proficiency Bonus) or have the Restrained condition until it escapes."
+  },
+  {
+    "name": "Oil",
+    "category": "adventuring gear",
+    "weight": 1,
+    "cost": "1 SP",
+    "description": "Can be used to douse a creature, object, or space, or as fuel for Lamps and Lanterns. A flask of Oil burns for 6 hours in a Lamp or Lantern. Lit oil in a 5-foot-square area deals 5 Fire damage to creatures entering or ending their turn there."
+  },
+  {
+    "name": "Paper",
+    "category": "adventuring gear",
+    "weight": null,
+    "cost": "2 SP",
+    "description": "One sheet of Paper can hold about 250 handwritten words."
+  },
+  {
+    "name": "Parchment",
+    "category": "adventuring gear",
+    "weight": null,
+    "cost": "1 SP",
+    "description": "One sheet of Parchment can hold about 250 handwritten words."
+  },
+  {
+    "name": "Perfume",
+    "category": "adventuring gear",
+    "weight": null,
+    "cost": "5 GP",
+    "description": "Comes in a 4-ounce vial. For 1 hour after applying, you have Advantage on Charisma (Persuasion) checks to influence an Indifferent Humanoid within 5 feet of yourself."
+  },
+  {
+    "name": "Poison, Basic",
+    "category": "adventuring gear",
+    "weight": null,
+    "cost": "100 GP",
+    "description": "As a Bonus Action, coat one weapon or up to three pieces of ammunition. A creature that takes Piercing or Slashing damage from the poisoned weapon or ammunition takes an extra 1d4 Poison damage. Potency lasts 1 minute or until its damage is dealt."
+  },
+  {
+    "name": "Pole",
+    "category": "adventuring gear",
+    "weight": 7,
+    "cost": "5 CP",
+    "description": "10 feet long. You can use it to touch something up to 10 feet away. Can be used to vault for Advantage on Strength (Athletics) checks for High or Long Jumps."
+  },
+  {
+    "name": "Pot, Iron",
+    "category": "adventuring gear",
+    "weight": 10,
+    "cost": "2 GP",
+    "description": "Holds up to 1 gallon."
+  },
+  {
+    "name": "Potion of Healing",
+    "category": "adventuring gear",
+    "weight": 0.5,
+    "cost": "50 GP",
+    "description": "A magic item. As a Bonus Action, drink it or administer it to another creature within 5 feet. The creature regains 2d4 + 2 Hit Points."
+  },
+  {
+    "name": "Pouch",
+    "category": "adventuring gear",
+    "weight": 1,
+    "cost": "5 SP",
+    "description": "Holds up to 6 pounds within one-fifth of a cubic foot."
+  },
+  {
+    "name": "Quiver",
+    "category": "adventuring gear",
+    "weight": 1,
+    "cost": "1 GP",
+    "description": "Holds up to 20 Arrows."
+  },
+  {
+    "name": "Ram, Portable",
+    "category": "adventuring gear",
+    "weight": 35,
+    "cost": "4 GP",
+    "description": "Use to break down doors, gaining a +4 bonus to the Strength check. One other character can help, giving Advantage on the check."
+  },
+  {
+    "name": "Rations",
+    "category": "adventuring gear",
+    "weight": 2,
+    "cost": "5 SP",
+    "description": "Travel-ready food including jerky, dried fruit, hardtack, and nuts."
+  },
+  {
+    "name": "Robe",
+    "category": "adventuring gear",
+    "weight": 4,
+    "cost": "1 GP",
+    "description": "Has vocational or ceremonial significance. Some events and locations admit only people wearing a Robe bearing certain colors or symbols."
+  },
+  {
+    "name": "Rope",
+    "category": "adventuring gear",
+    "weight": 5,
+    "cost": "1 GP",
+    "description": "As a Utilize action, you can tie a knot with Rope on a DC 10 Dexterity (Sleight of Hand) check. Can be burst with a DC 20 Strength (Athletics) check. Can bind a creature with the Grappled, Incapacitated, or Restrained condition; escape requires a DC 15 Dexterity (Acrobatics) check."
+  },
+  {
+    "name": "Sack",
+    "category": "adventuring gear",
+    "weight": 0.5,
+    "cost": "1 CP",
+    "description": "Holds up to 30 pounds within 1 cubic foot."
+  },
+  {
+    "name": "Shovel",
+    "category": "adventuring gear",
+    "weight": 5,
+    "cost": "2 GP",
+    "description": "Working for 1 hour, you can use a Shovel to dig a hole that is 5 feet on each side in soil or similar material."
+  },
+  {
+    "name": "Signal Whistle",
+    "category": "adventuring gear",
+    "weight": null,
+    "cost": "5 CP",
+    "description": "When blown as a Utilize action, produces a sound that can be heard up to 600 feet away."
+  },
+  {
+    "name": "Spell Scroll (Cantrip)",
+    "category": "adventuring gear",
+    "weight": null,
+    "cost": "30 GP",
+    "description": "A magic item bearing the words of a cantrip. If the spell is on your class's spell list, you can read the scroll and cast the spell without Material components. Spell save DC 13, attack bonus +5. The scroll disintegrates when the casting is completed."
+  },
+  {
+    "name": "Spell Scroll (Level 1)",
+    "category": "adventuring gear",
+    "weight": null,
+    "cost": "50 GP",
+    "description": "A magic item bearing the words of a level 1 spell. If the spell is on your class's spell list, you can read the scroll and cast the spell without Material components. Spell save DC 13, attack bonus +5. The scroll disintegrates when the casting is completed."
+  },
+  {
+    "name": "Spikes, Iron",
+    "category": "adventuring gear",
+    "weight": 5,
+    "cost": "1 GP",
+    "description": "Come in bundles of ten. As a Utilize action, you can hammer a spike into wood, earth, or similar material using a blunt object. Can be used to jam a door shut or to tie a Rope or Chain."
+  },
+  {
+    "name": "Spyglass",
+    "category": "adventuring gear",
+    "weight": 1,
+    "cost": "1,000 GP",
+    "description": "Objects viewed through a Spyglass are magnified to twice their size."
+  },
+  {
+    "name": "String",
+    "category": "adventuring gear",
+    "weight": null,
+    "cost": "1 SP",
+    "description": "10 feet long. You can tie a knot in it as a Utilize action."
+  },
+  {
+    "name": "Tent",
+    "category": "adventuring gear",
+    "weight": 20,
+    "cost": "2 GP",
+    "description": "Sleeps up to two Small or Medium creatures."
+  },
+  {
+    "name": "Tinderbox",
+    "category": "adventuring gear",
+    "weight": 1,
+    "cost": "5 SP",
+    "description": "A small container holding flint, fire steel, and tinder. Lighting a Candle, Lamp, Lantern, or Torch takes a Bonus Action. Lighting any other fire takes 1 minute."
+  },
+  {
+    "name": "Torch",
+    "category": "adventuring gear",
+    "weight": 1,
+    "cost": "1 CP",
+    "description": "Burns for 1 hour, casting Bright Light in a 20-foot radius and Dim Light for an additional 20 feet. Can be used as a Simple Melee weapon (1 Fire damage on a hit) when you take the Attack action."
+  },
+  {
+    "name": "Vial",
+    "category": "adventuring gear",
+    "weight": null,
+    "cost": "1 GP",
+    "description": "Holds up to 4 ounces."
+  },
+  {
+    "name": "Waterskin",
+    "category": "adventuring gear",
+    "weight": 5,
+    "cost": "2 SP",
+    "description": "Holds up to 4 pints. If you don't drink sufficient water, you risk dehydration."
+  },
+  {
+    "name": "Burglar's Pack",
+    "category": "pack",
+    "weight": 42,
+    "cost": "16 GP",
+    "description": "Contains: Backpack, Ball Bearings, Bell, 10 Candles, Crowbar, Hooded Lantern, 7 flasks of Oil, 5 days of Rations, Rope, Tinderbox, and Waterskin."
+  },
+  {
+    "name": "Diplomat's Pack",
+    "category": "pack",
+    "weight": 39,
+    "cost": "39 GP",
+    "description": "Contains: Chest, Fine Clothes, Ink, 5 Ink Pens, Lamp, 2 Map or Scroll Cases, 4 flasks of Oil, 5 sheets of Paper, 5 sheets of Parchment, Perfume, and Tinderbox."
+  },
+  {
+    "name": "Dungeoneer's Pack",
+    "category": "pack",
+    "weight": 55,
+    "cost": "12 GP",
+    "description": "Contains: Backpack, Caltrops, Crowbar, 2 flasks of Oil, 10 days of Rations, Rope, Tinderbox, 10 Torches, and Waterskin."
+  },
+  {
+    "name": "Entertainer's Pack",
+    "category": "pack",
+    "weight": 58.5,
+    "cost": "40 GP",
+    "description": "Contains: Backpack, Bedroll, Bell, Bullseye Lantern, 3 Costumes, Mirror, 8 flasks of Oil, 9 days of Rations, Tinderbox, and Waterskin."
+  },
+  {
+    "name": "Explorer's Pack",
+    "category": "pack",
+    "weight": 55,
+    "cost": "10 GP",
+    "description": "Contains: Backpack, Bedroll, 2 flasks of Oil, 10 days of Rations, Rope, Tinderbox, 10 Torches, and Waterskin."
+  },
+  {
+    "name": "Priest's Pack",
+    "category": "pack",
+    "weight": 29,
+    "cost": "33 GP",
+    "description": "Contains: Backpack, Blanket, Holy Water, Lamp, 7 days of Rations, Robe, and Tinderbox."
+  },
+  {
+    "name": "Scholar's Pack",
+    "category": "pack",
+    "weight": 22,
+    "cost": "40 GP",
+    "description": "Contains: Backpack, Book, Ink, Ink Pen, Lamp, 10 flasks of Oil, 10 sheets of Parchment, and Tinderbox."
+  },
+  {
+    "name": "Arrows",
+    "category": "ammunition",
+    "weight": 1,
+    "cost": "1 GP",
+    "description": "Comes in quantities of 20. Stored in a Quiver."
+  },
+  {
+    "name": "Bolts",
+    "category": "ammunition",
+    "weight": 1.5,
+    "cost": "1 GP",
+    "description": "Comes in quantities of 20. Stored in a Case."
+  },
+  {
+    "name": "Bullets, Firearm",
+    "category": "ammunition",
+    "weight": 2,
+    "cost": "3 GP",
+    "description": "Comes in quantities of 10. Stored in a Pouch."
+  },
+  {
+    "name": "Bullets, Sling",
+    "category": "ammunition",
+    "weight": 1.5,
+    "cost": "4 CP",
+    "description": "Comes in quantities of 20. Stored in a Pouch."
+  },
+  {
+    "name": "Needles",
+    "category": "ammunition",
+    "weight": 1,
+    "cost": "1 GP",
+    "description": "Comes in quantities of 50. Stored in a Pouch."
+  },
+  {
+    "name": "Camel",
+    "category": "mount",
+    "weight": null,
+    "cost": "50 GP",
+    "description": "Carrying capacity: 450 lb."
+  },
+  {
+    "name": "Elephant",
+    "category": "mount",
+    "weight": null,
+    "cost": "200 GP",
+    "description": "Carrying capacity: 1,320 lb."
+  },
+  {
+    "name": "Horse, Draft",
+    "category": "mount",
+    "weight": null,
+    "cost": "50 GP",
+    "description": "Carrying capacity: 540 lb."
+  },
+  {
+    "name": "Horse, Riding",
+    "category": "mount",
+    "weight": null,
+    "cost": "75 GP",
+    "description": "Carrying capacity: 480 lb."
+  },
+  {
+    "name": "Mastiff",
+    "category": "mount",
+    "weight": null,
+    "cost": "25 GP",
+    "description": "Carrying capacity: 195 lb."
+  },
+  {
+    "name": "Mule",
+    "category": "mount",
+    "weight": null,
+    "cost": "8 GP",
+    "description": "Carrying capacity: 420 lb."
+  },
+  {
+    "name": "Pony",
+    "category": "mount",
+    "weight": null,
+    "cost": "30 GP",
+    "description": "Carrying capacity: 225 lb."
+  },
+  {
+    "name": "Warhorse",
+    "category": "mount",
+    "weight": null,
+    "cost": "400 GP",
+    "description": "Carrying capacity: 540 lb."
+  },
+  {
+    "name": "Carriage",
+    "category": "vehicle",
+    "weight": 600,
+    "cost": "100 GP"
+  },
+  {
+    "name": "Cart",
+    "category": "vehicle",
+    "weight": 200,
+    "cost": "15 GP"
+  },
+  {
+    "name": "Chariot",
+    "category": "vehicle",
+    "weight": 100,
+    "cost": "250 GP"
+  },
+  {
+    "name": "Feed (per day)",
+    "category": "vehicle",
+    "weight": 10,
+    "cost": "5 CP",
+    "description": "Animal feed, per day."
+  },
+  {
+    "name": "Saddle, Exotic",
+    "category": "vehicle",
+    "weight": 40,
+    "cost": "60 GP",
+    "description": "Required for riding an aquatic or a flying mount."
+  },
+  {
+    "name": "Saddle, Military",
+    "category": "vehicle",
+    "weight": 30,
+    "cost": "20 GP",
+    "description": "Gives Advantage on any ability check you make to remain mounted."
+  },
+  {
+    "name": "Saddle, Riding",
+    "category": "vehicle",
+    "weight": 25,
+    "cost": "10 GP"
+  },
+  {
+    "name": "Sled",
+    "category": "vehicle",
+    "weight": 300,
+    "cost": "20 GP"
+  },
+  {
+    "name": "Stabling (per day)",
+    "category": "vehicle",
+    "weight": null,
+    "cost": "5 SP",
+    "description": "Cost for stabling an animal per day."
+  },
+  {
+    "name": "Wagon",
+    "category": "vehicle",
+    "weight": 400,
+    "cost": "35 GP"
+  },
+  {
+    "name": "Airship",
+    "category": "vehicle",
+    "weight": null,
+    "cost": "40,000 GP",
+    "description": "Airborne vehicle. Speed: 8 mph. Crew: 10. Passengers: 20. Cargo: 1 ton. AC: 13. HP: 300."
+  },
+  {
+    "name": "Galley",
+    "category": "vehicle",
+    "weight": null,
+    "cost": "30,000 GP",
+    "description": "Waterborne vehicle. Speed: 4 mph. Crew: 80. Passengers: —. Cargo: 150 tons. AC: 15. HP: 500. Damage Threshold: 20."
+  },
+  {
+    "name": "Keelboat",
+    "category": "vehicle",
+    "weight": null,
+    "cost": "3,000 GP",
+    "description": "Waterborne vehicle. Speed: 1 mph. Crew: 1. Passengers: 6. Cargo: 1/2 ton. AC: 15. HP: 100. Damage Threshold: 10."
+  },
+  {
+    "name": "Longship",
+    "category": "vehicle",
+    "weight": null,
+    "cost": "10,000 GP",
+    "description": "Waterborne vehicle. Speed: 3 mph. Crew: 40. Passengers: 150. Cargo: 10 tons. AC: 15. HP: 300. Damage Threshold: 15."
+  },
+  {
+    "name": "Rowboat",
+    "category": "vehicle",
+    "weight": null,
+    "cost": "50 GP",
+    "description": "Waterborne vehicle. Speed: 1½ mph. Crew: 1. Passengers: 3. AC: 11. HP: 50. Can be carried; weighs 100 pounds."
+  },
+  {
+    "name": "Sailing Ship",
+    "category": "vehicle",
+    "weight": null,
+    "cost": "10,000 GP",
+    "description": "Waterborne vehicle. Speed: 2 mph. Crew: 20. Passengers: 20. Cargo: 100 tons. AC: 15. HP: 300. Damage Threshold: 15."
+  },
+  {
+    "name": "Warship",
+    "category": "vehicle",
+    "weight": null,
+    "cost": "25,000 GP",
+    "description": "Waterborne vehicle. Speed: 2½ mph. Crew: 60. Passengers: 60. Cargo: 200 tons. AC: 15. HP: 500. Damage Threshold: 20."
+  }
+]

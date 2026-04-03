@@ -1,0 +1,62 @@
+[
+  {
+    "name": "Acolyte",
+    "ability_scores": [
+      "INT",
+      "WIS",
+      "CHA"
+    ],
+    "skill_proficiencies": [
+      "insight",
+      "religion"
+    ],
+    "tool_proficiency": "Calligrapher's Supplies",
+    "origin_feat": "Magic Initiate (Cleric)",
+    "equipment_option": "Choose A or B: (A) Calligrapher's Supplies, Book (prayers), Holy Symbol, Parchment (10 sheets), Robe, 8 GP; or (B) 50 GP"
+  },
+  {
+    "name": "Criminal",
+    "ability_scores": [
+      "DEX",
+      "CON",
+      "INT"
+    ],
+    "skill_proficiencies": [
+      "sleight_of_hand",
+      "stealth"
+    ],
+    "tool_proficiency": "Thieves' Tools",
+    "origin_feat": "Alert",
+    "equipment_option": "Choose A or B: (A) 2 Daggers, Thieves' Tools, Crowbar, 2 Pouches, Traveler's Clothes, 16 GP; or (B) 50 GP"
+  },
+  {
+    "name": "Sage",
+    "ability_scores": [
+      "CON",
+      "INT",
+      "WIS"
+    ],
+    "skill_proficiencies": [
+      "arcana",
+      "history"
+    ],
+    "tool_proficiency": "Calligrapher's Supplies",
+    "origin_feat": "Magic Initiate (Wizard)",
+    "equipment_option": "Choose A or B: (A) Quarterstaff, Calligrapher's Supplies, Book (history), Parchment (8 sheets), Robe, 8 GP; or (B) 50 GP"
+  },
+  {
+    "name": "Soldier",
+    "ability_scores": [
+      "STR",
+      "DEX",
+      "CON"
+    ],
+    "skill_proficiencies": [
+      "athletics",
+      "intimidation"
+    ],
+    "tool_proficiency": "Choose one kind of Gaming Set",
+    "origin_feat": "Savage Attacker",
+    "equipment_option": "Choose A or B: (A) Spear, Shortbow, 20 Arrows, Gaming Set (same as above), Healer's Kit, Quiver, Traveler's Clothes, 14 GP; or (B) 50 GP"
+  }
+]
