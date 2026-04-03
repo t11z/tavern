@@ -1,0 +1,147 @@
+name: SRD Import Pipeline
+
+on:
+  push:
+    paths:
+      - "srd/**"
+  workflow_dispatch:
+    inputs:
+      sections:
+        description: >
+          Space-separated list of sections to process, or "all".
+          Valid: species classes backgrounds feats equipment spells
+                 monsters conditions magic_items rules_tables
+        required: false
+        default: "all"
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: uv sync --group dev
+
+      - name: Install Claude CLI
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Configure Claude credentials
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: |
+          mkdir -p ~/.claude
+          printf '{"claudeAiOauth":{"accessToken":"%s"}}\n' \
+            "$CLAUDE_CODE_OAUTH_TOKEN" > ~/.claude/.credentials.json
+
+      - name: Determine sections
+        id: sections
+        run: |
+          INPUT="${{ github.event.inputs.sections || 'all' }}"
+          if [ "$INPUT" = "all" ]; then
+            echo "list=species classes backgrounds feats equipment spells monsters conditions magic_items rules_tables" >> "$GITHUB_OUTPUT"
+          else
+            echo "list=$INPUT" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Find SRD PDF
+        id: pdf
+        run: |
+          PDF=$(find srd/ -name "*.pdf" | head -1)
+          if [ -z "$PDF" ]; then
+            echo "ERROR: No PDF found in srd/" >&2
+            exit 1
+          fi
+          echo "path=$PDF" >> "$GITHUB_OUTPUT"
+
+      - name: Extract PDF chunks
+        run: |
+          for section in ${{ steps.sections.outputs.list }}; do
+            uv run python scripts/srd_import/extract.py \
+              --input "${{ steps.pdf.outputs.path }}" \
+              --section "$section"
+          done
+
+      - name: Parse chunks with Claude
+        run: |
+          for section in ${{ steps.sections.outputs.list }}; do
+            echo "=== Parsing: $section ==="
+            uv run python scripts/srd_import/claude_parse.py --section "$section"
+          done
+
+      - name: Validate extracted data
+        run: |
+          FAILED=()
+          for section in ${{ steps.sections.outputs.list }}; do
+            echo "=== Validating: $section ==="
+            if ! uv run python scripts/srd_import/validate.py --section "$section"; then
+              FAILED+=("$section")
+            fi
+          done
+          if [ ${#FAILED[@]} -gt 0 ]; then
+            echo "Validation failed for: ${FAILED[*]}" >&2
+            exit 1
+          fi
+
+      - name: Check for changes
+        id: changes
+        run: |
+          git add scripts/srd_import/extracted/ scripts/srd_import/review/
+          if git diff --cached --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Commit extracted data
+        if: steps.changes.outputs.changed == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          BRANCH="srd-update/$(date +%Y%m%d-%H%M%S)"
+          git checkout -b "$BRANCH"
+          git commit -m "data(srd): automated import run
+
+          Sections: ${{ steps.sections.outputs.list }}
+          Source:   ${{ steps.pdf.outputs.path }}
+          Workflow: ${{ github.run_id }}"
+          git push origin "$BRANCH"
+          echo "branch=$BRANCH" >> "$GITHUB_ENV"
+
+      - name: Open pull request
+        if: steps.changes.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr create \
+            --title "data(srd): automated SRD import — $(date +%Y-%m-%d)" \
+            --body "$(cat <<'EOF'
+          ## SRD Import
+
+          Automated extraction run triggered by changes to \`srd/\`.
+
+          **Sections processed:** ${{ steps.sections.outputs.list }}
+
+          ## Review checklist
+
+          - [ ] Spot-check 3–5 records per section against the source PDF
+          - [ ] Validate counts match expected totals (spells ~300, monsters ~150)
+          - [ ] No obvious hallucinations (invented spell names, impossible CR/XP combos)
+          - [ ] `validate.py` passed with zero schema errors (enforced by CI)
+
+          Merge this PR to update the seed data. Run `seed.py` after merge to apply to the database.
+          EOF
+          )" \
+            --label "srd-data" \
+            --head "$branch"

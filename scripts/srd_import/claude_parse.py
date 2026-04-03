@@ -7,14 +7,17 @@ Usage:
 Output:
     scripts/srd_import/extracted/{section}.json
 
-Requires:
-    ANTHROPIC_API_KEY environment variable.
+Authentication (in order of priority):
+    1. `claude` CLI present and logged in (Claude Max OAuth — local or CI via
+       CLAUDE_CODE_OAUTH_TOKEN)
+    2. ANTHROPIC_API_KEY environment variable (fallback for environments without the CLI)
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -47,7 +50,22 @@ Rules:
 """
 
 
-def _require_anthropic() -> object:
+def _claude_cli_available() -> bool:
+    """Return True if the `claude` CLI is on PATH and responds."""
+    try:
+        result = subprocess.run(
+            ["claude", "--version"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        return result.returncode == 0
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return False
+
+
+def _require_anthropic_sdk() -> object:
+    """Import and return the anthropic module, exit on failure."""
     try:
         import anthropic  # type: ignore[import-untyped]
 
@@ -86,7 +104,72 @@ def _build_user_prompt(schema: dict, chunk_text: str) -> str:
     )
 
 
-def parse_chunk(
+def _parse_raw(raw: str, chunk_name: str) -> list[dict] | None:
+    """Strip markdown fences, parse JSON array. Returns None on failure."""
+    if raw.startswith("```"):
+        lines = raw.splitlines()
+        raw = "\n".join(line for line in lines if not line.startswith("```"))
+    try:
+        records = json.loads(raw.strip())
+    except json.JSONDecodeError as exc:
+        print(
+            f"  WARNING: {chunk_name} JSON parse error: {exc}",
+            file=sys.stderr,
+        )
+        return None
+    if not isinstance(records, list):
+        print(
+            f"  WARNING: {chunk_name} response was not a JSON array — skipping.",
+            file=sys.stderr,
+        )
+        return None
+    return records  # type: ignore[return-value]
+
+
+def _parse_chunk_cli(
+    model: str,
+    schema: dict,
+    chunk_text: str,
+    chunk_name: str,
+    retry: int = 3,
+) -> list[dict]:
+    """Call `claude -p` subprocess and return extracted records."""
+    user_prompt = _build_user_prompt(schema, chunk_text)
+    for attempt in range(1, retry + 1):
+        try:
+            result = subprocess.run(
+                [
+                    "claude",
+                    "-p",
+                    user_prompt,
+                    "--system-prompt",
+                    SYSTEM_PROMPT,
+                    "--model",
+                    model,
+                    "--tools",
+                    "",
+                    "--no-session-persistence",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=300,
+            )
+            if result.returncode != 0:
+                raise RuntimeError(result.stderr.strip() or f"exit {result.returncode}")
+            records = _parse_raw(result.stdout, chunk_name)
+            if records is not None:
+                return records
+        except (subprocess.TimeoutExpired, RuntimeError, OSError) as exc:
+            print(
+                f"  ERROR: {chunk_name} attempt {attempt}/{retry} failed: {exc}",
+                file=sys.stderr,
+            )
+        if attempt < retry:
+            time.sleep(2**attempt)
+    return []
+
+
+def _parse_chunk_sdk(
     anthropic_client: object,
     model: str,
     schema: dict,
@@ -94,50 +177,25 @@ def parse_chunk(
     chunk_name: str,
     retry: int = 3,
 ) -> list[dict]:
-    """Send one chunk to Claude and return extracted records."""
+    """Call the anthropic Python SDK and return extracted records."""
     for attempt in range(1, retry + 1):
         try:
             response = anthropic_client.messages.create(  # type: ignore[attr-defined]
                 model=model,
                 max_tokens=8192,
                 system=SYSTEM_PROMPT,
-                messages=[
-                    {
-                        "role": "user",
-                        "content": _build_user_prompt(schema, chunk_text),
-                    }
-                ],
+                messages=[{"role": "user", "content": _build_user_prompt(schema, chunk_text)}],
             )
-            raw = response.content[0].text.strip()
-
-            # Strip accidental markdown fences
-            if raw.startswith("```"):
-                lines = raw.splitlines()
-                raw = "\n".join(line for line in lines if not line.startswith("```"))
-
-            records = json.loads(raw)
-            if not isinstance(records, list):
-                print(
-                    f"  WARNING: {chunk_name} response was not a JSON array — skipping.",
-                    file=sys.stderr,
-                )
-                return []
-            return records  # type: ignore[return-value]
-
-        except json.JSONDecodeError as exc:
-            print(
-                f"  WARNING: {chunk_name} attempt {attempt}/{retry} JSON parse error: {exc}",
-                file=sys.stderr,
-            )
-            if attempt < retry:
-                time.sleep(2**attempt)
+            records = _parse_raw(response.content[0].text, chunk_name)
+            if records is not None:
+                return records
         except Exception as exc:  # noqa: BLE001
             print(
                 f"  ERROR: {chunk_name} attempt {attempt}/{retry} failed: {exc}",
                 file=sys.stderr,
             )
-            if attempt < retry:
-                time.sleep(2**attempt)
+        if attempt < retry:
+            time.sleep(2**attempt)
     return []
 
 
@@ -184,10 +242,32 @@ def main() -> None:
         sys.exit(1)
 
     schema = _load_schema(section)
+
+    # Resolve backend: prefer claude CLI (Claude Max OAuth), fall back to SDK + API key
+    use_cli = _claude_cli_available()
+    sdk_client = None
+    if use_cli:
+        backend = "claude CLI (OAuth)"
+    else:
+        import os
+
+        api_key = os.environ.get("ANTHROPIC_API_KEY")
+        if not api_key:
+            print(
+                "ERROR: `claude` CLI not found and ANTHROPIC_API_KEY is not set.\n"
+                "Log in with `claude login` or set ANTHROPIC_API_KEY.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        anthropic = _require_anthropic_sdk()
+        sdk_client = anthropic.Anthropic(api_key=api_key)  # type: ignore[attr-defined]
+        backend = "anthropic SDK (API key)"
+
     print(f"Section:  {section}")
     print(f"Schema:   {SCHEMAS_DIR / (section + '.json')}")
     print(f"Chunks:   {len(chunk_files)} file(s)")
     print(f"Model:    {args.model}")
+    print(f"Backend:  {backend}")
 
     if args.dry_run:
         print("\nDry run — no API calls made.")
@@ -195,14 +275,14 @@ def main() -> None:
             print(f"  {f.name}")
         return
 
-    anthropic = _require_anthropic()
-    client = anthropic.Anthropic()  # type: ignore[attr-defined]
-
     all_records: list[dict] = []
     for chunk_file in chunk_files:
         print(f"\nProcessing {chunk_file.name} …")
         chunk_text = chunk_file.read_text(encoding="utf-8")
-        records = parse_chunk(client, args.model, schema, chunk_text, chunk_file.name)
+        if use_cli:
+            records = _parse_chunk_cli(args.model, schema, chunk_text, chunk_file.name)
+        else:
+            records = _parse_chunk_sdk(sdk_client, args.model, schema, chunk_text, chunk_file.name)
         print(f"  Extracted {len(records)} record(s)")
         all_records.extend(records)
 
