@@ -84,6 +84,8 @@ class BotState:
         self.active_sessions: set[int] = set()
         self.pending_rolls: dict[int, PendingRoll] = {}
         self.reaction_windows: dict[str, ReactionWindow] = {}
+        # channel_id → pinned session banner message_id
+        self.pinned_banners: dict[int, int] = {}
 
     # ------------------------------------------------------------------
     # Channel → campaign bindings
@@ -149,3 +151,18 @@ class BotState:
 
     def has_reaction_window(self, roll_id: str | UUID) -> bool:
         return str(roll_id) in self.reaction_windows
+
+    # ------------------------------------------------------------------
+    # Pinned session banners
+    # ------------------------------------------------------------------
+
+    def set_pinned_banner(self, channel_id: int, message_id: int) -> None:
+        """Record the message ID of a pinned session banner."""
+        self.pinned_banners[channel_id] = message_id
+
+    def get_pinned_banner(self, channel_id: int) -> int | None:
+        return self.pinned_banners.get(channel_id)
+
+    def clear_pinned_banner(self, channel_id: int) -> None:
+        """Remove the pinned banner record for a channel (idempotent)."""
+        self.pinned_banners.pop(channel_id, None)
