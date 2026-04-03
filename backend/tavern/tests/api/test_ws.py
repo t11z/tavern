@@ -80,9 +80,7 @@ class TestWebSocketConnection:
             ) as ws:
                 ws.receive_json()
 
-    async def test_disconnect_handled_without_error(
-        self, api_client: AsyncClient
-    ) -> None:
+    async def test_disconnect_handled_without_error(self, api_client: AsyncClient) -> None:
         """Normal disconnect must not raise exceptions."""
         cid = await _make_campaign(api_client, name="Disconnect Test")
 
@@ -110,9 +108,7 @@ class TestWebSocketConnection:
 
         assert data["payload"]["campaign"]["turn_count"] == 0
 
-    async def test_session_state_includes_character(
-        self, api_client: AsyncClient
-    ) -> None:
+    async def test_session_state_includes_character(self, api_client: AsyncClient) -> None:
         """Characters created before connecting appear in session.state."""
         campaign = (await api_client.post("/api/campaigns", json={"name": "Char Test"})).json()
         cid = campaign["id"]
