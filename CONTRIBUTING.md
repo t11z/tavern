@@ -10,7 +10,7 @@ This guide covers what you need to know before contributing.
 
 All significant architecture decisions are documented in `docs/adr/`. Accepted ADRs are binding constraints — contributions that contradict an accepted ADR will be asked to either conform or include a superseding ADR with the pull request.
 
-Start with [ADR-0000](adr/ADR-0000-adr-process-and-template.md) to understand the ADR process, then read the ADRs relevant to the area you want to contribute to.
+Start with [ADR-0000](docs/adr/ADR-0000-meta.md) to understand the ADR process, then read the ADRs relevant to the area you want to contribute to.
 
 ### Understand the Layer Boundary
 
@@ -98,7 +98,7 @@ npm run format
 
 If your contribution introduces a significant architecture decision — a new dependency, a change to the layer boundary, a new data model pattern, a deployment topology change — it needs an ADR. If you're unsure, open an issue to discuss before writing code.
 
-See [ADR-0000](adr/ADR-0000-adr-process-and-template.md) for the full governance process.
+See [ADR-0000](docs/adr/ADR-0000-meta.md) for the full governance process.
 
 ## Pull Request Process
 
@@ -160,6 +160,36 @@ If you find an error in the imported SRD data:
 1. Check whether the error is in the source PDF or in the extraction.
 2. If it's an extraction error, fix the relevant schema or extraction logic and submit a PR.
 3. If it's a source PDF error, note it in the PR description — we track SRD errata separately.
+
+## Versioning
+
+Tavern uses [Semantic Versioning](https://semver.org/) (SemVer).
+
+**What the version numbers mean for Tavern:**
+
+- **MAJOR** (1.0, 2.0): Breaking changes to the API, the data model, or the WebSocket event schema. Also: SRD version upgrades (e.g., SRD 5.2.1 → SRD 5.3) are a major bump because the underlying game mechanics change.
+- **MINOR** (0.3, 0.4): New features that are backward-compatible — new mechanics, new client features, new endpoints, new tone presets.
+- **PATCH** (0.3.1): Bug fixes, SRD data corrections, typo fixes, dependency updates that don't change behavior.
+
+**Pre-1.0 instability:** While the version is 0.x, breaking changes may occur in minor versions. This is standard SemVer convention for pre-release software. The API and data model are not stable until 1.0.
+
+**SRD version pinning:** Each Tavern release implements exactly one SRD version. The current target is **SRD 5.2.1**. There is no runtime selection between SRD versions and no compatibility mode. When a new SRD version is adopted, the engine is updated and a new major version is released.
+
+The SRD version is visible in three places: the README, the `GET /health` endpoint response, and the `SRD_VERSION` constant in the codebase.
+
+**When to bump:**
+
+| Change | Bump |
+|---|---|
+| New API endpoint (backward-compatible) | Minor |
+| New Rules Engine mechanic | Minor |
+| New tone preset or world preset | Minor |
+| Bug fix in combat resolution | Patch |
+| SRD data correction (wrong spell damage) | Patch |
+| Dependency update (no behavior change) | Patch |
+| API response format change (breaking) | Major |
+| Database schema change requiring migration | Minor (pre-1.0), Major (post-1.0) |
+| SRD version upgrade | Major |
 
 ## Code of Conduct
 
