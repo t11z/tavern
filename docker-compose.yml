@@ -30,23 +30,21 @@ services:
       retries: 10
     restart: unless-stopped
 
-  # discord-bot:
-  #   Activates when DISCORD_BOT_TOKEN is set in .env.
-  #   Uncomment and configure once the bot service is implemented (Phase 5+).
-  #
-  # discord-bot:
-  #   build:
-  #     context: .
-  #     dockerfile: Dockerfile.bot
-  #   depends_on:
-  #     - tavern
-  #   environment:
-  #     TAVERN_API_URL: http://tavern:3000
-  #     DISCORD_BOT_TOKEN: ${DISCORD_BOT_TOKEN}
-  #   env_file:
-  #     - path: .env
-  #       required: false
-  #   restart: unless-stopped
+  discord-bot:
+    # Requires DISCORD_BOT_TOKEN in .env — see .env.example for instructions.
+    build: .
+    command: python -m tavern.discord_bot
+    depends_on:
+      tavern:
+        condition: service_started
+    environment:
+      DISCORD_BOT_TOKEN: ${DISCORD_BOT_TOKEN:-}
+      TAVERN_API_URL: http://tavern:3000
+      TAVERN_WS_URL: ws://tavern:3000/ws
+    env_file:
+      - path: .env
+        required: false
+    restart: unless-stopped
 
 volumes:
   postgres_data:
