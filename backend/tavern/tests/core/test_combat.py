@@ -51,9 +51,19 @@ class TestDamageTypes:
     def test_all_thirteen_types_defined(self) -> None:
         """SRD p.180: 13 damage types listed in table."""
         expected = {
-            "Acid", "Bludgeoning", "Cold", "Fire", "Force",
-            "Lightning", "Necrotic", "Piercing", "Poison",
-            "Psychic", "Radiant", "Slashing", "Thunder",
+            "Acid",
+            "Bludgeoning",
+            "Cold",
+            "Fire",
+            "Force",
+            "Lightning",
+            "Necrotic",
+            "Piercing",
+            "Poison",
+            "Psychic",
+            "Radiant",
+            "Slashing",
+            "Thunder",
         }
         actual = {dt.value for dt in DamageType}
         assert actual == expected
@@ -109,8 +119,18 @@ class TestActionType:
     def test_all_standard_actions_present(self) -> None:
         """SRD pp.9-10: Action Summary lists these standard actions."""
         expected = {
-            "Attack", "Dash", "Disengage", "Dodge", "Help", "Hide",
-            "Influence", "Magic", "Ready", "Search", "Study", "Utilize",
+            "Attack",
+            "Dash",
+            "Disengage",
+            "Dodge",
+            "Help",
+            "Hide",
+            "Influence",
+            "Magic",
+            "Ready",
+            "Search",
+            "Study",
+            "Utilize",
         }
         actual = {a.value for a in ActionType}
         assert actual == expected
@@ -166,7 +186,7 @@ class TestResolveAttack:
             if r.natural == 20:
                 result = resolve_attack(
                     attack_modifier=-100,  # massive penalty
-                    target_ac=100,         # impossible AC
+                    target_ac=100,  # impossible AC
                     damage_dice="1d6",
                     damage_modifier=0,
                     damage_type=DamageType.BLUDGEONING,
@@ -183,7 +203,7 @@ class TestResolveAttack:
             if r.natural == 1:
                 result = resolve_attack(
                     attack_modifier=100,  # massive bonus
-                    target_ac=1,          # trivially easy AC
+                    target_ac=1,  # trivially easy AC
                     damage_dice="1d6",
                     damage_modifier=0,
                     damage_type=DamageType.BLUDGEONING,
@@ -407,7 +427,7 @@ class TestDamageResistanceVulnerabilityImmunity:
                 attack_modifier=20,
                 target_ac=10,
                 damage_dice="1d1",
-                damage_modifier=27,   # raw = 28
+                damage_modifier=27,  # raw = 28
                 damage_type=DamageType.FIRE,
                 target_resistances=frozenset({"Fire"}),
                 target_vulnerabilities=frozenset({"Fire"}),
@@ -809,7 +829,7 @@ class TestGrapple:
             result = attempt_grapple(
                 attacker_str_modifier=20,  # DC = 30
                 attacker_proficiency_bonus=2,
-                target_str_modifier=-5,    # tiny chance of success
+                target_str_modifier=-5,  # tiny chance of success
                 target_dex_modifier=-5,
                 target_uses_dex=False,
                 seed=seed,
@@ -941,23 +961,19 @@ class TestOpportunityAttacks:
     def test_disengage_prevents_opportunity_attack(self) -> None:
         """SRD p.15: 'You can avoid provoking an Opportunity Attack by taking
         the Disengage action.'"""
-        assert triggers_opportunity_attack(
-            leaving_reach=True, used_disengage=True
-        ) is False
+        assert triggers_opportunity_attack(leaving_reach=True, used_disengage=True) is False
 
     def test_teleport_does_not_trigger(self) -> None:
         """SRD p.15: 'You also don't provoke an Opportunity Attack when you
         Teleport.'"""
-        assert triggers_opportunity_attack(
-            leaving_reach=True, is_teleporting=True
-        ) is False
+        assert triggers_opportunity_attack(leaving_reach=True, is_teleporting=True) is False
 
     def test_external_force_does_not_trigger(self) -> None:
         """SRD p.15: 'or when you are moved without using your movement,
         action, Bonus Action, or Reaction.'"""
-        assert triggers_opportunity_attack(
-            leaving_reach=True, moved_by_external_force=True
-        ) is False
+        assert (
+            triggers_opportunity_attack(leaving_reach=True, moved_by_external_force=True) is False
+        )
 
     def test_not_leaving_reach_no_trigger(self) -> None:
         assert triggers_opportunity_attack(leaving_reach=False) is False
@@ -972,7 +988,7 @@ class TestConcentrationSaves:
     def test_dc_minimum_ten(self) -> None:
         """SRD p.179: 'The DC equals 10 or half the damage taken (round down),
         whichever is higher.'"""
-        assert concentration_save_dc(5) == 10   # half of 5 = 2; max(10,2)=10
+        assert concentration_save_dc(5) == 10  # half of 5 = 2; max(10,2)=10
         assert concentration_save_dc(10) == 10  # half of 10 = 5; max(10,5)=10
 
     def test_dc_half_damage_when_higher(self) -> None:

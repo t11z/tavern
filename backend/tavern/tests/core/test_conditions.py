@@ -235,24 +235,18 @@ class TestExhaustion:
 class TestFrightened:
     def test_attack_disadvantage_when_source_visible(self) -> None:
         """SRD p.182: Disadvantage on attacks while source of fear in LoS."""
-        mods = attack_roll_modifiers(
-            cond(ConditionName.FRIGHTENED), fear_source_visible=True
-        )
+        mods = attack_roll_modifiers(cond(ConditionName.FRIGHTENED), fear_source_visible=True)
         assert mods.has_disadvantage
         assert any("Frightened" in s for s in mods.disadvantage_sources)
 
     def test_no_attack_disadvantage_when_source_not_visible(self) -> None:
         """SRD p.182: Only while source is within line of sight."""
-        mods = attack_roll_modifiers(
-            cond(ConditionName.FRIGHTENED), fear_source_visible=False
-        )
+        mods = attack_roll_modifiers(cond(ConditionName.FRIGHTENED), fear_source_visible=False)
         assert not mods.has_disadvantage
 
     def test_ability_check_disadvantage_when_source_visible(self) -> None:
         """SRD p.182: Ability checks also affected."""
-        mods = ability_check_modifiers(
-            cond(ConditionName.FRIGHTENED), fear_source_visible=True
-        )
+        mods = ability_check_modifiers(cond(ConditionName.FRIGHTENED), fear_source_visible=True)
         assert mods.has_disadvantage
 
     def test_frightened_does_not_affect_saving_throws(self) -> None:
@@ -380,16 +374,12 @@ class TestParalyzed:
     def test_auto_crit_within_5ft(self) -> None:
         """SRD p.186: 'Any attack roll that hits you is a Critical Hit if the
         attacker is within 5 feet of you.'"""
-        mods = attacks_against_modifiers(
-            cond(ConditionName.PARALYZED), attacker_within_5ft=True
-        )
+        mods = attacks_against_modifiers(cond(ConditionName.PARALYZED), attacker_within_5ft=True)
         assert mods.melee_auto_crit_within_5ft is True
 
     def test_no_auto_crit_beyond_5ft(self) -> None:
         """SRD p.186: Auto-crit only applies within 5 feet."""
-        mods = attacks_against_modifiers(
-            cond(ConditionName.PARALYZED), attacker_within_5ft=False
-        )
+        mods = attacks_against_modifiers(cond(ConditionName.PARALYZED), attacker_within_5ft=False)
         assert mods.melee_auto_crit_within_5ft is False
 
     def test_concentration_broken(self) -> None:
@@ -424,9 +414,7 @@ class TestPetrified:
 
     def test_no_auto_crit(self) -> None:
         """SRD p.186: Petrified does NOT grant auto-crit (unlike Paralyzed/Unconscious)."""
-        mods = attacks_against_modifiers(
-            cond(ConditionName.PETRIFIED), attacker_within_5ft=True
-        )
+        mods = attacks_against_modifiers(cond(ConditionName.PETRIFIED), attacker_within_5ft=True)
         assert mods.melee_auto_crit_within_5ft is False
 
 
@@ -475,17 +463,13 @@ class TestProne:
     def test_attacks_within_5ft_have_advantage(self) -> None:
         """SRD p.187: 'An attack roll against you has Advantage if the attacker
         is within 5 feet of you.'"""
-        mods = attacks_against_modifiers(
-            cond(ConditionName.PRONE), attacker_within_5ft=True
-        )
+        mods = attacks_against_modifiers(cond(ConditionName.PRONE), attacker_within_5ft=True)
         assert mods.has_advantage
         assert not mods.has_disadvantage
 
     def test_attacks_beyond_5ft_have_disadvantage(self) -> None:
         """SRD p.187: 'Otherwise, that attack roll has Disadvantage.'"""
-        mods = attacks_against_modifiers(
-            cond(ConditionName.PRONE), attacker_within_5ft=False
-        )
+        mods = attacks_against_modifiers(cond(ConditionName.PRONE), attacker_within_5ft=False)
         assert mods.has_disadvantage
         assert not mods.has_advantage
 
@@ -497,9 +481,7 @@ class TestProne:
         assert can_act(cond(ConditionName.PRONE)) is True
 
     def test_no_auto_crit(self) -> None:
-        mods = attacks_against_modifiers(
-            cond(ConditionName.PRONE), attacker_within_5ft=True
-        )
+        mods = attacks_against_modifiers(cond(ConditionName.PRONE), attacker_within_5ft=True)
         assert mods.melee_auto_crit_within_5ft is False
 
 
@@ -564,9 +546,7 @@ class TestStunned:
 
     def test_no_auto_crit(self) -> None:
         """SRD p.189: Stunned does NOT grant auto-crit (only Paralyzed/Unconscious do)."""
-        mods = attacks_against_modifiers(
-            cond(ConditionName.STUNNED), attacker_within_5ft=True
-        )
+        mods = attacks_against_modifiers(cond(ConditionName.STUNNED), attacker_within_5ft=True)
         assert mods.melee_auto_crit_within_5ft is False
 
     def test_concentration_broken(self) -> None:
@@ -601,9 +581,7 @@ class TestUnconscious:
     def test_auto_crit_within_5ft(self) -> None:
         """SRD p.191: 'Any attack roll that hits you is a Critical Hit if the
         attacker is within 5 feet of you.'"""
-        mods = attacks_against_modifiers(
-            cond(ConditionName.UNCONSCIOUS), attacker_within_5ft=True
-        )
+        mods = attacks_against_modifiers(cond(ConditionName.UNCONSCIOUS), attacker_within_5ft=True)
         assert mods.melee_auto_crit_within_5ft is True
 
     def test_no_auto_crit_beyond_5ft(self) -> None:
