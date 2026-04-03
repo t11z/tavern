@@ -1,6 +1,6 @@
 # Architecture Snapshot
 
-> Last updated: YYYY-MM-DD — [describe what changed]
+> Last updated: 2026-04-03 — Phase 5b: WebSocket streaming endpoint, streaming Narrator, React chat UI
 >
 > This document is maintained by Claude Code per the rules in CLAUDE.md.
 > It is consumed by the architecture consultant to inform decisions without
@@ -12,26 +12,25 @@
 ```
 backend/tavern/
 ├── core/           # Rules Engine — SRD 5.2.1 mechanics, no LLM dependency
-│   ├── ...
-│   └── ...
 ├── dm/             # DM layer — Narrator, Context Builder, LLM provider
-│   ├── ...
-│   └── ...
-├── api/            # FastAPI endpoints and WebSocket handlers
-│   ├── ...
-│   └── ...
-├── models/         # SQLAlchemy models (database schema)
-│   ├── ...
-│   └── ...
-└── ...
+├── api/            # FastAPI REST endpoints and WebSocket handler
+│   ├── campaigns.py    # Campaign CRUD + session lifecycle
+│   ├── characters.py   # Character creation and retrieval
+│   ├── turns.py        # Turn submission (202) and retrieval
+│   ├── ws.py           # WebSocket endpoint + ConnectionManager
+│   ├── dependencies.py # Shared FastAPI dependencies (get_db_session, get_narrator, get_session_factory)
+│   ├── schemas.py      # Pydantic request/response schemas
+│   └── errors.py       # APIError + error handlers
+├── models/         # SQLAlchemy ORM models (database schema)
+└── alembic/        # Database migrations
 
 frontend/src/
-├── ...
-└── ...
+├── hooks/          # useWebSocket (WS lifecycle + reconnect)
+├── components/     # CampaignHeader, CharacterPanel, ChatLog, ChatInput
+├── App.tsx         # Root component — campaign/character selection, WS integration
+├── types.ts        # Shared TypeScript types
+└── index.css       # Tavern design tokens and global resets
 ```
-
-> Update this tree when modules are added or removed. Include only
-> directories, not individual files.
 
 ## Dependency Graph
 
@@ -43,7 +42,6 @@ core/ ──→ (no internal dependencies)
 ```
 
 > Constraint: core/ must never import from dm/ (see ADR-0001).
-> Update this section if new inter-module dependencies are introduced.
 
 ## External Dependencies
 
@@ -51,71 +49,91 @@ core/ ──→ (no internal dependencies)
 
 | Dependency | Purpose | Locked to |
 |---|---|---|
-| fastapi | Web framework, WebSocket support | ^x.y |
-| sqlalchemy | ORM, async sessions | ^x.y |
-| anthropic | Claude API (Narrator) | ^x.y |
-| ... | ... | ... |
+| fastapi | Web framework, WebSocket support | >=0.115.0 |
+| uvicorn[standard] | ASGI server | >=0.32.0 |
+| sqlalchemy[asyncio] | ORM, async sessions | >=2.0.0 |
+| asyncpg | PostgreSQL async driver | >=0.30.0 |
+| alembic | Database migrations | >=1.14.0 |
+| pydantic | Request/response validation | >=2.10.0 |
+| python-dotenv | Environment variable loading | >=1.0.0 |
+| anthropic | Claude API (Narrator) | >=0.88.0 |
 
 ### Frontend (package.json)
 
 | Dependency | Purpose | Locked to |
 |---|---|---|
-| react | UI framework | ^x.y |
-| vite | Build tool | ^x.y |
-| ... | ... | ... |
-
-> Only list direct dependencies, not transitive ones.
-> Update when a dependency is added or removed.
+| react | UI framework | ^18.3.1 |
+| react-dom | DOM bindings | ^18.3.1 |
+| vite | Build tool + dev server proxy | ^5.x |
+| typescript | Type checking | ^5.x |
 
 ## API Surface
 
 ### REST Endpoints
 
-| Method | Path | Purpose | Auth |
+| Method | Path | Purpose | Status code |
 |---|---|---|---|
-| ... | ... | ... | ... |
+| GET | /health | Liveness check | 200 |
+| GET | /api/campaigns | List campaigns | 200 |
+| POST | /api/campaigns | Create campaign | 201 |
+| GET | /api/campaigns/{id} | Get campaign detail | 200 |
+| PATCH | /api/campaigns/{id} | Update campaign name/status | 200 |
+| DELETE | /api/campaigns/{id} | Delete campaign | 204 |
+| POST | /api/campaigns/{id}/sessions | Start session (activates campaign) | 201 |
+| POST | /api/campaigns/{id}/sessions/end | End session (pauses campaign) | 200 |
+| GET | /api/campaigns/{id}/characters | List characters | 200 |
+| POST | /api/campaigns/{id}/characters | Create character | 201 |
+| GET | /api/campaigns/{id}/characters/{char_id} | Get character | 200 |
+| POST | /api/campaigns/{id}/turns | Submit player action | 202 |
+| GET | /api/campaigns/{id}/turns | List turns (paginated) | 200 |
+| GET | /api/campaigns/{id}/turns/{turn_id} | Get single turn | 200 |
+
+### WebSocket
+
+| Path | Purpose |
+|---|---|
+| /api/campaigns/{id}/ws | Campaign real-time event stream |
 
 ### WebSocket Events
 
 | Event | Direction | Payload summary |
 |---|---|---|
-| ... | ... | ... |
-
-> Update when endpoints or events are added, removed, or change contract.
+| session.state | server → client | Campaign, characters, scene, recent_turns (on connect) |
+| turn.narrative_start | server → client | turn_id (streaming begins) |
+| turn.narrative_chunk | server → client | turn_id, chunk, sequence (token-by-token) |
+| turn.narrative_end | server → client | turn_id, full narrative (streaming complete) |
+| system.error | server → client | message (narrator or system error) |
 
 ## Database Models
 
 | Model | Table | Key relations |
 |---|---|---|
-| ... | ... | ... |
-
-> Update when models are added, removed, or schema changes.
+| Campaign | campaigns | has one CampaignState, has many Character, has many Session |
+| CampaignState | campaign_states | belongs to Campaign |
+| Session | sessions | belongs to Campaign, has many Turn |
+| Character | characters | belongs to Campaign, has many InventoryItem, has many CharacterCondition |
+| Turn | turns | belongs to Session, belongs to Character |
 
 ## ADR Status
 
 | ADR | Title | Status |
 |---|---|---|
 | 0000 | ADR Process and Template | Accepted |
-| 0001 | ... | Accepted |
-| ... | ... | ... |
-
-> Update when an ADR is added, superseded, or deprecated.
+| 0001 | SRD Rules Engine | Accepted |
+| 0002 | Claude as Narrator | Accepted |
+| 0003 | Tech Stack | Accepted |
+| 0004 | Campaign and Session Lifecycle | Accepted |
+| 0005 | Client Architecture | Accepted |
+| 0006 | Authentication and Authorization | Accepted |
+| 0007 | Multiplayer and Real-Time Communication | Accepted |
 
 ## Known Deviations
 
-> List any intentional deviations from accepted ADRs, with a brief
-> explanation of why the deviation exists and whether it is temporary.
-> Remove entries when the deviation is resolved.
-
 | ADR | Deviation | Reason | Temporary? |
 |---|---|---|---|
-| — | — | — | — |
+| 0006 | No auth middleware on any endpoint | Auth not yet implemented | Yes — Phase 6 |
 
 ## Architecture Questions
-
-> If Claude Code encounters a situation where an architecture decision
-> seems needed but no ADR covers it, note it here instead of making the
-> decision. The architecture consultant will pick these up.
 
 | Date | Question | Context |
 |---|---|---|

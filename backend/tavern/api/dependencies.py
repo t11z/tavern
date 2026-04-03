@@ -9,7 +9,7 @@ from __future__ import annotations
 import os
 from collections.abc import AsyncGenerator
 
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from tavern.db import AsyncSessionLocal
 from tavern.dm.narrator import AnthropicProvider, Narrator
@@ -19,6 +19,16 @@ async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
     """Yield an async database session, closing it after the request."""
     async with AsyncSessionLocal() as session:
         yield session
+
+
+def get_session_factory() -> async_sessionmaker:
+    """Return the async session factory.
+
+    Separate from get_db_session so background tasks (which cannot use
+    FastAPI DI) can receive the factory and open their own sessions.
+    Overridden in tests to point background tasks at the test database.
+    """
+    return AsyncSessionLocal
 
 
 def get_narrator() -> Narrator:
