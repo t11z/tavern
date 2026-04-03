@@ -117,7 +117,20 @@ class TurnCreateRequest(BaseModel):
     action: str = Field(..., min_length=1)
 
 
+class TurnSubmitResponse(BaseModel):
+    """202 Accepted response for turn submission.
+
+    The narrative arrives via WebSocket turn.narrative_* events.
+    Use turn_id to correlate WebSocket events with this submission.
+    """
+
+    turn_id: uuid.UUID
+    sequence_number: int
+
+
 class TurnResponse(BaseModel):
+    """Full turn response — used as the turn.narrative_end WebSocket payload."""
+
     turn_id: uuid.UUID
     sequence_number: int
     narrative: str

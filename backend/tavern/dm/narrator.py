@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import logging
 import re
+from collections.abc import AsyncGenerator
 from typing import Literal, Protocol
 
 import anthropic
@@ -191,6 +192,48 @@ class AnthropicProvider:
 
         return response.content[0].text  # type: ignore[union-attr]
 
+    async def narrate_stream(
+        self,
+        snapshot: StateSnapshot,
+        model_tier: Literal["high", "low"] = "high",
+    ) -> AsyncGenerator[str, None]:
+        """Stream narrative tokens from Claude.
+
+        Uses the Anthropic SDK streaming mode. Each yielded value is a
+        raw text chunk — callers assemble the full narrative by joining.
+
+        Raises:
+            TimeoutError: If the request times out.
+            RuntimeError: If the API rate limit is exceeded.
+        """
+        serialized = serialize_snapshot(snapshot)
+        system_text: str = serialized["system"]  # type: ignore[assignment]
+        messages_list = serialized["messages"]  # type: ignore[assignment]
+        user_content: str = messages_list[0]["content"]  # type: ignore[index]
+
+        try:
+            async with self._client.messages.stream(
+                model=MODEL_MAP[model_tier],
+                max_tokens=NARRATION_MAX_TOKENS,
+                temperature=NARRATION_TEMPERATURE,
+                system=[
+                    {
+                        "type": "text",
+                        "text": system_text,
+                        "cache_control": {"type": "ephemeral"},
+                    }
+                ],
+                messages=[{"role": "user", "content": user_content}],
+            ) as stream:
+                async for text in stream.text_stream:
+                    yield text
+        except anthropic.APITimeoutError as exc:
+            raise TimeoutError(f"Anthropic API request timed out: {exc}") from exc
+        except anthropic.RateLimitError as exc:
+            raise RuntimeError(
+                f"Anthropic API rate limit exceeded — retry after a moment: {exc}"
+            ) from exc
+
     async def compress_summary(
         self,
         turns: list[str],
@@ -257,6 +300,34 @@ class Narrator:
 
     def __init__(self, provider: LLMProvider) -> None:
         self._provider = provider
+
+    async def narrate_turn_stream(
+        self,
+        snapshot: StateSnapshot,
+    ) -> AsyncGenerator[str, None]:
+        """Stream narrative tokens, applying the same tier routing as narrate_turn.
+
+        Yields raw text chunks. Logs quality warnings on the completed text.
+        Falls back to a single yield if the provider does not support streaming.
+        """
+        turn = snapshot.current_turn
+        if turn.rules_result is None and _is_simple_action(turn.player_action):
+            tier: Literal["high", "low"] = "low"
+        else:
+            tier = "high"
+
+        provider_stream = getattr(self._provider, "narrate_stream", None)
+        if provider_stream is not None:
+            full = ""
+            async for chunk in provider_stream(snapshot, tier):
+                full += chunk
+                yield chunk
+            _check_response_quality(full)
+        else:
+            # Non-streaming fallback: collect whole response and yield once
+            narrative = await self._provider.narrate(snapshot, tier)
+            _check_response_quality(narrative)
+            yield narrative
 
     async def narrate_turn(self, snapshot: StateSnapshot) -> str:
         """Determine model tier, get narration, and validate the response.

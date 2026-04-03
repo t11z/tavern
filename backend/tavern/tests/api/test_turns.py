@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from httpx import AsyncClient
 
-from tavern.tests.api.conftest import MOCK_NARRATIVE
 
 _VALID_FIGHTER = {
     "name": "Aldric",
@@ -37,23 +36,13 @@ async def _setup_active_campaign(client: AsyncClient) -> tuple[str, str]:
 
 
 class TestSubmitTurn:
-    async def test_submit_turn_returns_201(self, api_client: AsyncClient) -> None:
+    async def test_submit_turn_returns_202(self, api_client: AsyncClient) -> None:
         cid, char_id = await _setup_active_campaign(api_client)
         response = await api_client.post(
             f"/api/campaigns/{cid}/turns",
             json={"character_id": char_id, "action": "I attack the goblin"},
         )
-        assert response.status_code == 201
-
-    async def test_submit_turn_returns_narrative(self, api_client: AsyncClient) -> None:
-        cid, char_id = await _setup_active_campaign(api_client)
-        body = (
-            await api_client.post(
-                f"/api/campaigns/{cid}/turns",
-                json={"character_id": char_id, "action": "I attack the goblin"},
-            )
-        ).json()
-        assert body["narrative"] == MOCK_NARRATIVE
+        assert response.status_code == 202
 
     async def test_submit_turn_returns_sequence_number(self, api_client: AsyncClient) -> None:
         cid, char_id = await _setup_active_campaign(api_client)
@@ -91,18 +80,6 @@ class TestSubmitTurn:
             )
         ).json()
         assert "turn_id" in body
-
-    async def test_submit_turn_has_empty_mechanical_results(self, api_client: AsyncClient) -> None:
-        cid, char_id = await _setup_active_campaign(api_client)
-        body = (
-            await api_client.post(
-                f"/api/campaigns/{cid}/turns",
-                json={"character_id": char_id, "action": "I open the door"},
-            )
-        ).json()
-        assert body["mechanical_results"] == []
-        assert body["character_updates"] == []
-        assert body["scene_updates"] == {}
 
     async def test_submit_turn_on_paused_campaign_returns_409(
         self, api_client: AsyncClient
@@ -142,16 +119,28 @@ class TestSubmitTurn:
         assert turns["total"] == 1
         assert turns["turns"][0]["player_action"] == "I search the room"
 
-    async def test_narrator_called_with_action(
+    async def test_narrator_stream_called_with_action(
         self, api_client: AsyncClient, mock_narrator
     ) -> None:
-        """Narrator.narrate_turn must be called exactly once per turn."""
+        """narrate_turn_stream must be invoked (background task uses it, not narrate_turn)."""
+        from unittest.mock import AsyncMock, patch
+
+        called_with: list = []
+        original_stream = mock_narrator.narrate_turn_stream
+
+        async def tracking_stream(*args, **kwargs):  # type: ignore[no-untyped-def]
+            called_with.append((args, kwargs))
+            async for chunk in original_stream(*args, **kwargs):
+                yield chunk
+
+        mock_narrator.narrate_turn_stream = tracking_stream
+
         cid, char_id = await _setup_active_campaign(api_client)
         await api_client.post(
             f"/api/campaigns/{cid}/turns",
             json={"character_id": char_id, "action": "I open the door"},
         )
-        mock_narrator.narrate_turn.assert_called_once()
+        assert len(called_with) == 1
 
     async def test_campaign_not_found_returns_404(self, api_client: AsyncClient) -> None:
         response = await api_client.post(

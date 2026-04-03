@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from tavern.api import campaigns, characters, health, turns
+from tavern.api import campaigns, characters, health, turns, ws
 from tavern.api.errors import APIError, api_error_handler
 
 app = FastAPI(title="Tavern", version="0.1.0")
@@ -18,6 +18,7 @@ app.include_router(health.router)
 app.include_router(campaigns.router, prefix="/api")
 app.include_router(characters.router, prefix="/api")
 app.include_router(turns.router, prefix="/api")
+app.include_router(ws.router, prefix="/api")
 
 STATIC_DIR = Path(__file__).parent / "static"
 
