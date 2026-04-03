@@ -52,6 +52,11 @@ nav:
   - Getting Started:
     - Quickstart: quickstart.md
     - How to Play: how-to-play.md
+  - Game Design:
+    - Campaign Design: game-design/campaign-design.md
+    - Character Creation: game-design/character-creation.md
+    - Worlds:
+      - The Shattered Coast: game-design/worlds/shattered-coast.md
   - Architecture:
     - ADR-0000 — ADR Process: adr/ADR-0000-adr-process-and-template.md
     - ADR-0001 — Rules Engine: adr/ADR-0001-srd-rules-engine.md
@@ -61,9 +66,4 @@ nav:
     - ADR-0005 — Client Architecture: adr/ADR-0005-client-architecture.md
     - ADR-0006 — Authentication: adr/ADR-0006-authentication-and-authorization.md
     - ADR-0007 — Multiplayer: adr/ADR-0007-multiplayer-and-realtime-communication.md
-  - Game Design:
-    - Campaign Design: game-design/campaign-design.md
-    - Character Creation: game-design/character-creation.md
-    - Worlds:
-      - The Shattered Coast: game-design/worlds/shattered-coast.md
   - Contributing: contributing.md

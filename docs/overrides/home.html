@@ -1,124 +1,219 @@
 {% extends "main.html" %}
 
 {% block tabs %}
-{{ super() }}
+  {{ super() }}
 
-{% if page and page.is_homepage %}
-<section class="tx-hero">
-  <div class="tx-hero__logo">
-    <img src="assets/logo.png" alt="Tavern — AI Game Master">
-  </div>
-  <p class="tx-hero__subtitle">
-    An AI Game Master for tabletop RPG campaigns.<br>
-    Open source. Self-hosted. Cheaper than a coffee.
-  </p>
-
-  <div class="tx-hero__tagline">
-    A solo session runs ~$0.28. Four players for three hours: ~$0.70.<br>
-    No subscription. No platform fees. Just your API key and <code>docker compose up</code>.
-  </div>
-
-  <div class="tx-hero__actions">
-    <a href="quickstart/" class="tx-hero__button tx-hero__button--primary">
-      Get Started
-    </a>
-    <a href="https://github.com/t11z/tavern" class="tx-hero__button tx-hero__button--secondary">
-      View on GitHub
-    </a>
-  </div>
-</section>
-
-<div class="tx-divider">⸻ ✦ ⸻</div>
-
-<div class="tx-features">
-  <div class="tx-feature">
-    <div class="tx-feature__icon">🎲</div>
-    <div class="tx-feature__title">Rules in Code</div>
-    <div class="tx-feature__description">
-      Full SRD 5e combat, spells, conditions, and character progression — implemented as a deterministic Python engine, not prompt engineering.
+  <!-- ===================== HERO ===================== -->
+  <section class="tx-hero">
+    <div class="tx-hero__logo">
+      <img src="{{ base_url }}/assets/logo.png" alt="Tavern — AI Game Master">
     </div>
-  </div>
-  <div class="tx-feature">
-    <div class="tx-feature__icon">🧠</div>
-    <div class="tx-feature__title">Claude as GM</div>
-    <div class="tx-feature__description">
-      Claude handles the story — narration, NPC dialogue, world reaction, plot twists. The engine handles the math. Each does what it's best at.
+    <h1 class="tx-hero__tagline">
+      An AI Game Master for tabletop RPG campaigns —<br>
+      open source, self-hosted, and cheaper than a coffee.
+    </h1>
+    <p class="tx-hero__cost">
+      A solo session runs&nbsp;<strong>~$0.28</strong> in API usage.
+      Four players for three hours:&nbsp;<strong>~$0.70</strong>.
+      No subscription. No platform fees.
+    </p>
+    <div class="tx-hero__actions">
+      <a href="{{ base_url }}/quickstart/" class="tx-btn tx-btn--primary">Get Started</a>
+      <a href="https://github.com/t11z/tavern" class="tx-btn tx-btn--secondary" target="_blank" rel="noopener">View on GitHub</a>
     </div>
-  </div>
-  <div class="tx-feature">
-    <div class="tx-feature__icon">💾</div>
-    <div class="tx-feature__title">Persistent Campaigns</div>
-    <div class="tx-feature__description">
-      Stop mid-dungeon, come back next week. Every turn is saved. Your campaign survives across sessions, crashes, and server restarts.
-    </div>
-  </div>
-  <div class="tx-feature">
-    <div class="tx-feature__icon">👥</div>
-    <div class="tx-feature__title">Solo & Multiplayer</div>
-    <div class="tx-feature__description">
-      Play alone or with friends. Real-time multiplayer with initiative-based combat, player presence tracking, and mid-session join/leave.
-    </div>
-  </div>
-  <div class="tx-feature">
-    <div class="tx-feature__icon">🎭</div>
-    <div class="tx-feature__title">Two Ways to Play</div>
-    <div class="tx-feature__description">
-      Browser-based web client for the full visual experience, or Discord bot with voice support. Both are first-class, both ship with Tavern.
-    </div>
-  </div>
-  <div class="tx-feature">
-    <div class="tx-feature__icon">🌍</div>
-    <div class="tx-feature__title">Community Worlds</div>
-    <div class="tx-feature__description">
-      Use the included Shattered Coast setting or import community-created world presets. Build and share your own — it's just a Markdown file.
-    </div>
-  </div>
-</div>
+  </section>
 
-<div class="tx-divider">⸻ ✦ ⸻</div>
+  <!-- ===================== HOW IT WORKS ===================== -->
+  <section class="tx-section">
+    <div class="tx-section__inner">
+      <h2 class="tx-section__heading">How It Works</h2>
+      <div class="tx-cards tx-cards--3">
 
-<div class="tx-scenarios">
-  <h2 class="tx-scenarios__title">Three Ways to Gather</h2>
+        <div class="tx-card">
+          <div class="tx-card__icon">🎲</div>
+          <div class="tx-card__title">Rules in Code, Not Prompts</div>
+          <div class="tx-card__body">
+            Full SRD 5.2.1 rules engine — combat, spells, conditions, character progression.
+            Deterministic. Testable. No hallucinated hit points.
+          </div>
+        </div>
 
-  <div class="tx-scenario">
-    <div class="tx-scenario__icon">🖥️</div>
-    <div>
-      <div class="tx-scenario__title">At Your Desk</div>
-      <div class="tx-scenario__description">
-        Open the web client in your browser. Create a character, start a campaign, and play solo or invite friends with a link.
+        <div class="tx-card">
+          <div class="tx-card__icon">🧠</div>
+          <div class="tx-card__title">Claude as Your Game Master</div>
+          <div class="tx-card__body">
+            Claude handles narration, NPC behavior, and world reactions.
+            It receives structured game state, not raw rulebooks.
+            The numbers come from your code.
+          </div>
+        </div>
+
+        <div class="tx-card">
+          <div class="tx-card__icon">🐳</div>
+          <div class="tx-card__title">One Command to Play</div>
+          <div class="tx-card__body">
+            <code>docker compose up</code> — that's it.
+            Game server, database, web client.
+            Add your Anthropic API key and start your adventure.
+          </div>
+        </div>
+
       </div>
     </div>
-  </div>
+  </section>
 
-  <div class="tx-scenario">
-    <div class="tx-scenario__icon">📱</div>
-    <div>
-      <div class="tx-scenario__title">At the Table</div>
-      <div class="tx-scenario__description">
-        Put a laptop at the head of the table as the shared display. Each player joins on their phone. Claude narrates through the speakers.
+  <!-- ===================== THREE WAYS TO PLAY ===================== -->
+  <section class="tx-section tx-section--alt">
+    <div class="tx-section__inner">
+      <h2 class="tx-section__heading">Three Ways to Play</h2>
+      <div class="tx-cards tx-cards--3">
+
+        <div class="tx-card">
+          <div class="tx-card__icon">🌐</div>
+          <div class="tx-card__title">In Your Browser</div>
+          <div class="tx-card__body">
+            Open the web client, create a campaign, build a character.
+            Solo or invite friends via join code.
+          </div>
+        </div>
+
+        <div class="tx-card">
+          <div class="tx-card__icon">📱</div>
+          <div class="tx-card__title">At the Table</div>
+          <div class="tx-card__body">
+            Shared display on a laptop. Each player joins on their phone via QR code.
+            Claude narrates through the speakers.
+          </div>
+        </div>
+
+        <div class="tx-card">
+          <div class="tx-card__icon">💬</div>
+          <div class="tx-card__title">On Discord</div>
+          <div class="tx-card__body">
+            Add the Tavern bot to your server. Play in a text channel, join voice —
+            Claude speaks as the GM.
+          </div>
+        </div>
+
       </div>
     </div>
-  </div>
+  </section>
 
-  <div class="tx-scenario">
-    <div class="tx-scenario__icon">🎙️</div>
-    <div>
-      <div class="tx-scenario__title">On Discord</div>
-      <div class="tx-scenario__description">
-        Add the Tavern bot to your server. Join a voice channel, start a campaign, and play — Claude speaks as your GM. Type or talk, your choice.
+  <!-- ===================== QUICKSTART ===================== -->
+  <section class="tx-section">
+    <div class="tx-section__inner tx-section__inner--narrow">
+      <h2 class="tx-section__heading">Get Running in Minutes</h2>
+      <div class="tx-quickstart">
+        <pre class="tx-quickstart__code"><code>git clone https://github.com/t11z/tavern
+cd tavern
+cp .env.example .env
+# Add your ANTHROPIC_API_KEY to .env
+docker compose up</code></pre>
+      </div>
+      <p class="tx-quickstart__caption">
+        Then open <a href="http://localhost:3000">localhost:3000</a> and roll for initiative.
+      </p>
+    </div>
+  </section>
+
+  <!-- ===================== ABOUT ===================== -->
+  <section class="tx-section tx-section--alt">
+    <div class="tx-section__inner tx-section__inner--narrow">
+      <h2 class="tx-section__heading">About Tavern</h2>
+      <p class="tx-about__body">
+        Tavern is an open-source project that brings tabletop RPGs to everyone —
+        with an AI that handles the storytelling while your code handles the rules.
+        Built on the SRD 5.2.1 under the Open Game License, powered by Claude,
+        and designed to be self-hosted on anything from a Raspberry Pi to a cloud server.
+        No accounts, no subscriptions, no platform lock-in.
+        Just your API key and a story waiting to be told.
+      </p>
+    </div>
+  </section>
+
+  <!-- ===================== CONTRIBUTE ===================== -->
+  <section class="tx-section">
+    <div class="tx-section__inner">
+      <h2 class="tx-section__heading">Contribute</h2>
+      <div class="tx-contribute">
+
+        <div class="tx-contribute__pitch">
+          <h3 class="tx-contribute__heading">Join the Adventure</h3>
+          <p class="tx-contribute__body">
+            Tavern is Apache 2.0 licensed and built in the open. Whether you're fixing SRD
+            mechanics, writing world presets, improving the narrator, or building a new client —
+            there's a seat at the table.
+          </p>
+          <a href="{{ base_url }}/contributing/" class="tx-btn tx-btn--primary">Read the Contributing Guide</a>
+        </div>
+
+        <div class="tx-contribute__first">
+          <h3 class="tx-contribute__heading">Good First Contributions</h3>
+          <div class="tx-tag-list">
+            <span class="tx-tag">Rules Engine mechanics</span>
+            <span class="tx-tag">SRD data corrections</span>
+            <span class="tx-tag">World presets (no code required)</span>
+            <span class="tx-tag">Documentation improvements</span>
+          </div>
+        </div>
+
       </div>
     </div>
-  </div>
-</div>
+  </section>
 
-<div class="tx-cost">
-  <div class="tx-cost__headline">Cheaper Than a Coffee</div>
-  <div class="tx-cost__detail">
-    Prompt caching, mixed model routing, and rolling summaries keep API costs minimal.
-    A full evening of adventure costs less than what you'd tip your barista.
-    Bring your own Anthropic API key — no subscription, no platform fees.
-  </div>
-</div>
-{% endif %}
+  <!-- ===================== CONTRIBUTORS ===================== -->
+  <section class="tx-section tx-section--alt">
+    <div class="tx-section__inner">
+      <h2 class="tx-section__heading">The Party</h2>
+      <div class="tx-contributors">
 
+        <div class="tx-contributor">
+          <a href="https://github.com/t11z" target="_blank" rel="noopener">
+            <img src="https://github.com/t11z.png?size=80" alt="t11z" class="tx-contributor__avatar">
+            <span class="tx-contributor__name">t11z</span>
+          </a>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+{% endblock %}
+
+{% block content %}{% endblock %}
+
+{% block footer %}
+<footer class="tx-landing-footer">
+  <div class="tx-landing-footer__inner">
+
+    <div class="tx-landing-footer__left">
+      Tavern is Apache 2.0 licensed. Made with 🍺 and questionable decisions.
+    </div>
+
+    <div class="tx-landing-footer__center">
+      <a href="https://github.com/t11z/tavern" class="tx-footer-icon" target="_blank" rel="noopener" title="GitHub">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="currentColor">
+          <path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/>
+        </svg>
+      </a>
+      <!-- TODO: Add Discord invite link when server exists -->
+      <a href="#" class="tx-footer-icon tx-footer-icon--coming-soon" title="Discord (coming soon)">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="currentColor">
+          <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057c.002.022.015.04.037.05a19.9 19.9 0 0 0 5.993 3.032.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.032.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/>
+        </svg>
+      </a>
+      <!-- TODO: Add Twitter/X link -->
+      <a href="#" class="tx-footer-icon tx-footer-icon--coming-soon" title="Twitter/X (coming soon)">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="currentColor">
+          <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+        </svg>
+      </a>
+    </div>
+
+    <div class="tx-landing-footer__right">
+      Powered by <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">MkDocs Material</a>
+    </div>
+
+  </div>
+</footer>
 {% endblock %}
