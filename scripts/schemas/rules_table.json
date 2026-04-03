@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tavern.local/schemas/rules_table.json",
+  "title": "RulesTable",
+  "description": "SRD 5.2.1 reference table (e.g. encumbrance, exhaustion levels, lifting/carrying)",
+  "type": "object",
+  "required": ["table_name", "data"],
+  "additionalProperties": false,
+  "properties": {
+    "table_name": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Unique identifier for the table (e.g. 'exhaustion_effects', 'encumbrance_thresholds')"
+    },
+    "description": {
+      "type": "string",
+      "description": "Human-readable description of what this table represents"
+    },
+    "data": {
+      "description": "Table data — structure varies by table; may be an array of rows or a nested object"
+    }
+  }
+}

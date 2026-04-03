@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tavern.local/schemas/weapon.json",
+  "title": "Weapon",
+  "description": "SRD 5.2.1 weapon definition",
+  "type": "object",
+  "required": ["name", "category", "damage_dice", "damage_type", "properties"],
+  "additionalProperties": false,
+  "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "category": {
+      "type": "string",
+      "enum": ["simple", "martial"]
+    },
+    "damage_dice": {
+      "type": "string",
+      "pattern": "^\\d+d\\d+$",
+      "description": "Dice notation (e.g. 1d6)"
+    },
+    "damage_type": {
+      "$ref": "#/$defs/damage_type"
+    },
+    "weight": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Weight in pounds"
+    },
+    "cost": {
+      "type": "string",
+      "description": "Cost (e.g. '1 gp', '5 sp')"
+    },
+    "properties": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "finesse", "light", "heavy", "two_handed", "versatile",
+          "thrown", "ammunition", "reach", "loading", "special"
+        ]
+      }
+    },
+    "range": {
+      "type": "object",
+      "required": ["normal", "long"],
+      "additionalProperties": false,
+      "properties": {
+        "normal": { "type": "integer", "minimum": 0 },
+        "long": { "type": "integer", "minimum": 0 }
+      },
+      "description": "Range in feet for ranged/thrown weapons"
+    },
+    "versatile_damage": {
+      "type": "string",
+      "pattern": "^\\d+d\\d+$",
+      "description": "Damage dice when wielded two-handed (versatile property)"
+    },
+    "description": {
+      "type": "string"
+    }
+  },
+  "$defs": {
+    "damage_type": {
+      "type": "string",
+      "enum": [
+        "acid", "bludgeoning", "cold", "fire", "force",
+        "lightning", "necrotic", "piercing", "poison",
+        "psychic", "radiant", "slashing", "thunder"
+      ]
+    }
+  }
+}

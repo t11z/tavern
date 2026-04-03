@@ -1,0 +1,139 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tavern.local/schemas/spell.json",
+  "title": "Spell",
+  "description": "SRD 5.2.1 spell definition",
+  "type": "object",
+  "required": [
+    "name", "level", "school", "casting_time", "range",
+    "components", "duration", "requires_concentration", "ritual",
+    "description", "classes"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "level": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9,
+      "description": "Spell level; 0 for cantrips"
+    },
+    "school": {
+      "type": "string",
+      "enum": [
+        "abjuration", "conjuration", "divination", "enchantment",
+        "evocation", "illusion", "necromancy", "transmutation"
+      ]
+    },
+    "casting_time": {
+      "type": "string",
+      "description": "e.g. '1 action', '1 bonus action', '1 reaction', '1 minute', '10 minutes', '1 hour'"
+    },
+    "range": {
+      "type": "string",
+      "description": "e.g. 'Self', 'Touch', '60 feet', '150 feet'"
+    },
+    "components": {
+      "type": "object",
+      "required": ["verbal", "somatic", "material"],
+      "additionalProperties": false,
+      "properties": {
+        "verbal": { "type": "boolean" },
+        "somatic": { "type": "boolean" },
+        "material": { "type": "boolean" },
+        "material_description": {
+          "type": "string",
+          "description": "Description of material component (if material is true)"
+        }
+      }
+    },
+    "duration": {
+      "type": "string",
+      "description": "e.g. 'Instantaneous', '1 minute', 'Concentration, up to 1 hour', 'Until dispelled'"
+    },
+    "requires_concentration": {
+      "type": "boolean"
+    },
+    "ritual": {
+      "type": "boolean"
+    },
+    "description": {
+      "type": "string"
+    },
+    "higher_levels": {
+      "type": "string",
+      "description": "Effect when cast at a higher spell slot"
+    },
+    "classes": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 1,
+      "description": "Class names that have this spell on their spell list"
+    },
+    "damage_dice": {
+      "type": "string",
+      "description": "Damage dice notation (e.g. '8d6')"
+    },
+    "damage_type": {
+      "$ref": "#/$defs/damage_type"
+    },
+    "healing_dice": {
+      "type": "string",
+      "description": "Healing dice notation (e.g. '2d8')"
+    },
+    "save_ability": {
+      "$ref": "#/$defs/ability"
+    },
+    "attack_type": {
+      "type": "string",
+      "enum": ["melee", "ranged"],
+      "description": "Spell attack type for spells that require an attack roll"
+    },
+    "area_of_effect": {
+      "type": "object",
+      "required": ["shape", "size"],
+      "additionalProperties": false,
+      "properties": {
+        "shape": {
+          "type": "string",
+          "enum": ["sphere", "cone", "cube", "line", "cylinder"]
+        },
+        "size": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Radius/length/side in feet"
+        }
+      }
+    },
+    "conditions_applied": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/condition" },
+      "description": "Conditions this spell can impose on targets"
+    }
+  },
+  "$defs": {
+    "ability": {
+      "type": "string",
+      "enum": ["STR", "DEX", "CON", "INT", "WIS", "CHA"]
+    },
+    "damage_type": {
+      "type": "string",
+      "enum": [
+        "acid", "bludgeoning", "cold", "fire", "force",
+        "lightning", "necrotic", "piercing", "poison",
+        "psychic", "radiant", "slashing", "thunder"
+      ]
+    },
+    "condition": {
+      "type": "string",
+      "enum": [
+        "blinded", "charmed", "deafened", "exhaustion", "frightened",
+        "grappled", "incapacitated", "invisible", "paralyzed", "petrified",
+        "poisoned", "prone", "restrained", "stunned", "unconscious"
+      ]
+    }
+  }
+}

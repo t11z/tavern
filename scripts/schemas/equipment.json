@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tavern.local/schemas/equipment.json",
+  "title": "Equipment",
+  "description": "SRD 5.2.1 adventuring gear and miscellaneous equipment",
+  "type": "object",
+  "required": ["name", "category"],
+  "additionalProperties": false,
+  "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "category": {
+      "type": "string",
+      "description": "Equipment category (e.g. 'adventuring gear', 'tool', 'mount', 'vehicle', 'pack')"
+    },
+    "weight": {
+      "type": ["number", "null"],
+      "minimum": 0,
+      "description": "Weight in pounds; null if not tracked"
+    },
+    "cost": {
+      "type": "string",
+      "description": "Cost (e.g. '1 gp')"
+    },
+    "description": {
+      "type": "string"
+    }
+  }
+}

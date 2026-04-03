@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tavern.local/schemas/armor.json",
+  "title": "Armor",
+  "description": "SRD 5.2.1 armor definition",
+  "type": "object",
+  "required": ["name", "type", "base_ac", "stealth_disadvantage"],
+  "additionalProperties": false,
+  "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "type": {
+      "type": "string",
+      "enum": ["light", "medium", "heavy", "shield"]
+    },
+    "base_ac": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Base AC value (before DEX modifier is added)"
+    },
+    "dex_cap": {
+      "type": ["integer", "null"],
+      "minimum": 0,
+      "description": "Maximum DEX modifier added to AC; null means no cap (full DEX); 0 means no DEX added"
+    },
+    "stealth_disadvantage": {
+      "type": "boolean"
+    },
+    "weight": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Weight in pounds"
+    },
+    "cost": {
+      "type": "string",
+      "description": "Cost (e.g. '45 gp')"
+    },
+    "strength_requirement": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Minimum Strength score required; omit if none"
+    },
+    "description": {
+      "type": "string"
+    }
+  }
+}

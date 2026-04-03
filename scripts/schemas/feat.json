@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tavern.local/schemas/feat.json",
+  "title": "Feat",
+  "description": "SRD 5.2.1 feat definition",
+  "type": "object",
+  "required": ["name", "category", "repeatable", "description", "mechanical_effects"],
+  "additionalProperties": false,
+  "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "category": {
+      "type": "string",
+      "enum": ["origin", "general", "fighting_style"]
+    },
+    "prerequisite": {
+      "$ref": "#/$defs/prerequisite"
+    },
+    "repeatable": {
+      "type": "boolean"
+    },
+    "description": {
+      "type": "string"
+    },
+    "mechanical_effects": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/mechanical_effect" }
+    }
+  },
+  "$defs": {
+    "prerequisite": {
+      "type": "object",
+      "required": ["type", "value"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "description": "Prerequisite type (e.g. ability_score, class, level, proficiency)"
+        },
+        "value": {
+          "description": "Required value for the prerequisite"
+        }
+      }
+    },
+    "mechanical_effect": {
+      "type": "object",
+      "required": ["type"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "description": "Effect type (e.g. ability_score_increase, skill_proficiency, damage_bonus, extra_attack)"
+        },
+        "ability": {
+          "type": "string",
+          "enum": ["STR", "DEX", "CON", "INT", "WIS", "CHA"]
+        },
+        "value": {
+          "description": "Numeric or string value for the effect"
+        },
+        "notes": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

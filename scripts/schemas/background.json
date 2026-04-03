@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tavern.local/schemas/background.json",
+  "title": "Background",
+  "description": "SRD 5.2.1 character background",
+  "type": "object",
+  "required": ["name", "ability_scores", "skill_proficiencies", "origin_feat", "equipment_option"],
+  "additionalProperties": false,
+  "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "ability_scores": {
+      "type": "array",
+      "description": "The three ability scores eligible for the +2/+1 or +1/+1/+1 distribution",
+      "items": { "$ref": "#/$defs/ability" },
+      "minItems": 3,
+      "maxItems": 3
+    },
+    "skill_proficiencies": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/skill" },
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "tool_proficiency": {
+      "type": "string",
+      "description": "Tool proficiency granted (if any)"
+    },
+    "origin_feat": {
+      "type": "string",
+      "description": "Feat granted at character creation"
+    },
+    "equipment_option": {
+      "type": "string",
+      "description": "Starting equipment package description or choice"
+    },
+    "description": {
+      "type": "string"
+    }
+  },
+  "$defs": {
+    "ability": {
+      "type": "string",
+      "enum": ["STR", "DEX", "CON", "INT", "WIS", "CHA"]
+    },
+    "skill": {
+      "type": "string",
+      "enum": [
+        "acrobatics", "animal_handling", "arcana", "athletics",
+        "deception", "history", "insight", "intimidation", "investigation",
+        "medicine", "nature", "perception", "performance", "persuasion",
+        "religion", "sleight_of_hand", "stealth", "survival"
+      ]
+    }
+  }
+}

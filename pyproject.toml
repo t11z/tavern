@@ -29,6 +29,7 @@ dev = [
     "mypy>=1.13.0",
     "aiosqlite>=0.20.0",
     "pypdf>=6.9.2",
+    "jsonschema>=4.23.0",
 ]
 
 [tool.ruff]

@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tavern.local/schemas/condition.json",
+  "title": "Condition",
+  "description": "SRD 5.2.1 condition definition with mechanical effects",
+  "type": "object",
+  "required": ["name", "description", "mechanical_effects"],
+  "additionalProperties": false,
+  "properties": {
+    "name": {
+      "type": "string",
+      "enum": [
+        "blinded", "charmed", "deafened", "exhaustion", "frightened",
+        "grappled", "incapacitated", "invisible", "paralyzed", "petrified",
+        "poisoned", "prone", "restrained", "stunned", "unconscious"
+      ]
+    },
+    "description": {
+      "type": "string"
+    },
+    "mechanical_effects": {
+      "type": "object",
+      "description": "Structured mechanical effects applied by this condition",
+      "additionalProperties": false,
+      "properties": {
+        "speed": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "multiplier": {
+              "type": "number",
+              "minimum": 0,
+              "description": "Multiply base speed by this value (0 = speed 0)"
+            },
+            "flat": {
+              "type": "integer",
+              "description": "Add this flat value to speed (can be negative)"
+            }
+          }
+        },
+        "attack_rolls": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "advantage": { "type": "boolean", "default": false },
+            "disadvantage": { "type": "boolean", "default": false }
+          }
+        },
+        "attacks_against": {
+          "type": "object",
+          "description": "Modifiers on attack rolls made against this creature",
+          "additionalProperties": false,
+          "properties": {
+            "advantage": { "type": "boolean", "default": false },
+            "disadvantage": { "type": "boolean", "default": false },
+            "auto_crit_within_5ft": {
+              "type": "boolean",
+              "default": false,
+              "description": "Attackers within 5 feet auto-crit (Paralyzed, Unconscious)"
+            }
+          }
+        },
+        "saving_throws": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "advantage": { "type": "boolean", "default": false },
+            "disadvantage": { "type": "boolean", "default": false },
+            "auto_fail_str_dex": {
+              "type": "boolean",
+              "default": false,
+              "description": "Automatically fail STR and DEX saves (Paralyzed, Petrified, Stunned, Unconscious)"
+            }
+          }
+        },
+        "actions": {
+          "type": "object",
+          "description": "Which action types are available",
+          "additionalProperties": false,
+          "properties": {
+            "can_act": { "type": "boolean", "default": true },
+            "can_use_bonus": { "type": "boolean", "default": true },
+            "can_react": { "type": "boolean", "default": true }
+          }
+        },
+        "ability_checks": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "disadvantage_str": {
+              "type": "boolean",
+              "default": false,
+              "description": "Disadvantage on STR ability checks (Grappled, Restrained etc.)"
+            }
+          }
+        },
+        "implies": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "blinded", "charmed", "deafened", "exhaustion", "frightened",
+              "grappled", "incapacitated", "invisible", "paralyzed", "petrified",
+              "poisoned", "prone", "restrained", "stunned", "unconscious"
+            ]
+          },
+          "description": "Conditions that are also applied when this condition is active"
+        }
+      }
+    }
+  }
+}

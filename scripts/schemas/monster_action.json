@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tavern.local/schemas/monster_action.json",
+  "title": "MonsterAction",
+  "description": "A monster action, trait, or legendary action",
+  "type": "object",
+  "required": ["name", "description"],
+  "additionalProperties": false,
+  "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "description": {
+      "type": "string"
+    },
+    "attack_bonus": {
+      "type": "integer",
+      "description": "Total attack bonus for attack roll actions"
+    },
+    "damage_dice": {
+      "type": "string",
+      "description": "Damage dice notation (e.g. '2d6+3')"
+    },
+    "damage_type": {
+      "$ref": "#/$defs/damage_type"
+    },
+    "save_dc": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "DC for saving throws imposed by this action"
+    },
+    "save_ability": {
+      "$ref": "#/$defs/ability"
+    },
+    "recharge": {
+      "type": "string",
+      "pattern": "^[1-6](-[1-6])?$",
+      "description": "Recharge range on a d6 (e.g. '5-6', '6')"
+    }
+  },
+  "$defs": {
+    "ability": {
+      "type": "string",
+      "enum": ["STR", "DEX", "CON", "INT", "WIS", "CHA"]
+    },
+    "damage_type": {
+      "type": "string",
+      "enum": [
+        "acid", "bludgeoning", "cold", "fire", "force",
+        "lightning", "necrotic", "piercing", "poison",
+        "psychic", "radiant", "slashing", "thunder"
+      ]
+    }
+  }
+}

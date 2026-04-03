@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tavern.local/schemas/class.json",
+  "title": "Class",
+  "description": "SRD 5.2.1 character class definition",
+  "type": "object",
+  "required": [
+    "name", "hit_die", "primary_ability", "saving_throws",
+    "armor_proficiencies", "weapon_proficiencies", "skill_choices",
+    "num_skills", "features_by_level", "subclass_level"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "hit_die": {
+      "type": "integer",
+      "enum": [6, 8, 10, 12]
+    },
+    "primary_ability": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/ability" },
+      "minItems": 1
+    },
+    "saving_throws": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/ability" },
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "armor_proficiencies": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "weapon_proficiencies": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "tool_proficiencies": {
+      "type": "array",
+      "items": { "type": "string" },
+      "default": []
+    },
+    "skill_choices": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/skill" },
+      "minItems": 1
+    },
+    "num_skills": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "features_by_level": {
+      "type": "object",
+      "description": "Keys are level numbers (as strings '1'–'20'), values are arrays of feature names",
+      "propertyNames": {
+        "pattern": "^([1-9]|1[0-9]|20)$"
+      },
+      "additionalProperties": {
+        "type": "array",
+        "items": { "type": "string" }
+      }
+    },
+    "subclass_level": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 20,
+      "description": "Level at which the character chooses a subclass"
+    },
+    "spellcasting_ability": {
+      "$ref": "#/$defs/ability",
+      "description": "Spellcasting ability for caster classes; omit for non-casters"
+    },
+    "description": {
+      "type": "string"
+    }
+  },
+  "$defs": {
+    "ability": {
+      "type": "string",
+      "enum": ["STR", "DEX", "CON", "INT", "WIS", "CHA"]
+    },
+    "skill": {
+      "type": "string",
+      "enum": [
+        "acrobatics", "animal_handling", "arcana", "athletics",
+        "deception", "history", "insight", "intimidation", "investigation",
+        "medicine", "nature", "perception", "performance", "persuasion",
+        "religion", "sleight_of_hand", "stealth", "survival"
+      ]
+    }
+  }
+}

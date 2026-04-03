@@ -1,6 +1,6 @@
 # Architecture Snapshot
 
-> Last updated: 2026-04-03 — Full regeneration — all sections verified against codebase
+> Last updated: 2026-04-03 — Added SRD import pipeline (scripts/schemas/, scripts/srd_import/), SRD reference models (models/srd_data.py), Alembic migration 0003, jsonschema dev dependency
 >
 > This document is maintained by Claude Code per the rules in CLAUDE.md.
 > It is consumed by the architecture consultant to inform decisions without
@@ -60,13 +60,17 @@ backend/tavern/
 │   ├── campaign.py         # Campaign, CampaignState
 │   ├── character.py        # Character, InventoryItem, CharacterCondition
 │   ├── session.py          # Session
-│   └── turn.py             # Turn
+│   ├── turn.py             # Turn
+│   └── srd_data.py         # SRD reference tables: SrdSpecies, SrdClass, SrdClassFeature, SrdSubclass,
+│                           #   SrdBackground, SrdFeat, SrdWeapon, SrdArmor, SrdEquipment, SrdSpell,
+│                           #   SrdMonster, SrdMonsterAction, SrdCondition, SrdMagicItem, SrdRulesTable
 ├── alembic/            # Database migrations
 │   ├── env.py              # Async migration runner (asyncpg)
 │   ├── script.py.mako      # Migration file template
 │   └── versions/
 │       ├── 0001_initial.py                                     # Initial schema
-│       └── 0002_add_campaign_session_character_turn_models.py  # Campaign, Session, Character, Turn tables
+│       ├── 0002_add_campaign_session_character_turn_models.py  # Campaign, Session, Character, Turn tables
+│       └── 0003_add_srd_reference_tables.py                   # 15 SRD reference tables
 ├── auth/               # Placeholder — Phase 6 authentication (not yet implemented)
 └── multiplayer/        # Placeholder — future multiplayer support
 
@@ -84,7 +88,31 @@ frontend/src/
     └── ChatInput.tsx       # Player action submission
 
 scripts/
-└── setup-repo.sh       # GitHub repository configuration (labels, branch protection, issue templates)
+├── setup-repo.sh       # GitHub repository configuration (labels, branch protection, issue templates)
+├── schemas/            # JSON Schema files — contracts between import pipeline and Rules Engine
+│   ├── species.json        # Species: size, speed, darkvision, traits, subspecies
+│   ├── class.json          # Class: hit die, saving throws, features by level, subclass level
+│   ├── class_feature.json  # Class feature: name, class, level, optional mechanical_effect
+│   ├── subclass.json       # Subclass: parent class, features by level
+│   ├── background.json     # Background: ability scores, skill proficiencies, origin feat
+│   ├── feat.json           # Feat: category (origin/general/fighting_style), prerequisites, effects
+│   ├── weapon.json         # Weapon: category, damage_dice, damage_type, properties, range
+│   ├── armor.json          # Armor: type, base_ac, dex_cap, stealth_disadvantage
+│   ├── equipment.json      # Adventuring gear: category, weight, cost
+│   ├── spell.json          # Spell: level, school, components, AOE, conditions_applied
+│   ├── monster.json        # Monster stat block: ability scores, resistances, CR, actions
+│   ├── monster_action.json # Monster action/trait: attack_bonus, damage, save_dc, recharge
+│   ├── condition.json      # Condition: structured mechanical_effects (speed, saves, actions)
+│   ├── magic_item.json     # Magic item: rarity, attunement, mechanical_effects
+│   └── rules_table.json    # Reference table: flexible data shape per table
+└── srd_import/         # SRD import pipeline (extract → parse → validate → seed)
+    ├── extract.py          # Chunk SRD PDF by section into text files (uses pypdf)
+    ├── claude_parse.py     # Claude-assisted extraction: chunks → structured JSON per schema
+    ├── validate.py         # Schema validation, cross-references, plausibility checks, baseline diff
+    ├── seed.py             # Idempotent upsert of reviewed JSON into PostgreSQL
+    ├── chunks/             # Generated: PDF text chunks (gitignored)
+    ├── extracted/          # Generated: raw Claude output (gitignored)
+    └── review/             # Generated: validated JSON staged for human review (gitignored)
 
 Infrastructure/
 ├── Dockerfile          # Multi-stage: Node 20 frontend build → Python 3.12 runtime; serves on :3000
@@ -135,7 +163,7 @@ models/ ──→ (no internal dependencies)
 
 | Group | Dependencies | Purpose |
 |---|---|---|
-| dev | pytest, pytest-asyncio, httpx, ruff, mypy, aiosqlite, pypdf | Development and testing |
+| dev | pytest, pytest-asyncio, httpx, ruff, mypy, aiosqlite, pypdf, jsonschema | Development and testing |
 | discord-bot | discord.py>=2.3, httpx>=0.27 | Documents discord_bot/ runtime requirements |
 
 ### Frontend (package.json)
@@ -210,6 +238,21 @@ Events the discord_bot `gameplay.py` cog is ready to handle (not yet emitted by 
 | InventoryItem | inventory_items | belongs to Character |
 | CharacterCondition | character_conditions | belongs to Character |
 | Turn | turns | belongs to Session, belongs to Character |
+| SrdSpecies | srd_species | reference data; indexed on name |
+| SrdClass | srd_classes | reference data; indexed on name |
+| SrdClassFeature | srd_class_features | reference data; unique on (class_name, name) |
+| SrdSubclass | srd_subclasses | reference data; unique on (class_name, name) |
+| SrdBackground | srd_backgrounds | reference data; indexed on name |
+| SrdFeat | srd_feats | reference data; indexed on name, category |
+| SrdWeapon | srd_weapons | reference data; indexed on name, category |
+| SrdArmor | srd_armor | reference data; indexed on name, type |
+| SrdEquipment | srd_equipment | reference data; indexed on name, category |
+| SrdSpell | srd_spells | reference data; indexed on name, level, school |
+| SrdMonster | srd_monsters | reference data; indexed on name, type, cr |
+| SrdMonsterAction | srd_monster_actions | reference data; unique on (monster_name, name) |
+| SrdCondition | srd_conditions | reference data; indexed on name |
+| SrdMagicItem | srd_magic_items | reference data; indexed on name, type, rarity |
+| SrdRulesTable | srd_rules_tables | reference data; unique on table_name |
 
 ## ADR Status
 

@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tavern.local/schemas/species.json",
+  "title": "Species",
+  "description": "SRD 5.2.1 species (race) definition",
+  "type": "object",
+  "required": ["name", "size", "speed", "traits", "languages"],
+  "additionalProperties": false,
+  "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "size": {
+      "type": "string",
+      "enum": ["tiny", "small", "medium", "large", "huge", "gargantuan"]
+    },
+    "speed": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Walking speed in feet"
+    },
+    "darkvision": {
+      "type": "integer",
+      "minimum": 0,
+      "default": 0,
+      "description": "Darkvision range in feet; 0 means no darkvision"
+    },
+    "traits": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/trait" }
+    },
+    "languages": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 1
+    },
+    "subspecies": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/subspecies" }
+    },
+    "description": {
+      "type": "string"
+    }
+  },
+  "$defs": {
+    "trait": {
+      "type": "object",
+      "required": ["name", "description"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" }
+      }
+    },
+    "subspecies": {
+      "type": "object",
+      "required": ["name", "traits"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" },
+        "traits": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/trait" }
+        },
+        "description": { "type": "string" }
+      }
+    }
+  }
+}

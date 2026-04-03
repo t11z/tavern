@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tavern.local/schemas/subclass.json",
+  "title": "Subclass",
+  "description": "SRD 5.2.1 subclass definition",
+  "type": "object",
+  "required": ["name", "class_name", "features_by_level"],
+  "additionalProperties": false,
+  "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "class_name": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Parent class name"
+    },
+    "features_by_level": {
+      "type": "object",
+      "description": "Keys are level numbers (as strings '1'–'20'), values are arrays of feature names",
+      "propertyNames": {
+        "pattern": "^([1-9]|1[0-9]|20)$"
+      },
+      "additionalProperties": {
+        "type": "array",
+        "items": { "type": "string" }
+      }
+    },
+    "description": {
+      "type": "string"
+    }
+  }
+}

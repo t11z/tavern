@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tavern.local/schemas/class_feature.json",
+  "title": "ClassFeature",
+  "description": "Individual class feature at a specific level",
+  "type": "object",
+  "required": ["name", "class_name", "level", "description"],
+  "additionalProperties": false,
+  "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "class_name": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Name of the class that grants this feature"
+    },
+    "level": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 20
+    },
+    "description": {
+      "type": "string"
+    },
+    "mechanical_effect": {
+      "$ref": "#/$defs/mechanical_effect"
+    }
+  },
+  "$defs": {
+    "mechanical_effect": {
+      "type": "object",
+      "description": "Structured representation of the mechanical impact; only fields that apply need to be present",
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "description": "Effect category (e.g. extra_attack, damage_bonus, resistance, movement_bonus)"
+        },
+        "value": {
+          "description": "Numeric value or dice notation associated with the effect"
+        },
+        "uses": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of times per rest this feature can be used; 0 = unlimited"
+        },
+        "recharge_on": {
+          "type": "string",
+          "enum": ["short_rest", "long_rest", "dawn", "turn"],
+          "description": "When uses recharge"
+        },
+        "notes": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

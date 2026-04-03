@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tavern.local/schemas/magic_item.json",
+  "title": "MagicItem",
+  "description": "SRD 5.2.1 magic item definition",
+  "type": "object",
+  "required": ["name", "type", "rarity", "requires_attunement", "description"],
+  "additionalProperties": false,
+  "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "type": {
+      "type": "string",
+      "description": "Item type (e.g. 'armor', 'weapon', 'potion', 'ring', 'rod', 'scroll', 'staff', 'wand', 'wondrous item')"
+    },
+    "rarity": {
+      "type": "string",
+      "enum": ["common", "uncommon", "rare", "very_rare", "legendary", "artifact"]
+    },
+    "requires_attunement": {
+      "type": "boolean"
+    },
+    "attunement_restriction": {
+      "type": "string",
+      "description": "Who can attune (e.g. 'a spellcaster', 'a cleric or paladin'); omit if no restriction"
+    },
+    "description": {
+      "type": "string"
+    },
+    "mechanical_effects": {
+      "type": "object",
+      "description": "Structured mechanical effects; shape varies by item type",
+      "additionalProperties": true
+    },
+    "charges": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Maximum charges (if applicable)"
+    },
+    "recharge": {
+      "type": "string",
+      "description": "Recharge timing (e.g. 'dawn', 'dusk', 'short or long rest')"
+    }
+  }
+}
