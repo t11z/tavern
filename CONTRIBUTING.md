@@ -10,7 +10,7 @@ This guide covers what you need to know before contributing.
 
 All significant architecture decisions are documented in `docs/adr/`. Accepted ADRs are binding constraints — contributions that contradict an accepted ADR will be asked to either conform or include a superseding ADR with the pull request.
 
-Start with [ADR-0000](docs/adr/ADR-0000-meta.md) to understand the ADR process, then read the ADRs relevant to the area you want to contribute to.
+Start with [ADR-0000](docs/adr/ADR-0000-adr-process-and-template.md) to understand the ADR process, then read the ADRs relevant to the area you want to contribute to.
 
 ### Understand the Layer Boundary
 
