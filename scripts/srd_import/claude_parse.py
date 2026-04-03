@@ -50,6 +50,7 @@ Rules:
 def _require_anthropic() -> object:
     try:
         import anthropic  # type: ignore[import-untyped]
+
         return anthropic
     except ImportError:
         print(
@@ -112,9 +113,7 @@ def parse_chunk(
             # Strip accidental markdown fences
             if raw.startswith("```"):
                 lines = raw.splitlines()
-                raw = "\n".join(
-                    line for line in lines if not line.startswith("```")
-                )
+                raw = "\n".join(line for line in lines if not line.startswith("```"))
 
             records = json.loads(raw)
             if not isinstance(records, list):

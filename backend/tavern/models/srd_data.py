@@ -43,9 +43,7 @@ class SrdClassFeature(Base):
     """Individual class feature at a specific level."""
 
     __tablename__ = "srd_class_features"
-    __table_args__ = (
-        UniqueConstraint("class_name", "name", name="uq_class_features_class_name"),
-    )
+    __table_args__ = (UniqueConstraint("class_name", "name", name="uq_class_features_class_name"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String, index=True)
@@ -60,9 +58,7 @@ class SrdSubclass(Base):
     """Subclass definitions — features by level, parent class."""
 
     __tablename__ = "srd_subclasses"
-    __table_args__ = (
-        UniqueConstraint("class_name", "name", name="uq_subclasses_class_name"),
-    )
+    __table_args__ = (UniqueConstraint("class_name", "name", name="uq_subclasses_class_name"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String, index=True)

@@ -22,16 +22,16 @@ from pathlib import Path
 # ---------------------------------------------------------------------------
 
 SECTION_PAGES: dict[str, tuple[int, int]] = {
-    "species":        (11,   20),
-    "classes":        (21,   80),
-    "backgrounds":    (81,   97),
-    "feats":          (98,  120),
-    "equipment":      (121, 155),
-    "spells":         (156, 260),
-    "monsters":       (261, 349),
-    "conditions":     (350, 355),
-    "magic_items":    (356, 370),
-    "rules_tables":   (1,    10),
+    "species": (11, 20),
+    "classes": (21, 80),
+    "backgrounds": (81, 97),
+    "feats": (98, 120),
+    "equipment": (121, 155),
+    "spells": (156, 260),
+    "monsters": (261, 349),
+    "conditions": (350, 355),
+    "magic_items": (356, 370),
+    "rules_tables": (1, 10),
 }
 
 CHUNK_SIZE = 20  # pages per chunk
