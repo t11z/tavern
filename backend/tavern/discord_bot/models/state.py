@@ -52,12 +52,19 @@ class ReactionWindow:
     ``eligible_reactors`` is the set of character UUIDs that may still react.
     ``responded`` is the set that have reacted or explicitly passed.  When
     ``responded`` equals ``eligible_reactors`` the window can be closed early.
+
+    ``channel_id``, ``turn_id``, and ``message_id`` are set when the window
+    is opened so that the bot can edit the window message in-place as reactions
+    are used and submit API calls from the ``/pass`` command.
     """
 
     roll_id: UUID
     eligible_reactors: set[UUID] = field(default_factory=set)
     responded: set[UUID] = field(default_factory=set)
     expires_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    channel_id: int = 0
+    turn_id: UUID | None = None
+    message_id: int | None = None
 
     @property
     def all_responded(self) -> bool:
