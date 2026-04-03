@@ -1,0 +1,65 @@
+name: 🐛 Bug Report
+description: Something isn't working as expected.
+labels: ["bug"]
+body:
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      description: Which part of Tavern is affected?
+      options:
+        - Rules Engine (combat, spells, conditions, dice)
+        - Narrator (Claude responses, narration quality, prompts)
+        - Web Client (browser UI)
+        - Discord Bot
+        - Campaign/Session Management
+        - SRD Import Pipeline
+        - Deployment (Docker, database)
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: Describe the bug clearly. What did you expect to happen, and what happened instead?
+      placeholder: |
+        Expected: My Fireball should deal 8d6 fire damage.
+        Actual: The Rules Engine calculated 6d6 damage.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: How can we reproduce this bug?
+      placeholder: |
+        1. Start a campaign with a Level 5 Wizard
+        2. Cast Fireball at a group of enemies
+        3. Observe the damage calculation in the turn result
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Environment
+      description: Deployment details that might be relevant.
+      placeholder: |
+        - Tavern version: (commit hash or tag)
+        - Deployment: Docker Compose / local dev
+        - Client: Web / Discord
+        - Browser (if web): Chrome 120 / Firefox 130 / Safari 18
+    validations:
+      required: false
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs or screenshots
+      description: Paste any error messages, logs, or screenshots that help illustrate the problem.
+      render: shell
+    validations:
+      required: false

@@ -1,0 +1,124 @@
+{% extends "main.html" %}
+
+{% block tabs %}
+{{ super() }}
+
+{% if page and page.is_homepage %}
+<section class="tx-hero">
+  <div class="tx-hero__logo">
+    <img src="assets/logo.png" alt="Tavern — AI Game Master">
+  </div>
+  <p class="tx-hero__subtitle">
+    An AI Game Master for tabletop RPG campaigns.<br>
+    Open source. Self-hosted. Cheaper than a coffee.
+  </p>
+
+  <div class="tx-hero__tagline">
+    A solo session runs ~$0.28. Four players for three hours: ~$0.70.<br>
+    No subscription. No platform fees. Just your API key and <code>docker compose up</code>.
+  </div>
+
+  <div class="tx-hero__actions">
+    <a href="quickstart/" class="tx-hero__button tx-hero__button--primary">
+      Get Started
+    </a>
+    <a href="https://github.com/t11z/tavern" class="tx-hero__button tx-hero__button--secondary">
+      View on GitHub
+    </a>
+  </div>
+</section>
+
+<div class="tx-divider">⸻ ✦ ⸻</div>
+
+<div class="tx-features">
+  <div class="tx-feature">
+    <div class="tx-feature__icon">🎲</div>
+    <div class="tx-feature__title">Rules in Code</div>
+    <div class="tx-feature__description">
+      Full SRD 5e combat, spells, conditions, and character progression — implemented as a deterministic Python engine, not prompt engineering.
+    </div>
+  </div>
+  <div class="tx-feature">
+    <div class="tx-feature__icon">🧠</div>
+    <div class="tx-feature__title">Claude as GM</div>
+    <div class="tx-feature__description">
+      Claude handles the story — narration, NPC dialogue, world reaction, plot twists. The engine handles the math. Each does what it's best at.
+    </div>
+  </div>
+  <div class="tx-feature">
+    <div class="tx-feature__icon">💾</div>
+    <div class="tx-feature__title">Persistent Campaigns</div>
+    <div class="tx-feature__description">
+      Stop mid-dungeon, come back next week. Every turn is saved. Your campaign survives across sessions, crashes, and server restarts.
+    </div>
+  </div>
+  <div class="tx-feature">
+    <div class="tx-feature__icon">👥</div>
+    <div class="tx-feature__title">Solo & Multiplayer</div>
+    <div class="tx-feature__description">
+      Play alone or with friends. Real-time multiplayer with initiative-based combat, player presence tracking, and mid-session join/leave.
+    </div>
+  </div>
+  <div class="tx-feature">
+    <div class="tx-feature__icon">🎭</div>
+    <div class="tx-feature__title">Two Ways to Play</div>
+    <div class="tx-feature__description">
+      Browser-based web client for the full visual experience, or Discord bot with voice support. Both are first-class, both ship with Tavern.
+    </div>
+  </div>
+  <div class="tx-feature">
+    <div class="tx-feature__icon">🌍</div>
+    <div class="tx-feature__title">Community Worlds</div>
+    <div class="tx-feature__description">
+      Use the included Shattered Coast setting or import community-created world presets. Build and share your own — it's just a Markdown file.
+    </div>
+  </div>
+</div>
+
+<div class="tx-divider">⸻ ✦ ⸻</div>
+
+<div class="tx-scenarios">
+  <h2 class="tx-scenarios__title">Three Ways to Gather</h2>
+
+  <div class="tx-scenario">
+    <div class="tx-scenario__icon">🖥️</div>
+    <div>
+      <div class="tx-scenario__title">At Your Desk</div>
+      <div class="tx-scenario__description">
+        Open the web client in your browser. Create a character, start a campaign, and play solo or invite friends with a link.
+      </div>
+    </div>
+  </div>
+
+  <div class="tx-scenario">
+    <div class="tx-scenario__icon">📱</div>
+    <div>
+      <div class="tx-scenario__title">At the Table</div>
+      <div class="tx-scenario__description">
+        Put a laptop at the head of the table as the shared display. Each player joins on their phone. Claude narrates through the speakers.
+      </div>
+    </div>
+  </div>
+
+  <div class="tx-scenario">
+    <div class="tx-scenario__icon">🎙️</div>
+    <div>
+      <div class="tx-scenario__title">On Discord</div>
+      <div class="tx-scenario__description">
+        Add the Tavern bot to your server. Join a voice channel, start a campaign, and play — Claude speaks as your GM. Type or talk, your choice.
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="tx-cost">
+  <div class="tx-cost__headline">Cheaper Than a Coffee</div>
+  <div class="tx-cost__detail">
+    Prompt caching, mixed model routing, and rolling summaries keep API costs minimal.
+    A full evening of adventure costs less than what you'd tip your barista.
+    Bring your own Anthropic API key — no subscription, no platform fees.
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}

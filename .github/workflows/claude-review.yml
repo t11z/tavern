@@ -1,0 +1,32 @@
+name: Claude PR Review
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    concurrency:
+      group: claude-review-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: |
+            Review this pull request. Before reviewing, read all ADRs in docs/adr/
+            to understand existing architectural decisions.
+
+            Flag any changes that:
+            1. Contradict an accepted ADR without a superseding ADR in this PR
+            2. Introduce a significant architectural decision without a corresponding ADR
+            3. Contain logic errors, security issues, or missing error handling
+
+            Format: ## ADR Compliance, ## Issues Found, ## Summary
+          claude_args: "--max-turns 5 --model claude-sonnet-4-6"

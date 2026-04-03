@@ -1,0 +1,64 @@
+name: 🌍 World Preset Proposal
+description: Propose a new community world preset for Tavern.
+labels: ["world-preset"]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: World summary
+      description: A brief description of the world — setting, tone, and what makes it interesting.
+      placeholder: |
+        A desert world where water is currency and the ruins of a drowned civilization
+        lie buried beneath the sand. Tone: Dark & Gritty with elements of mystery.
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: compliance
+    attributes:
+      label: SRD and IP compliance
+      description: World presets must not contain WotC-protected intellectual property.
+      options:
+        - label: This world does not use any WotC-protected terms, creatures, settings, or characters (see `docs/game-design/campaign-design.md` for the reference list).
+          required: true
+        - label: All mechanics in this world are compatible with the SRD 5.2.1.
+          required: true
+
+  - type: dropdown
+    id: tone
+    attributes:
+      label: Primary tone
+      description: Which of Tavern's tone presets does this world best support?
+      options:
+        - Heroic Fantasy
+        - Dark & Gritty
+        - Lighthearted & Humorous
+        - Mystery & Intrigue
+        - Eldritch Horror
+        - Multiple / Adaptable
+    validations:
+      required: true
+
+  - type: textarea
+    id: factions
+    attributes:
+      label: Key factions (at least 2)
+      description: Brief descriptions of the major factions in this world.
+    validations:
+      required: true
+
+  - type: textarea
+    id: hooks
+    attributes:
+      label: Campaign hooks (at least 2)
+      description: Starting scenarios that a campaign in this world could use.
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional details
+      description: Anything else — geography, NPCs, world rules, inspirations.
+    validations:
+      required: false

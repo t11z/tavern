@@ -1,0 +1,50 @@
+name: ✨ Feature Request
+description: Suggest a new feature or improvement.
+labels: ["enhancement"]
+body:
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      description: Which part of Tavern does this relate to?
+      options:
+        - Rules Engine (combat, spells, conditions, dice)
+        - Narrator (Claude behaviour, narration, prompts)
+        - Web Client (browser UI)
+        - Discord Bot
+        - Campaign/Session Management
+        - Character Creation
+        - World Presets / Game Design
+        - SRD Import Pipeline
+        - Deployment / Infrastructure
+        - New Client (mobile, voice, CLI, etc.)
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What would you like to see?
+      description: Describe the feature. What problem does it solve, or what experience does it improve?
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you've considered
+      description: Have you thought about other ways to solve this? Workarounds you're using today?
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: adr-check
+    attributes:
+      label: Architecture impact
+      description: Does this feature require a new architecture decision?
+      options:
+        - label: This feature would introduce a new dependency, change an interface between layers, alter the data model, or change the deployment topology.
+          required: false
+        - label: I have read the existing ADRs in `docs/adr/` and this feature does not contradict any of them.
+          required: false
