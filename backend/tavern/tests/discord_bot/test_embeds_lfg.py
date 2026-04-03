@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import discord
-import pytest
 
 from tavern.discord_bot.embeds.lfg import TAVERN_AMBER, build_lfg_embed
 

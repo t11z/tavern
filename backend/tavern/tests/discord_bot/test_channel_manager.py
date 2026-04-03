@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import discord
 import pytest
@@ -12,7 +11,6 @@ from tavern.discord_bot.services.channel_manager import (
     ChannelManager,
     _slugify,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -294,12 +292,8 @@ class TestArchiveChannels:
         category = self._make_category_with_channels(guild)
         await manager.archive_channels(category)
         category.edit.assert_called_once()
-        name_kwarg = category.edit.call_args.kwargs.get(
-            "name"
-        ) or category.edit.call_args.args[0] if category.edit.call_args.args else None
-        # Grab name from kwargs
-        call_kwargs = category.edit.call_args.kwargs
-        assert call_kwargs.get("name") == "📁 Tavern: Shattered Coast (archived)"
+        expected = "📁 Tavern: Shattered Coast (archived)"
+        assert category.edit.call_args.kwargs.get("name") == expected
 
     async def test_works_with_empty_category(self, manager: ChannelManager) -> None:
         guild = make_guild()
