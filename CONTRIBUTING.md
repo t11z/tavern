@@ -10,7 +10,7 @@ This guide covers what you need to know before contributing.
 
 All significant architecture decisions are documented in `docs/adr/`. Accepted ADRs are binding constraints — contributions that contradict an accepted ADR will be asked to either conform or include a superseding ADR with the pull request.
 
-Start with [ADR-0000](docs/adr/ADR-0000-meta.md) to understand the ADR process, then read the ADRs relevant to the area you want to contribute to.
+Start with [ADR-0000](adr/ADR-0000-adr-process-and-template.md) to understand the ADR process, then read the ADRs relevant to the area you want to contribute to.
 
 ### Understand the Layer Boundary
 
@@ -98,7 +98,7 @@ npm run format
 
 If your contribution introduces a significant architecture decision — a new dependency, a change to the layer boundary, a new data model pattern, a deployment topology change — it needs an ADR. If you're unsure, open an issue to discuss before writing code.
 
-See [ADR-0000](docs/adr/ADR-0000-meta.md) for the full governance process.
+See [ADR-0000](adr/ADR-0000-adr-process-and-template.md) for the full governance process.
 
 ## Pull Request Process
 
