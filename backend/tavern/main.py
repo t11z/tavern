@@ -15,7 +15,7 @@ async def health() -> dict[str, str]:
 
 
 # Serve the React frontend if the static directory is populated.
-if STATIC_DIR.exists() and any(STATIC_DIR.iterdir()):
+if (STATIC_DIR / "assets").exists():
     app.mount("/assets", StaticFiles(directory=str(STATIC_DIR / "assets")), name="assets")
 
     @app.get("/{full_path:path}", include_in_schema=False)
