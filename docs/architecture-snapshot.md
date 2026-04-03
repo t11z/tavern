@@ -1,6 +1,6 @@
 # Architecture Snapshot
 
-> Last updated: 2026-04-03 — Phase 5b: WebSocket streaming endpoint, streaming Narrator, React chat UI
+> Last updated: 2026-04-03 — Added `discord_bot/` module skeleton; new dependency: `discord.py`
 >
 > This document is maintained by Claude Code per the rules in CLAUDE.md.
 > It is consumed by the architecture consultant to inform decisions without
@@ -21,6 +21,12 @@ backend/tavern/
 │   ├── dependencies.py # Shared FastAPI dependencies (get_db_session, get_narrator, get_session_factory)
 │   ├── schemas.py      # Pydantic request/response schemas
 │   └── errors.py       # APIError + error handlers
+├── discord_bot/    # Discord client — connects to Tavern API, translates Discord interactions
+│   ├── bot.py          # TavernBot (commands.Bot subclass); loads cogs, syncs slash commands
+│   ├── config.py       # BotConfig dataclass; validates required env vars on init
+│   ├── __main__.py     # Entry point: python -m tavern.discord_bot
+│   └── cogs/           # discord.py Cog modules (one per command group)
+│       └── ping.py     # Temporary: /tavern ping — health check for bot + API
 ├── models/         # SQLAlchemy ORM models (database schema)
 └── alembic/        # Database migrations
 
@@ -57,6 +63,7 @@ core/ ──→ (no internal dependencies)
 | pydantic | Request/response validation | >=2.10.0 |
 | python-dotenv | Environment variable loading | >=1.0.0 |
 | anthropic | Claude API (Narrator) | >=0.88.0 |
+| discord.py | Discord bot client (slash commands, intents, cogs) | >=2.4.0 |
 
 ### Frontend (package.json)
 
@@ -126,6 +133,8 @@ core/ ──→ (no internal dependencies)
 | 0005 | Client Architecture | Accepted |
 | 0006 | Authentication and Authorization | Accepted |
 | 0007 | Multiplayer and Real-Time Communication | Accepted |
+| 0008 | Discord Bot Voice Pipeline | Accepted |
+| 0009 | Interactive Dice Rolling and Reaction System | Accepted |
 
 ## Known Deviations
 
