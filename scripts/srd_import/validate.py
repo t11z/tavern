@@ -30,31 +30,70 @@ SCHEMAS_DIR = Path(__file__).parent.parent / "schemas"
 # ---------------------------------------------------------------------------
 
 BASELINE_HIT_DICE: dict[str, int] = {
-    "Barbarian": 12, "Fighter": 10, "Paladin": 10, "Ranger": 10,
-    "Bard": 8, "Cleric": 8, "Druid": 8, "Monk": 8, "Rogue": 8,
-    "Warlock": 8, "Sorcerer": 6, "Wizard": 6,
+    "Barbarian": 12,
+    "Fighter": 10,
+    "Paladin": 10,
+    "Ranger": 10,
+    "Bard": 8,
+    "Cleric": 8,
+    "Druid": 8,
+    "Monk": 8,
+    "Rogue": 8,
+    "Warlock": 8,
+    "Sorcerer": 6,
+    "Wizard": 6,
 }
 
 # CR → XP table per SRD 5.2.1
 CR_XP: dict[float, int] = {
-    0: 10, 0.125: 25, 0.25: 50, 0.5: 100,
-    1: 200, 2: 450, 3: 700, 4: 1100, 5: 1800,
-    6: 2300, 7: 3900, 8: 3900, 9: 5000, 10: 5900,
-    11: 7200, 12: 8400, 13: 10000, 14: 11500, 15: 13000,
-    16: 15000, 17: 18000, 18: 20000, 19: 22000, 20: 25000,
-    21: 33000, 22: 41000, 23: 50000, 24: 62000, 30: 155000,
+    0: 10,
+    0.125: 25,
+    0.25: 50,
+    0.5: 100,
+    1: 200,
+    2: 450,
+    3: 700,
+    4: 1100,
+    5: 1800,
+    6: 2300,
+    7: 3900,
+    8: 3900,
+    9: 5000,
+    10: 5900,
+    11: 7200,
+    12: 8400,
+    13: 10000,
+    14: 11500,
+    15: 13000,
+    16: 15000,
+    17: 18000,
+    18: 20000,
+    19: 22000,
+    20: 25000,
+    21: 33000,
+    22: 41000,
+    23: 50000,
+    24: 62000,
+    30: 155000,
 }
 
 # Plausible HP ranges per CR band (min, max) for sanity checking
 CR_HP_RANGES: dict[int, tuple[int, int]] = {
-    0: (1, 20), 1: (1, 85), 2: (50, 120), 5: (100, 250),
-    10: (180, 350), 15: (230, 500), 20: (300, 700), 30: (500, 1000),
+    0: (1, 20),
+    1: (1, 85),
+    2: (50, 120),
+    5: (100, 250),
+    10: (180, 350),
+    15: (230, 500),
+    20: (300, 700),
+    30: (500, 1000),
 }
 
 
 def _require_jsonschema() -> object:
     try:
         import jsonschema  # type: ignore[import-untyped]
+
         return jsonschema
     except ImportError:
         print(
@@ -109,39 +148,55 @@ def validate_schema(
 def cross_reference_spells(records: list[dict]) -> list[str]:
     """Verify spell conditions_applied reference known condition names."""
     known_conditions = {
-        "blinded", "charmed", "deafened", "exhaustion", "frightened",
-        "grappled", "incapacitated", "invisible", "paralyzed", "petrified",
-        "poisoned", "prone", "restrained", "stunned", "unconscious",
+        "blinded",
+        "charmed",
+        "deafened",
+        "exhaustion",
+        "frightened",
+        "grappled",
+        "incapacitated",
+        "invisible",
+        "paralyzed",
+        "petrified",
+        "poisoned",
+        "prone",
+        "restrained",
+        "stunned",
+        "unconscious",
     }
     issues: list[str] = []
     for rec in records:
         for cond in rec.get("conditions_applied") or []:
             if cond not in known_conditions:
-                issues.append(
-                    f"  [{rec.get('name')}] Unknown condition '{cond}'"
-                )
+                issues.append(f"  [{rec.get('name')}] Unknown condition '{cond}'")
     return issues
 
 
 def cross_reference_classes(records: list[dict], section: str) -> list[str]:
     """Check that class references in spells/features point to known class names."""
     known_classes = {
-        "Barbarian", "Bard", "Cleric", "Druid", "Fighter", "Monk",
-        "Paladin", "Ranger", "Rogue", "Sorcerer", "Warlock", "Wizard",
+        "Barbarian",
+        "Bard",
+        "Cleric",
+        "Druid",
+        "Fighter",
+        "Monk",
+        "Paladin",
+        "Ranger",
+        "Rogue",
+        "Sorcerer",
+        "Warlock",
+        "Wizard",
     }
     issues: list[str] = []
     for rec in records:
         for cls in rec.get("classes") or []:
             if cls not in known_classes:
-                issues.append(
-                    f"  [{rec.get('name')}] Unknown class '{cls}'"
-                )
+                issues.append(f"  [{rec.get('name')}] Unknown class '{cls}'")
         if section in ("class_feature", "subclass"):
             cls = rec.get("class_name", "")
             if cls and cls not in known_classes:
-                issues.append(
-                    f"  [{rec.get('name')}] Unknown class_name '{cls}'"
-                )
+                issues.append(f"  [{rec.get('name')}] Unknown class_name '{cls}'")
     return issues
 
 
@@ -163,9 +218,7 @@ def plausibility_checks_monsters(records: list[dict]) -> list[str]:
             cr_band = max((k for k in CR_HP_RANGES if k <= float(cr)), default=0)
             lo, hi = CR_HP_RANGES[cr_band]
             if not (lo <= hp <= hi * 2):
-                issues.append(
-                    f"  [{name}] HP {hp} is outside plausible range for CR {cr}"
-                )
+                issues.append(f"  [{name}] HP {hp} is outside plausible range for CR {cr}")
     return issues
 
 
@@ -249,9 +302,7 @@ def main() -> None:
     # --- Write reviewed output ---
     REVIEW_DIR.mkdir(parents=True, exist_ok=True)
     out_path = REVIEW_DIR / f"{section}.json"
-    out_path.write_text(
-        json.dumps(valid_records, indent=2, ensure_ascii=False), encoding="utf-8"
-    )
+    out_path.write_text(json.dumps(valid_records, indent=2, ensure_ascii=False), encoding="utf-8")
     print(f"\nWrote {len(valid_records)} valid record(s) → {out_path}")
 
     if schema_errors:

@@ -40,11 +40,11 @@ CHUNK_SIZE = 20  # pages per chunk
 def _require_pypdf() -> object:
     try:
         import pypdf  # type: ignore[import-untyped]
+
         return pypdf
     except ImportError:
         print(
-            "ERROR: pypdf is not installed. "
-            "Run: uv sync --group dev",
+            "ERROR: pypdf is not installed. Run: uv sync --group dev",
             file=sys.stderr,
         )
         sys.exit(1)
@@ -67,8 +67,7 @@ def extract_section(pdf_path: Path, section: str, output_dir: Path) -> list[Path
 
     if section not in SECTION_PAGES:
         print(
-            f"ERROR: Unknown section '{section}'. "
-            f"Valid sections: {sorted(SECTION_PAGES)}",
+            f"ERROR: Unknown section '{section}'. Valid sections: {sorted(SECTION_PAGES)}",
             file=sys.stderr,
         )
         sys.exit(1)
@@ -102,10 +101,7 @@ def extract_section(pdf_path: Path, section: str, output_dir: Path) -> list[Path
         chunk_text = "\n\n".join(text_parts)
         chunk_file = output_dir / f"{section}_{chunk_idx:03d}.txt"
         chunk_file.write_text(chunk_text, encoding="utf-8")
-        print(
-            f"  Wrote {chunk_file.name} "
-            f"(pages {chunk_pages[0] + 1}–{chunk_pages[-1] + 1})"
-        )
+        print(f"  Wrote {chunk_file.name} (pages {chunk_pages[0] + 1}–{chunk_pages[-1] + 1})")
         written.append(chunk_file)
 
     return written

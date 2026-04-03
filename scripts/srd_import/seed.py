@@ -23,21 +23,21 @@ HERE = Path(__file__).parent
 REVIEW_DIR = HERE / "review"
 
 SECTION_MODEL_MAP: dict[str, str] = {
-    "species":       "SrdSpecies",
-    "classes":       "SrdClass",
-    "class_features":"SrdClassFeature",
-    "subclasses":    "SrdSubclass",
-    "backgrounds":   "SrdBackground",
-    "feats":         "SrdFeat",
-    "weapons":       "SrdWeapon",
-    "armor":         "SrdArmor",
-    "equipment":     "SrdEquipment",
-    "spells":        "SrdSpell",
-    "monsters":      "SrdMonster",
-    "monster_actions":"SrdMonsterAction",
-    "conditions":    "SrdCondition",
-    "magic_items":   "SrdMagicItem",
-    "rules_tables":  "SrdRulesTable",
+    "species": "SrdSpecies",
+    "classes": "SrdClass",
+    "class_features": "SrdClassFeature",
+    "subclasses": "SrdSubclass",
+    "backgrounds": "SrdBackground",
+    "feats": "SrdFeat",
+    "weapons": "SrdWeapon",
+    "armor": "SrdArmor",
+    "equipment": "SrdEquipment",
+    "spells": "SrdSpell",
+    "monsters": "SrdMonster",
+    "monster_actions": "SrdMonsterAction",
+    "conditions": "SrdCondition",
+    "magic_items": "SrdMagicItem",
+    "rules_tables": "SrdRulesTable",
 }
 
 # For rules_tables, the unique key is table_name, not name
