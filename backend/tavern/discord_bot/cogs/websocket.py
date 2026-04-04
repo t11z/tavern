@@ -43,6 +43,7 @@ _BACKOFF = [1, 2, 4, 8, 15, 30]
 
 # Maps raw WebSocket event types to discord.py custom event names.
 _DISPATCH_MAP: dict[str, str] = {
+    "session.state": "tavern_session_state",
     "turn.roll_required": "tavern_turn_roll_required",
     "turn.roll_executed": "tavern_turn_roll_executed",
     "turn.self_reaction_window": "tavern_turn_self_reaction_window",
@@ -50,6 +51,7 @@ _DISPATCH_MAP: dict[str, str] = {
     "turn.reaction_used": "tavern_turn_reaction_used",
     "turn.reaction_window_closed": "tavern_turn_reaction_window_closed",
     "turn.narrative_start": "tavern_turn_narrative_start",
+    "turn.narrative_chunk": "tavern_turn_narrative_chunk",
     "turn.narrative_end": "tavern_turn_narrative_end",
     "character.updated": "tavern_character_updated",
     "player.joined": "tavern_player_joined",

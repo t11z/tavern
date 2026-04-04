@@ -1,8 +1,8 @@
 """Async HTTP client for the Tavern REST API.
 
 All methods raise TavernAPIError on 4xx/5xx responses. Callers receive the
-raw JSON body (dict) on success — no deserialization into domain objects here;
-that is the callers' responsibility.
+raw JSON body (dict or list) on success — no deserialization into domain
+objects here; that is the callers' responsibility.
 
 Usage::
 
@@ -63,9 +63,9 @@ class TavernAPI:
                 message = response.text
             raise TavernAPIError(response.status_code, str(message))
 
-    async def _json(self, response: httpx.Response) -> dict[str, Any]:
+    async def _json(self, response: httpx.Response) -> Any:
         await self._raise_for_status(response)
-        return response.json()  # type: ignore[no-any-return]
+        return response.json()
 
     # ------------------------------------------------------------------
     # Health
@@ -74,38 +74,72 @@ class TavernAPI:
     async def health_check(self) -> dict[str, Any]:
         """GET /health — liveness probe."""
         r = await self._client.get("/health")
-        return await self._json(r)
+        return await self._json(r)  # type: ignore[no-any-return]
 
     # ------------------------------------------------------------------
     # Campaigns
     # ------------------------------------------------------------------
 
-    async def list_campaigns(self) -> dict[str, Any]:
-        """GET /api/campaigns"""
+    async def list_campaigns(self) -> list[dict[str, Any]]:
+        """GET /api/campaigns — returns a list of campaign summaries."""
         r = await self._client.get("/api/campaigns")
-        return await self._json(r)
+        return await self._json(r)  # type: ignore[no-any-return]
 
     async def create_campaign(self, data: dict[str, Any]) -> dict[str, Any]:
         """POST /api/campaigns"""
         r = await self._client.post("/api/campaigns", json=data)
-        return await self._json(r)
+        return await self._json(r)  # type: ignore[no-any-return]
 
     async def get_campaign(self, campaign_id: str | UUID) -> dict[str, Any]:
         """GET /api/campaigns/{id}"""
         r = await self._client.get(f"/api/campaigns/{_id(campaign_id)}")
-        return await self._json(r)
+        return await self._json(r)  # type: ignore[no-any-return]
+
+    async def patch_campaign(
+        self, campaign_id: str | UUID, updates: dict[str, Any]
+    ) -> dict[str, Any]:
+        """PATCH /api/campaigns/{id} — update name or status.
+
+        Only ``name`` and ``status`` are accepted by the API; all other keys
+        are silently dropped to avoid 422 errors from the server.
+        Valid statuses: ``active``, ``paused``, ``concluded``, ``abandoned``.
+        """
+        allowed = {k: v for k, v in updates.items() if k in ("name", "status")}
+        r = await self._client.patch(f"/api/campaigns/{_id(campaign_id)}", json=allowed)
+        return await self._json(r)  # type: ignore[no-any-return]
 
     async def get_campaign_config(self, campaign_id: str | UUID) -> dict[str, Any]:
-        """GET /api/campaigns/{id}/config"""
-        r = await self._client.get(f"/api/campaigns/{_id(campaign_id)}/config")
-        return await self._json(r)
+        """Return campaign data for config display.
+
+        There is no dedicated /config endpoint; this delegates to get_campaign()
+        and returns the full campaign detail dict so callers can read settings
+        stored in the campaign record.
+        """
+        return await self.get_campaign(campaign_id)
 
     async def patch_campaign_config(
         self, campaign_id: str | UUID, settings: dict[str, Any]
     ) -> dict[str, Any]:
-        """PATCH /api/campaigns/{id}/config"""
-        r = await self._client.patch(f"/api/campaigns/{_id(campaign_id)}/config", json=settings)
-        return await self._json(r)
+        """PATCH /api/campaigns/{id} — persist name/status changes.
+
+        Game-configuration keys (rolling_mode, difficulty, etc.) are not yet
+        supported by the API and are silently dropped.
+        """
+        return await self.patch_campaign(campaign_id, settings)
+
+    # ------------------------------------------------------------------
+    # Sessions
+    # ------------------------------------------------------------------
+
+    async def start_session(self, campaign_id: str | UUID) -> dict[str, Any]:
+        """POST /api/campaigns/{id}/sessions — transition campaign to Active."""
+        r = await self._client.post(f"/api/campaigns/{_id(campaign_id)}/sessions")
+        return await self._json(r)  # type: ignore[no-any-return]
+
+    async def end_session(self, campaign_id: str | UUID) -> dict[str, Any]:
+        """POST /api/campaigns/{id}/sessions/end — transition campaign to Paused."""
+        r = await self._client.post(f"/api/campaigns/{_id(campaign_id)}/sessions/end")
+        return await self._json(r)  # type: ignore[no-any-return]
 
     # ------------------------------------------------------------------
     # Turns
@@ -119,28 +153,39 @@ class TavernAPI:
             f"/api/campaigns/{_id(campaign_id)}/turns",
             json={"character_id": _id(character_id), "action": action},
         )
-        return await self._json(r)
+        return await self._json(r)  # type: ignore[no-any-return]
 
-    async def get_turn_history(self, campaign_id: str | UUID, limit: int = 5) -> dict[str, Any]:
-        """GET /api/campaigns/{id}/turns?limit=N"""
+    async def get_turn_history(
+        self, campaign_id: str | UUID, page_size: int = 5, page: int = 1
+    ) -> dict[str, Any]:
+        """GET /api/campaigns/{id}/turns?page_size=N&page=P
+
+        Returns a dict with ``turns`` (list), ``total``, ``page``, ``page_size``.
+        """
         r = await self._client.get(
             f"/api/campaigns/{_id(campaign_id)}/turns",
-            params={"limit": limit},
+            params={"page_size": page_size, "page": page},
         )
-        return await self._json(r)
+        return await self._json(r)  # type: ignore[no-any-return]
 
     async def get_recap(self, campaign_id: str | UUID) -> dict[str, Any]:
-        """GET /api/campaigns/{id}/recap — triggers a Haiku narrative summary."""
+        """GET /api/campaigns/{id}/recap — narrative recap (M2 endpoint, not yet live).
+
+        Raises TavernAPIError on 404 until the endpoint is implemented.
+        """
         r = await self._client.get(f"/api/campaigns/{_id(campaign_id)}/recap")
-        return await self._json(r)
+        return await self._json(r)  # type: ignore[no-any-return]
 
     async def get_scene(self, campaign_id: str | UUID) -> dict[str, Any]:
-        """GET /api/campaigns/{id}/scene — current scene state and points of interest."""
+        """GET /api/campaigns/{id}/scene — scene state (M2 endpoint, not yet live).
+
+        Raises TavernAPIError on 404 until the endpoint is implemented.
+        """
         r = await self._client.get(f"/api/campaigns/{_id(campaign_id)}/scene")
-        return await self._json(r)
+        return await self._json(r)  # type: ignore[no-any-return]
 
     # ------------------------------------------------------------------
-    # Rolls  (ADR-0009)
+    # Rolls  (ADR-0009 — M2, endpoints not yet live)
     # ------------------------------------------------------------------
 
     async def execute_roll(
@@ -150,12 +195,12 @@ class TavernAPI:
         roll_id: str | UUID,
         pre_roll_options: list[str] | None = None,
     ) -> dict[str, Any]:
-        """POST /api/campaigns/{id}/turns/{turn_id}/rolls/{roll_id}/execute"""
+        """POST /api/campaigns/{id}/turns/{turn_id}/rolls/{roll_id}/execute (M2)."""
         r = await self._client.post(
             f"/api/campaigns/{_id(campaign_id)}/turns/{_id(turn_id)}/rolls/{_id(roll_id)}/execute",
             json={"pre_roll_options": pre_roll_options or []},
         )
-        return await self._json(r)
+        return await self._json(r)  # type: ignore[no-any-return]
 
     async def submit_reaction(
         self,
@@ -165,12 +210,12 @@ class TavernAPI:
         character_id: str | UUID,
         reaction_id: str,
     ) -> dict[str, Any]:
-        """POST /api/campaigns/{id}/turns/{turn_id}/rolls/{roll_id}/react"""
+        """POST /api/campaigns/{id}/turns/{turn_id}/rolls/{roll_id}/react (M2)."""
         r = await self._client.post(
             f"/api/campaigns/{_id(campaign_id)}/turns/{_id(turn_id)}/rolls/{_id(roll_id)}/react",
             json={"character_id": _id(character_id), "reaction_id": reaction_id},
         )
-        return await self._json(r)
+        return await self._json(r)  # type: ignore[no-any-return]
 
     async def submit_pass(
         self,
@@ -179,65 +224,36 @@ class TavernAPI:
         roll_id: str | UUID,
         character_id: str | UUID,
     ) -> dict[str, Any]:
-        """POST /api/campaigns/{id}/turns/{turn_id}/rolls/{roll_id}/pass"""
+        """POST /api/campaigns/{id}/turns/{turn_id}/rolls/{roll_id}/pass (M2)."""
         r = await self._client.post(
             f"/api/campaigns/{_id(campaign_id)}/turns/{_id(turn_id)}/rolls/{_id(roll_id)}/pass",
             json={"character_id": _id(character_id)},
         )
-        return await self._json(r)
-
-    async def start_character_creation(
-        self, campaign_id: str | UUID, user_id: str | UUID, display_name: str
-    ) -> dict[str, Any]:
-        """POST /api/campaigns/{id}/characters/creation — start guided (Path 1) creation.
-
-        Returns a dict with at minimum ``session_id``, ``message`` (Claude's first
-        question), and ``status`` (``"in_progress"`` or ``"complete"``).
-        """
-        r = await self._client.post(
-            f"/api/campaigns/{_id(campaign_id)}/characters/creation",
-            json={"user_id": _id(user_id), "display_name": display_name},
-        )
-        return await self._json(r)
-
-    async def submit_creation_step(
-        self, campaign_id: str | UUID, session_id: str, message: str
-    ) -> dict[str, Any]:
-        """POST /api/campaigns/{id}/characters/creation/{session_id} — send player reply.
-
-        Returns a dict with ``message`` (Claude's next question or summary),
-        ``status`` (``"in_progress"`` or ``"complete"``), and on completion
-        a ``character`` key with the full character data.
-        """
-        r = await self._client.post(
-            f"/api/campaigns/{_id(campaign_id)}/characters/creation/{session_id}",
-            json={"message": message},
-        )
-        return await self._json(r)
+        return await self._json(r)  # type: ignore[no-any-return]
 
     async def standalone_roll(self, campaign_id: str | UUID, expression: str) -> dict[str, Any]:
-        """POST /api/campaigns/{id}/rolls/standalone"""
+        """POST /api/campaigns/{id}/rolls/standalone (M2)."""
         r = await self._client.post(
             f"/api/campaigns/{_id(campaign_id)}/rolls/standalone",
             json={"expression": expression},
         )
-        return await self._json(r)
+        return await self._json(r)  # type: ignore[no-any-return]
 
     # ------------------------------------------------------------------
     # Characters
     # ------------------------------------------------------------------
 
-    async def get_characters(self, campaign_id: str | UUID) -> dict[str, Any]:
+    async def get_characters(self, campaign_id: str | UUID) -> list[dict[str, Any]]:
         """GET /api/campaigns/{id}/characters"""
         r = await self._client.get(f"/api/campaigns/{_id(campaign_id)}/characters")
-        return await self._json(r)
+        return await self._json(r)  # type: ignore[no-any-return]
 
     async def create_character(
         self, campaign_id: str | UUID, data: dict[str, Any]
     ) -> dict[str, Any]:
         """POST /api/campaigns/{id}/characters"""
         r = await self._client.post(f"/api/campaigns/{_id(campaign_id)}/characters", json=data)
-        return await self._json(r)
+        return await self._json(r)  # type: ignore[no-any-return]
 
     async def get_character(
         self, campaign_id: str | UUID, character_id: str | UUID
@@ -246,22 +262,22 @@ class TavernAPI:
         r = await self._client.get(
             f"/api/campaigns/{_id(campaign_id)}/characters/{_id(character_id)}"
         )
-        return await self._json(r)
+        return await self._json(r)  # type: ignore[no-any-return]
 
     # ------------------------------------------------------------------
-    # Members  (ADR-0006)
+    # Members  (ADR-0006 Phase 6 — endpoints not yet live)
     # ------------------------------------------------------------------
 
     async def invite_player(self, campaign_id: str | UUID, user_id: str | UUID) -> dict[str, Any]:
-        """POST /api/campaigns/{id}/members"""
+        """POST /api/campaigns/{id}/members (Phase 6)."""
         r = await self._client.post(
             f"/api/campaigns/{_id(campaign_id)}/members",
             json={"user_id": _id(user_id)},
         )
-        return await self._json(r)
+        return await self._json(r)  # type: ignore[no-any-return]
 
     async def remove_player(self, campaign_id: str | UUID, user_id: str | UUID) -> None:
-        """DELETE /api/campaigns/{id}/members/{user_id}"""
+        """DELETE /api/campaigns/{id}/members/{user_id} (Phase 6)."""
         r = await self._client.delete(f"/api/campaigns/{_id(campaign_id)}/members/{_id(user_id)}")
         await self._raise_for_status(r)
 
