@@ -243,18 +243,27 @@ SRD reference data is no longer stored in PostgreSQL. It is served from the
 
 | Collection | Contents |
 |---|---|
-| classes | SRD class documents (barbarian, wizard, …) |
-| levels | Per-class-per-level documents (spell slots, features) |
-| races | Species documents (5e-database legacy name; exposed as ``species`` in Tavern's API) |
-| backgrounds | Background documents |
-| feats | Feat documents |
-| spells | Spell documents |
-| monsters | Monster stat blocks |
-| conditions | Condition documents |
-| equipment | Equipment documents |
-| magic-items | Magic item documents |
+| 2024-classes | SRD 5.2.1 class documents (barbarian, wizard, …) |
+| 2024-levels | Per-class-per-level documents (spell slots, features, unified level-3 subclass selection) |
+| 2024-species | Species documents (dragonborn, dwarf, elf, gnome, goliath, halfling, human, orc, tiefling) |
+| 2024-backgrounds | Background documents with ability bonuses, Origin Feats, skill/tool proficiencies |
+| 2024-feats | Feat documents including Origin Feats |
+| 2024-spells | Spell documents |
+| 2024-monsters | Monster stat blocks |
+| 2024-conditions | Condition documents |
+| 2024-equipment | Equipment documents |
+| 2024-magic-items | Magic item documents |
 | custom_{collection} | Instance Library: custom/homebrew documents per collection |
 | campaign_overrides | Campaign-scoped overrides: { campaign_id, collection, index, data } |
+
+### SRD Data Source
+ 
+Tavern's SRD data comes from `t11z/5e-database`, a fork of `5e-bits/5e-database` (MIT license). The fork exists to complete the `2024-*` MongoDB collections with SRD 5.2.1 data that upstream has not yet published. See ADR-0010.
+ 
+**Image registry:** `ghcr.io/t11z/5e-database`
+**Version scheme:** `v{upstream}-tavern.{patch}` (e.g., `v4.6.3-tavern.1`)
+**Upstream sync:** Manual, on new upstream releases. Merge upstream → verify against Tavern test suite → release new tavern-suffixed tag.
+**Upstream contributions:** Every document added to the fork is a candidate for a PR to `5e-bits/5e-database`.
 
 ## ADR Status
 
@@ -270,11 +279,13 @@ SRD reference data is no longer stored in PostgreSQL. It is served from the
 | 0007 | Multiplayer and Real-Time Communication | Accepted |
 | 0008 | Discord Bot Voice Pipeline | Accepted |
 | 0009 | Interactive Dice Rolling and Reaction System | Accepted |
+| 0010 | SRD Data Source Fork and 2024 Dataset Migration | Accepted |
 
 ## Known Deviations
 
 | ADR | Deviation | Reason | Temporary? |
 |---|---|---|---|
+| 0001 | Python constants for XP thresholds in srd_data.py | Data not yet in fork's 2024-levels collection | Yes — remove when fork includes XP data |
 | 0006 | No auth middleware on any endpoint | Auth not yet implemented | Yes — Phase 6 |
 
 ## Architecture Questions
