@@ -32,6 +32,7 @@ from tavern.api.schemas import (
 )
 from tavern.dm.context_builder import TurnContext, build_snapshot
 from tavern.dm.narrator import Narrator
+from tavern.dm.summary import build_turn_summary_input, trim_summary
 from tavern.models.campaign import Campaign, CampaignState
 from tavern.models.character import Character
 from tavern.models.session import Session
@@ -119,16 +120,24 @@ async def _stream_narrative(
             if turn is not None:
                 turn.narrative_response = full_narrative
 
-            # Update rolling summary
-            turn_line = f"Turn {sequence_number}: {character_name} — action completed."
+            # Update rolling summary with an informative turn line
+            turn_line = build_turn_summary_input(
+                character_name=character_name,
+                player_action=snapshot.current_turn.player_action,
+                rules_result=snapshot.current_turn.rules_result,
+                narrative_excerpt=full_narrative,
+                sequence_number=sequence_number,
+            )
             try:
                 new_summary = await narrator.update_summary(
                     recent_turns=[turn_line],
                     current_summary=current_summary,
                 )
+                # Enforce the 500-token budget as a hard safety net after LLM compression.
+                new_summary = trim_summary(new_summary)
             except Exception as exc:
                 logger.warning("Summary update failed: %s — keeping previous summary", exc)
-                new_summary = current_summary
+                new_summary = trim_summary(current_summary)
 
             # Update CampaignState
             state_result = await db.execute(

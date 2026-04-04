@@ -1,6 +1,6 @@
 # Architecture Snapshot
 
-> Last updated: 2026-04-04 — Added core/spells.py spell resolution orchestrator
+> Last updated: 2026-04-04 — Added dm/summary.py rolling summary module
 >
 > This document is maintained by Claude Code per the rules in CLAUDE.md.
 > It is consumed by the architecture consultant to inform decisions without
@@ -23,7 +23,8 @@ backend/tavern/
 │   ├── srd_data.py         # SRD Data Access Layer: three-tier lookup (Campaign Override → Instance Library → SRD Baseline)
 ├── dm/                 # DM layer — Narrator, Context Builder, LLM provider abstraction
 │   ├── narrator.py         # Narrator class; model routing (Sonnet/Haiku); streaming narration and summary compression
-│   └── context_builder.py  # StateSnapshot, TurnContext; builds and serializes game state for the Narrator
+│   ├── context_builder.py  # StateSnapshot, TurnContext; builds and serializes game state for the Narrator
+│   └── summary.py          # Rolling summary helpers: build_turn_summary_input(), trim_summary(); enforces 500-token budget
 ├── api/                # FastAPI REST endpoints and WebSocket handler
 │   ├── campaigns.py        # Campaign CRUD + session lifecycle
 │   ├── characters.py       # Character creation and retrieval
