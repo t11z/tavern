@@ -85,6 +85,7 @@ def test_connection_defaults() -> None:
 
 def test_dispatch_map_has_all_events() -> None:
     expected = {
+        "session.state",
         "turn.roll_required",
         "turn.roll_executed",
         "turn.self_reaction_window",
@@ -92,6 +93,7 @@ def test_dispatch_map_has_all_events() -> None:
         "turn.reaction_used",
         "turn.reaction_window_closed",
         "turn.narrative_start",
+        "turn.narrative_chunk",
         "turn.narrative_end",
         "character.updated",
         "player.joined",
