@@ -34,7 +34,7 @@ SECTION_PAGES: dict[str, tuple[int, int]] = {
     "monsters": (258, 364),  # Monsters A–Z
 }
 
-CHUNK_SIZE = 20  # pages per chunk
+CHUNK_SIZE = 20  # pages per chunk (override with --chunk-size)
 
 
 def _require_pypdf() -> object:
@@ -50,7 +50,9 @@ def _require_pypdf() -> object:
         sys.exit(1)
 
 
-def extract_section(pdf_path: Path, section: str, output_dir: Path) -> list[Path]:
+def extract_section(
+    pdf_path: Path, section: str, output_dir: Path, chunk_size: int = CHUNK_SIZE
+) -> list[Path]:
     """Extract pages for *section* from *pdf_path* and write chunks to *output_dir*.
 
     Returns the list of chunk files written.
@@ -88,7 +90,7 @@ def extract_section(pdf_path: Path, section: str, output_dir: Path) -> list[Path
         last_page = total_pages
 
     pages = range(first_page - 1, last_page)  # pypdf uses 0-based indexing
-    chunks = [pages[i : i + CHUNK_SIZE] for i in range(0, len(pages), CHUNK_SIZE)]
+    chunks = [pages[i : i + chunk_size] for i in range(0, len(pages), chunk_size)]
 
     written: list[Path] = []
     for chunk_idx, chunk_pages in enumerate(chunks):
@@ -123,6 +125,13 @@ def main() -> None:
         metavar="SECTION",
         help=f"Section to extract, or 'all'. Valid: {sorted(SECTION_PAGES)}",
     )
+    parser.add_argument(
+        "--chunk-size",
+        type=int,
+        default=CHUNK_SIZE,
+        metavar="N",
+        help=f"Pages per chunk (default: {CHUNK_SIZE}). Use smaller values for dense sections.",
+    )
     args = parser.parse_args()
 
     pdf_path = Path(args.input)
@@ -131,7 +140,7 @@ def main() -> None:
 
     for section in sections:
         print(f"\nExtracting section: {section}")
-        files = extract_section(pdf_path, section, chunks_dir)
+        files = extract_section(pdf_path, section, chunks_dir, chunk_size=args.chunk_size)
         print(f"  → {len(files)} chunk(s) written to {chunks_dir}")
 
 

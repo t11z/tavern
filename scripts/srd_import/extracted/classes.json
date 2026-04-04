@@ -1,0 +1,1096 @@
+[
+  {
+    "name": "Barbarian",
+    "hit_die": 12,
+    "primary_ability": [
+      "STR"
+    ],
+    "saving_throws": [
+      "STR",
+      "CON"
+    ],
+    "armor_proficiencies": [
+      "Light armor",
+      "Medium armor",
+      "Shields"
+    ],
+    "weapon_proficiencies": [
+      "Simple weapons",
+      "Martial weapons"
+    ],
+    "skill_choices": [
+      "animal_handling",
+      "athletics",
+      "intimidation",
+      "nature",
+      "perception",
+      "survival"
+    ],
+    "num_skills": 2,
+    "subclass_level": 3,
+    "features_by_level": {
+      "1": [
+        "Rage",
+        "Unarmored Defense",
+        "Weapon Mastery"
+      ],
+      "2": [
+        "Danger Sense",
+        "Reckless Attack"
+      ],
+      "3": [
+        "Barbarian Subclass",
+        "Primal Knowledge"
+      ],
+      "4": [
+        "Ability Score Improvement"
+      ],
+      "5": [
+        "Extra Attack",
+        "Fast Movement"
+      ],
+      "6": [
+        "Subclass feature"
+      ],
+      "7": [
+        "Feral Instinct",
+        "Instinctive Pounce"
+      ],
+      "8": [
+        "Ability Score Improvement"
+      ],
+      "9": [
+        "Brutal Strike"
+      ],
+      "10": [
+        "Subclass feature"
+      ],
+      "11": [
+        "Relentless Rage"
+      ],
+      "12": [
+        "Ability Score Improvement"
+      ],
+      "13": [
+        "Improved Brutal Strike"
+      ],
+      "14": [
+        "Subclass feature"
+      ],
+      "15": [
+        "Persistent Rage"
+      ],
+      "16": [
+        "Ability Score Improvement"
+      ],
+      "17": [
+        "Improved Brutal Strike"
+      ],
+      "18": [
+        "Indomitable Might"
+      ],
+      "19": [
+        "Epic Boon"
+      ],
+      "20": [
+        "Primal Champion"
+      ]
+    }
+  },
+  {
+    "name": "Bard",
+    "hit_die": 8,
+    "primary_ability": [
+      "CHA"
+    ],
+    "saving_throws": [
+      "DEX",
+      "CHA"
+    ],
+    "armor_proficiencies": [
+      "Light armor"
+    ],
+    "weapon_proficiencies": [
+      "Simple weapons"
+    ],
+    "tool_proficiencies": [
+      "Musical Instrument",
+      "Musical Instrument",
+      "Musical Instrument"
+    ],
+    "skill_choices": [
+      "acrobatics",
+      "animal_handling",
+      "arcana",
+      "athletics",
+      "deception",
+      "history",
+      "insight",
+      "intimidation",
+      "investigation",
+      "medicine",
+      "nature",
+      "perception",
+      "performance",
+      "persuasion",
+      "religion",
+      "sleight_of_hand",
+      "stealth",
+      "survival"
+    ],
+    "num_skills": 3,
+    "subclass_level": 3,
+    "spellcasting_ability": "CHA",
+    "features_by_level": {
+      "1": [
+        "Bardic Inspiration",
+        "Spellcasting"
+      ],
+      "2": [
+        "Expertise",
+        "Jack of All Trades"
+      ],
+      "3": [
+        "Bard Subclass"
+      ],
+      "4": [
+        "Ability Score Improvement"
+      ],
+      "5": [
+        "Font of Inspiration"
+      ],
+      "6": [
+        "Subclass feature"
+      ],
+      "7": [
+        "Countercharm"
+      ],
+      "8": [
+        "Ability Score Improvement"
+      ],
+      "9": [
+        "Expertise"
+      ],
+      "10": [
+        "Magical Secrets"
+      ],
+      "12": [
+        "Ability Score Improvement"
+      ],
+      "14": [
+        "Subclass feature"
+      ],
+      "16": [
+        "Ability Score Improvement"
+      ],
+      "18": [
+        "Superior Inspiration"
+      ],
+      "19": [
+        "Epic Boon"
+      ],
+      "20": [
+        "Words of Creation"
+      ]
+    }
+  },
+  {
+    "name": "Cleric",
+    "hit_die": 8,
+    "primary_ability": [
+      "WIS"
+    ],
+    "saving_throws": [
+      "WIS",
+      "CHA"
+    ],
+    "armor_proficiencies": [
+      "Light armor",
+      "Medium armor",
+      "Shields"
+    ],
+    "weapon_proficiencies": [
+      "Simple weapons"
+    ],
+    "skill_choices": [
+      "history",
+      "insight",
+      "medicine",
+      "persuasion",
+      "religion"
+    ],
+    "num_skills": 2,
+    "spellcasting_ability": "WIS",
+    "subclass_level": 3,
+    "features_by_level": {
+      "1": [
+        "Spellcasting",
+        "Divine Order"
+      ],
+      "2": [
+        "Channel Divinity"
+      ],
+      "3": [
+        "Cleric Subclass"
+      ],
+      "4": [
+        "Ability Score Improvement"
+      ],
+      "5": [
+        "Sear Undead"
+      ],
+      "6": [
+        "Subclass feature"
+      ],
+      "7": [
+        "Blessed Strikes"
+      ],
+      "8": [
+        "Ability Score Improvement"
+      ],
+      "10": [
+        "Divine Intervention"
+      ],
+      "12": [
+        "Ability Score Improvement"
+      ],
+      "14": [
+        "Improved Blessed Strikes"
+      ],
+      "16": [
+        "Ability Score Improvement"
+      ],
+      "17": [
+        "Subclass feature"
+      ],
+      "19": [
+        "Epic Boon"
+      ],
+      "20": [
+        "Greater Divine Intervention"
+      ]
+    }
+  },
+  {
+    "name": "Druid",
+    "hit_die": 8,
+    "primary_ability": [
+      "WIS"
+    ],
+    "saving_throws": [
+      "INT",
+      "WIS"
+    ],
+    "armor_proficiencies": [
+      "Light armor",
+      "Shields"
+    ],
+    "weapon_proficiencies": [
+      "Simple weapons"
+    ],
+    "tool_proficiencies": [
+      "Herbalism Kit"
+    ],
+    "skill_choices": [
+      "animal_handling",
+      "arcana",
+      "insight",
+      "medicine",
+      "nature",
+      "perception",
+      "religion",
+      "survival"
+    ],
+    "num_skills": 2,
+    "spellcasting_ability": "WIS",
+    "subclass_level": 3,
+    "features_by_level": {
+      "1": [
+        "Spellcasting",
+        "Druidic",
+        "Primal Order"
+      ],
+      "2": [
+        "Wild Shape",
+        "Wild Companion"
+      ],
+      "3": [
+        "Druid Subclass"
+      ],
+      "4": [
+        "Ability Score Improvement"
+      ],
+      "5": [
+        "Wild Resurgence"
+      ],
+      "6": [
+        "Subclass feature"
+      ],
+      "7": [
+        "Elemental Fury"
+      ],
+      "8": [
+        "Ability Score Improvement"
+      ],
+      "10": [
+        "Subclass feature"
+      ],
+      "12": [
+        "Ability Score Improvement"
+      ],
+      "14": [
+        "Subclass feature"
+      ],
+      "15": [
+        "Improved Elemental Fury"
+      ],
+      "16": [
+        "Ability Score Improvement"
+      ],
+      "18": [
+        "Beast Spells"
+      ],
+      "19": [
+        "Epic Boon"
+      ],
+      "20": [
+        "Archdruid"
+      ]
+    }
+  },
+  {
+    "name": "Fighter",
+    "hit_die": 10,
+    "primary_ability": [
+      "STR",
+      "DEX"
+    ],
+    "saving_throws": [
+      "STR",
+      "CON"
+    ],
+    "armor_proficiencies": [
+      "Light",
+      "Medium",
+      "Heavy",
+      "Shields"
+    ],
+    "weapon_proficiencies": [
+      "Simple weapons",
+      "Martial weapons"
+    ],
+    "skill_choices": [
+      "acrobatics",
+      "animal_handling",
+      "athletics",
+      "history",
+      "insight",
+      "intimidation",
+      "persuasion",
+      "perception",
+      "survival"
+    ],
+    "num_skills": 2,
+    "subclass_level": 3,
+    "features_by_level": {
+      "1": [
+        "Fighting Style",
+        "Second Wind",
+        "Weapon Mastery"
+      ],
+      "2": [
+        "Action Surge (one use)",
+        "Tactical Mind"
+      ],
+      "3": [
+        "Fighter Subclass"
+      ],
+      "4": [
+        "Ability Score Improvement"
+      ],
+      "5": [
+        "Extra Attack",
+        "Tactical Shift"
+      ],
+      "6": [
+        "Ability Score Improvement"
+      ],
+      "7": [
+        "Subclass feature"
+      ],
+      "8": [
+        "Ability Score Improvement"
+      ],
+      "9": [
+        "Indomitable (one use)",
+        "Tactical Master"
+      ],
+      "10": [
+        "Subclass feature"
+      ],
+      "11": [
+        "Two Extra Attacks"
+      ],
+      "12": [
+        "Ability Score Improvement"
+      ],
+      "13": [
+        "Indomitable (two uses)",
+        "Studied Attacks"
+      ],
+      "14": [
+        "Ability Score Improvement"
+      ],
+      "15": [
+        "Subclass feature"
+      ],
+      "16": [
+        "Ability Score Improvement"
+      ],
+      "17": [
+        "Action Surge (two uses)",
+        "Indomitable (three uses)"
+      ],
+      "18": [
+        "Subclass feature"
+      ],
+      "19": [
+        "Epic Boon"
+      ],
+      "20": [
+        "Three Extra Attacks"
+      ]
+    }
+  },
+  {
+    "name": "Monk",
+    "hit_die": 8,
+    "primary_ability": [
+      "DEX",
+      "WIS"
+    ],
+    "saving_throws": [
+      "STR",
+      "DEX"
+    ],
+    "armor_proficiencies": [],
+    "weapon_proficiencies": [
+      "Simple weapons",
+      "Martial weapons with the Light property"
+    ],
+    "tool_proficiencies": [
+      "Artisan's Tools (one type)",
+      "Musical Instrument (one type)"
+    ],
+    "skill_choices": [
+      "acrobatics",
+      "athletics",
+      "history",
+      "insight",
+      "religion",
+      "stealth"
+    ],
+    "num_skills": 2,
+    "subclass_level": 3,
+    "features_by_level": {
+      "1": [
+        "Martial Arts",
+        "Unarmored Defense"
+      ],
+      "2": [
+        "Monk's Focus",
+        "Unarmored Movement",
+        "Uncanny Metabolism"
+      ],
+      "3": [
+        "Deflect Attacks",
+        "Monk Subclass"
+      ],
+      "4": [
+        "Ability Score Improvement",
+        "Slow Fall"
+      ],
+      "5": [
+        "Extra Attack",
+        "Stunning Strike"
+      ],
+      "6": [
+        "Empowered Strikes",
+        "Subclass feature"
+      ],
+      "7": [
+        "Evasion"
+      ],
+      "8": [
+        "Ability Score Improvement"
+      ],
+      "9": [
+        "Acrobatic Movement"
+      ],
+      "10": [
+        "Heightened Focus",
+        "Self-Restoration"
+      ],
+      "11": [
+        "Subclass feature"
+      ],
+      "12": [
+        "Ability Score Improvement"
+      ],
+      "13": [
+        "Deflect Energy"
+      ],
+      "14": [
+        "Disciplined Survivor"
+      ],
+      "15": [
+        "Perfect Focus"
+      ],
+      "16": [
+        "Ability Score Improvement"
+      ],
+      "17": [
+        "Subclass feature"
+      ],
+      "18": [
+        "Superior Defense"
+      ],
+      "19": [
+        "Epic Boon"
+      ],
+      "20": [
+        "Body and Mind"
+      ]
+    }
+  },
+  {
+    "name": "Paladin",
+    "hit_die": 10,
+    "primary_ability": [
+      "STR",
+      "CHA"
+    ],
+    "saving_throws": [
+      "WIS",
+      "CHA"
+    ],
+    "armor_proficiencies": [
+      "Light",
+      "Medium",
+      "Heavy",
+      "Shields"
+    ],
+    "weapon_proficiencies": [
+      "Simple",
+      "Martial"
+    ],
+    "skill_choices": [
+      "athletics",
+      "insight",
+      "intimidation",
+      "medicine",
+      "persuasion",
+      "religion"
+    ],
+    "num_skills": 2,
+    "spellcasting_ability": "CHA",
+    "subclass_level": 3,
+    "features_by_level": {
+      "1": [
+        "Lay On Hands",
+        "Spellcasting",
+        "Weapon Mastery"
+      ],
+      "2": [
+        "Fighting Style",
+        "Paladin's Smite"
+      ],
+      "3": [
+        "Channel Divinity",
+        "Paladin Subclass"
+      ],
+      "4": [
+        "Ability Score Improvement"
+      ],
+      "5": [
+        "Extra Attack",
+        "Faithful Steed"
+      ],
+      "6": [
+        "Aura of Protection"
+      ],
+      "7": [
+        "Subclass feature"
+      ],
+      "8": [
+        "Ability Score Improvement"
+      ],
+      "9": [
+        "Abjure Foes"
+      ],
+      "10": [
+        "Aura of Courage"
+      ],
+      "11": [
+        "Radiant Strikes"
+      ],
+      "12": [
+        "Ability Score Improvement"
+      ],
+      "14": [
+        "Restoring Touch"
+      ],
+      "15": [
+        "Subclass feature"
+      ],
+      "16": [
+        "Ability Score Improvement"
+      ],
+      "18": [
+        "Aura Expansion"
+      ],
+      "19": [
+        "Epic Boon"
+      ],
+      "20": [
+        "Subclass feature"
+      ]
+    }
+  },
+  {
+    "name": "Ranger",
+    "hit_die": 10,
+    "primary_ability": [
+      "DEX",
+      "WIS"
+    ],
+    "saving_throws": [
+      "STR",
+      "DEX"
+    ],
+    "armor_proficiencies": [
+      "Light",
+      "Medium",
+      "Shields"
+    ],
+    "weapon_proficiencies": [
+      "Simple",
+      "Martial"
+    ],
+    "skill_choices": [
+      "animal_handling",
+      "athletics",
+      "insight",
+      "investigation",
+      "nature",
+      "perception",
+      "stealth",
+      "survival"
+    ],
+    "num_skills": 3,
+    "spellcasting_ability": "WIS",
+    "subclass_level": 3,
+    "features_by_level": {
+      "1": [
+        "Spellcasting",
+        "Favored Enemy",
+        "Weapon Mastery"
+      ],
+      "2": [
+        "Deft Explorer",
+        "Fighting Style"
+      ],
+      "3": [
+        "Ranger Subclass"
+      ],
+      "4": [
+        "Ability Score Improvement"
+      ],
+      "5": [
+        "Extra Attack"
+      ],
+      "6": [
+        "Roving"
+      ],
+      "7": [
+        "Subclass feature"
+      ],
+      "8": [
+        "Ability Score Improvement"
+      ],
+      "9": [
+        "Expertise"
+      ],
+      "10": [
+        "Tireless"
+      ],
+      "11": [
+        "Subclass feature"
+      ],
+      "12": [
+        "Ability Score Improvement"
+      ],
+      "13": [
+        "Relentless Hunter"
+      ],
+      "14": [
+        "Nature's Veil"
+      ],
+      "15": [
+        "Subclass feature"
+      ],
+      "16": [
+        "Ability Score Improvement"
+      ],
+      "17": [
+        "Precise Hunter"
+      ],
+      "18": [
+        "Feral Senses"
+      ],
+      "19": [
+        "Epic Boon"
+      ],
+      "20": [
+        "Foe Slayer"
+      ]
+    }
+  },
+  {
+    "name": "Rogue",
+    "hit_die": 8,
+    "primary_ability": [
+      "DEX"
+    ],
+    "saving_throws": [
+      "DEX",
+      "INT"
+    ],
+    "armor_proficiencies": [
+      "Light armor"
+    ],
+    "weapon_proficiencies": [
+      "Simple weapons",
+      "Martial weapons that have the Finesse or Light property"
+    ],
+    "tool_proficiencies": [
+      "Thieves' Tools"
+    ],
+    "skill_choices": [
+      "acrobatics",
+      "athletics",
+      "deception",
+      "insight",
+      "intimidation",
+      "investigation",
+      "perception",
+      "persuasion",
+      "sleight_of_hand",
+      "stealth"
+    ],
+    "num_skills": 4,
+    "subclass_level": 3,
+    "features_by_level": {
+      "1": [
+        "Expertise",
+        "Sneak Attack",
+        "Thieves' Cant",
+        "Weapon Mastery"
+      ],
+      "2": [
+        "Cunning Action"
+      ],
+      "3": [
+        "Rogue Subclass",
+        "Steady Aim"
+      ],
+      "4": [
+        "Ability Score Improvement"
+      ],
+      "5": [
+        "Cunning Strike",
+        "Uncanny Dodge"
+      ],
+      "6": [
+        "Expertise"
+      ],
+      "7": [
+        "Evasion",
+        "Reliable Talent"
+      ],
+      "8": [
+        "Ability Score Improvement"
+      ],
+      "9": [
+        "Subclass feature"
+      ],
+      "10": [
+        "Ability Score Improvement"
+      ],
+      "11": [
+        "Improved Cunning Strike"
+      ],
+      "12": [
+        "Ability Score Improvement"
+      ],
+      "13": [
+        "Subclass feature"
+      ],
+      "14": [
+        "Devious Strikes"
+      ],
+      "15": [
+        "Slippery Mind"
+      ],
+      "16": [
+        "Ability Score Improvement"
+      ],
+      "17": [
+        "Subclass feature"
+      ],
+      "18": [
+        "Elusive"
+      ],
+      "19": [
+        "Epic Boon"
+      ],
+      "20": [
+        "Stroke of Luck"
+      ]
+    }
+  },
+  {
+    "name": "Sorcerer",
+    "hit_die": 6,
+    "primary_ability": [
+      "CHA"
+    ],
+    "saving_throws": [
+      "CON",
+      "CHA"
+    ],
+    "armor_proficiencies": [],
+    "weapon_proficiencies": [
+      "Simple weapons"
+    ],
+    "skill_choices": [
+      "arcana",
+      "deception",
+      "insight",
+      "intimidation",
+      "persuasion",
+      "religion"
+    ],
+    "num_skills": 2,
+    "subclass_level": 3,
+    "spellcasting_ability": "CHA",
+    "features_by_level": {
+      "1": [
+        "Spellcasting",
+        "Innate Sorcery"
+      ],
+      "2": [
+        "Font of Magic",
+        "Metamagic"
+      ],
+      "3": [
+        "Sorcerer Subclass"
+      ],
+      "4": [
+        "Ability Score Improvement"
+      ],
+      "5": [
+        "Sorcerous Restoration"
+      ],
+      "6": [
+        "Subclass feature"
+      ],
+      "7": [
+        "Sorcery Incarnate"
+      ],
+      "8": [
+        "Ability Score Improvement"
+      ],
+      "10": [
+        "Metamagic"
+      ],
+      "12": [
+        "Ability Score Improvement"
+      ],
+      "14": [
+        "Subclass feature"
+      ],
+      "16": [
+        "Ability Score Improvement"
+      ],
+      "17": [
+        "Metamagic"
+      ],
+      "18": [
+        "Subclass feature"
+      ],
+      "19": [
+        "Epic Boon"
+      ],
+      "20": [
+        "Arcane Apotheosis"
+      ]
+    }
+  },
+  {
+    "name": "Warlock",
+    "hit_die": 8,
+    "primary_ability": [
+      "CHA"
+    ],
+    "saving_throws": [
+      "WIS",
+      "CHA"
+    ],
+    "armor_proficiencies": [
+      "Light armor"
+    ],
+    "weapon_proficiencies": [
+      "Simple weapons"
+    ],
+    "skill_choices": [
+      "arcana",
+      "deception",
+      "history",
+      "intimidation",
+      "investigation",
+      "nature",
+      "religion"
+    ],
+    "num_skills": 2,
+    "spellcasting_ability": "CHA",
+    "subclass_level": 3,
+    "features_by_level": {
+      "1": [
+        "Eldritch Invocations",
+        "Pact Magic"
+      ],
+      "2": [
+        "Magical Cunning"
+      ],
+      "3": [
+        "Warlock Subclass"
+      ],
+      "4": [
+        "Ability Score Improvement"
+      ],
+      "6": [
+        "Subclass feature"
+      ],
+      "8": [
+        "Ability Score Improvement"
+      ],
+      "9": [
+        "Contact Patron"
+      ],
+      "10": [
+        "Subclass feature"
+      ],
+      "11": [
+        "Mystic Arcanum (level 6 spell)"
+      ],
+      "12": [
+        "Ability Score Improvement"
+      ],
+      "13": [
+        "Mystic Arcanum (level 7 spell)"
+      ],
+      "14": [
+        "Subclass feature"
+      ],
+      "15": [
+        "Mystic Arcanum (level 8 spell)"
+      ],
+      "16": [
+        "Ability Score Improvement"
+      ],
+      "17": [
+        "Mystic Arcanum (level 9 spell)"
+      ],
+      "19": [
+        "Epic Boon"
+      ],
+      "20": [
+        "Eldritch Master"
+      ]
+    }
+  },
+  {
+    "name": "Wizard",
+    "hit_die": 6,
+    "primary_ability": [
+      "INT"
+    ],
+    "saving_throws": [
+      "INT",
+      "WIS"
+    ],
+    "armor_proficiencies": [],
+    "weapon_proficiencies": [
+      "Simple weapons"
+    ],
+    "skill_choices": [
+      "arcana",
+      "history",
+      "insight",
+      "investigation",
+      "medicine",
+      "nature",
+      "religion"
+    ],
+    "num_skills": 2,
+    "spellcasting_ability": "INT",
+    "subclass_level": 3,
+    "features_by_level": {
+      "1": [
+        "Spellcasting",
+        "Ritual Adept",
+        "Arcane Recovery"
+      ],
+      "2": [
+        "Scholar"
+      ],
+      "3": [
+        "Wizard Subclass"
+      ],
+      "4": [
+        "Ability Score Improvement"
+      ],
+      "5": [
+        "Memorize Spell"
+      ],
+      "6": [
+        "Subclass feature"
+      ],
+      "8": [
+        "Ability Score Improvement"
+      ],
+      "10": [
+        "Subclass feature"
+      ],
+      "12": [
+        "Ability Score Improvement"
+      ],
+      "14": [
+        "Subclass feature"
+      ],
+      "16": [
+        "Ability Score Improvement"
+      ],
+      "18": [
+        "Spell Mastery"
+      ],
+      "19": [
+        "Epic Boon"
+      ],
+      "20": [
+        "Signature Spells"
+      ]
+    }
+  }
+]

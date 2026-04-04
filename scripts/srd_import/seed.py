@@ -40,9 +40,13 @@ SECTION_MODEL_MAP: dict[str, str] = {
     "rules_tables": "SrdRulesTable",
 }
 
-# For rules_tables, the unique key is table_name, not name
-UNIQUE_KEY: dict[str, str] = {
+# Unique key per section.  String = single column; tuple = composite key.
+UNIQUE_KEY: dict[str, str | tuple[str, ...]] = {
     "rules_tables": "table_name",
+    # SrdClassFeature has UniqueConstraint("class_name", "name")
+    "class_features": ("class_name", "name"),
+    # SrdSubclass has UniqueConstraint("class_name", "name")
+    "subclasses": ("class_name", "name"),
 }
 
 # Indexed columns that must be extracted from the record and set on the model instance.
@@ -146,33 +150,36 @@ def _get_model(section: str) -> type:
     return model_map[model_name]
 
 
-def _upsert(
+async def _upsert(
     session: object,
     model: type,
     model_name: str,
     records: list[dict],
-    unique_key: str,
+    unique_key: str | tuple[str, ...],
 ) -> tuple[int, int]:
     """Upsert *records* into the table backing *model*.
 
-    Returns (inserted, updated) counts.
+    *unique_key* may be a single column name (str) or a tuple of column names
+    for composite unique constraints.  Returns (inserted, updated) counts.
     """
-    from sqlalchemy import select  # type: ignore[import]
+    from sqlalchemy import and_, select  # type: ignore[import]
+
+    keys = (unique_key,) if isinstance(unique_key, str) else unique_key
 
     inserted = 0
     updated = 0
     for rec in records:
-        key_value = rec.get(unique_key)
-        if key_value is None:
-            continue  # Skip records missing the unique key
+        key_values = {k: rec.get(k) for k in keys}
+        if any(v is None for v in key_values.values()):
+            continue  # Skip records missing any key field
 
-        stmt = select(model).where(  # type: ignore[call-overload]
-            getattr(model, unique_key) == key_value
-        )
-        existing = session.execute(stmt).scalar_one_or_none()  # type: ignore[union-attr]
+        where_clauses = [getattr(model, k) == v for k, v in key_values.items()]
+        stmt = select(model).where(and_(*where_clauses))  # type: ignore[call-overload]
+        result = await session.execute(stmt)  # type: ignore[union-attr]
+        existing = result.scalar_one_or_none()
         extra = _extra_kwargs(model_name, rec)
         if existing is None:
-            obj = model(data=rec, **{unique_key: key_value}, **extra)
+            obj = model(data=rec, **key_values, **extra)
             session.add(obj)  # type: ignore[union-attr]
             inserted += 1
         else:
@@ -240,7 +247,9 @@ def main() -> None:
         async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
         async with async_session() as session:
             async with session.begin():
-                inserted, updated = _upsert(session, model, model_name_str, records, unique_key)
+                inserted, updated = await _upsert(
+                    session, model, model_name_str, records, unique_key
+                )
         await engine.dispose()
         return inserted, updated
 

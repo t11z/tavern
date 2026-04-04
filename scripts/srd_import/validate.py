@@ -25,6 +25,9 @@ EXTRACTED_DIR = HERE / "extracted"
 REVIEW_DIR = HERE / "review"
 SCHEMAS_DIR = Path(__file__).parent.parent / "schemas"
 
+# Add backend to sys.path so srd_tables can be imported for baseline checks
+sys.path.insert(0, str(Path(__file__).parent.parent.parent / "backend"))
+
 # ---------------------------------------------------------------------------
 # Baseline data from core/ srd_tables.py for cross-checking
 # ---------------------------------------------------------------------------
@@ -103,9 +106,24 @@ def _require_jsonschema() -> object:
         sys.exit(1)
 
 
+_SECTION_TO_SCHEMA: dict[str, str] = {
+    "classes": "class",
+    "class_features": "class_feature",
+    "subclasses": "subclass",
+    "spells": "spell",
+    "backgrounds": "background",
+    "conditions": "condition",
+    "feats": "feat",
+    "monsters": "monster",
+    "species": "species",
+    "magic_items": "magic_item",
+    "rules_tables": "rules_table",
+}
+
+
 def _load_schema(section: str) -> dict:
-    # Try exact name first, then singular
-    for name in [section, section.rstrip("s")]:
+    candidates = [_SECTION_TO_SCHEMA.get(section, ""), section, section.rstrip("s")]
+    for name in dict.fromkeys(c for c in candidates if c):
         path = SCHEMAS_DIR / f"{name}.json"
         if path.exists():
             return json.loads(path.read_text())
@@ -193,7 +211,7 @@ def cross_reference_classes(records: list[dict], section: str) -> list[str]:
         for cls in rec.get("classes") or []:
             if cls not in known_classes:
                 issues.append(f"  [{rec.get('name')}] Unknown class '{cls}'")
-        if section in ("class_feature", "subclass"):
+        if section in ("class_feature", "class_features", "subclass", "subclasses"):
             cls = rec.get("class_name", "")
             if cls and cls not in known_classes:
                 issues.append(f"  [{rec.get('name')}] Unknown class_name '{cls}'")
@@ -234,6 +252,35 @@ def baseline_check_classes(records: list[dict]) -> list[str]:
                 f"  [{name}] hit_die mismatch: extracted {hit_die}, "
                 f"core/srd_tables.py baseline {baseline}"
             )
+    return issues
+
+
+def baseline_check_class_features_by_level(records: list[dict]) -> list[str]:
+    """Compare extracted features_by_level (L1-5) against core/srd_tables.py CLASS_FEATURES."""
+    try:
+        from tavern.core.srd_tables import CLASS_FEATURES  # type: ignore[import]
+    except ImportError:
+        return [
+            "  WARNING: Could not import tavern.core.srd_tables — skipping features_by_level check"
+        ]
+
+    issues: list[str] = []
+    for rec in records:
+        name = rec.get("name", "")
+        if name not in CLASS_FEATURES:
+            continue
+        extracted = rec.get("features_by_level", {})
+        baseline = CLASS_FEATURES[name]
+        for level in range(1, 6):
+            key = str(level)
+            ext_features = set(extracted.get(key, []))
+            base_features = set(baseline.get(level, []))
+            missing = base_features - ext_features
+            extra = ext_features - base_features
+            if missing:
+                issues.append(f"  [{name}] Level {level}: missing features {sorted(missing)}")
+            if extra:
+                issues.append(f"  [{name}] Level {level}: extra features {sorted(extra)}")
     return issues
 
 
@@ -283,10 +330,11 @@ def main() -> None:
     warnings: list[str] = []
     if section in ("spells", "spell"):
         warnings.extend(cross_reference_spells(valid_records))
-    if section in ("spells", "spell", "class_feature", "subclass"):
+    if section in ("spells", "spell", "class_feature", "class_features", "subclass", "subclasses"):
         warnings.extend(cross_reference_classes(valid_records, section))
     if section in ("classes", "class"):
         warnings.extend(baseline_check_classes(valid_records))
+        warnings.extend(baseline_check_class_features_by_level(valid_records))
     if section in ("monsters", "monster"):
         warnings.extend(plausibility_checks_monsters(valid_records))
 

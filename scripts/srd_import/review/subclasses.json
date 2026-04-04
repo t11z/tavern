@@ -1,0 +1,238 @@
+[
+  {
+    "name": "Path of the Berserker",
+    "class_name": "Barbarian",
+    "features_by_level": {
+      "3": [
+        "Frenzy"
+      ],
+      "6": [
+        "Mindless Rage"
+      ],
+      "10": [
+        "Retaliation"
+      ],
+      "14": [
+        "Intimidating Presence"
+      ]
+    },
+    "description": "Channel Rage into Violent Fury"
+  },
+  {
+    "name": "College of Lore",
+    "class_name": "Bard",
+    "features_by_level": {
+      "3": [
+        "Bonus Proficiencies",
+        "Cutting Words"
+      ],
+      "6": [
+        "Magical Discoveries"
+      ],
+      "14": [
+        "Peerless Skill"
+      ]
+    },
+    "description": "Plumb the Depths of Magical Knowledge"
+  },
+  {
+    "name": "Life Domain",
+    "class_name": "Cleric",
+    "description": "Soothe the Hurts of the World. The Life Domain focuses on the positive energy that helps sustain all life in the multiverse. Clerics who tap into this domain are masters of healing, using that life force to cure many hurts.",
+    "features_by_level": {
+      "3": [
+        "Disciple of Life",
+        "Life Domain Spells",
+        "Preserve Life"
+      ],
+      "6": [
+        "Blessed Healer"
+      ],
+      "17": [
+        "Supreme Healing"
+      ]
+    }
+  },
+  {
+    "name": "Circle of the Land",
+    "class_name": "Druid",
+    "features_by_level": {
+      "3": [
+        "Circle of the Land Spells",
+        "Land's Aid"
+      ],
+      "6": [
+        "Natural Recovery"
+      ],
+      "10": [
+        "Nature's Ward"
+      ],
+      "14": [
+        "Nature's Sanctuary"
+      ]
+    },
+    "description": "Celebrate Connection to the Natural World"
+  },
+  {
+    "name": "Champion",
+    "class_name": "Fighter",
+    "features_by_level": {
+      "3": [
+        "Improved Critical",
+        "Remarkable Athlete"
+      ],
+      "7": [
+        "Additional Fighting Style"
+      ],
+      "10": [
+        "Heroic Warrior"
+      ],
+      "15": [
+        "Superior Critical"
+      ],
+      "18": [
+        "Survivor"
+      ]
+    },
+    "description": "Pursue Physical Excellence in Combat"
+  },
+  {
+    "name": "Warrior of the Open Hand",
+    "class_name": "Monk",
+    "features_by_level": {
+      "3": [
+        "Open Hand Technique"
+      ],
+      "6": [
+        "Wholeness of Body"
+      ],
+      "11": [
+        "Fleet Step"
+      ],
+      "17": [
+        "Quivering Palm"
+      ]
+    },
+    "description": "Master Unarmed Combat Techniques. Warriors of the Open Hand are masters of unarmed combat. They learn techniques to push and trip their opponents and manipulate their own energy to protect themselves from harm."
+  },
+  {
+    "name": "Oath of Devotion",
+    "class_name": "Paladin",
+    "features_by_level": {
+      "3": [
+        "Oath of Devotion Spells",
+        "Sacred Weapon"
+      ],
+      "7": [
+        "Aura of Devotion"
+      ],
+      "15": [
+        "Smite of Protection"
+      ],
+      "20": [
+        "Holy Nimbus"
+      ]
+    },
+    "description": "Uphold the Ideals of Justice and Order. The Oath of Devotion binds Paladins to the ideals of justice and order. These Paladins meet the archetype of the knight in shining armor. They hold themselves to the highest standards of conduct, and some hold the rest of the world to the same standards."
+  },
+  {
+    "name": "Hunter",
+    "class_name": "Ranger",
+    "features_by_level": {
+      "3": [
+        "Hunter's Lore",
+        "Hunter's Prey"
+      ],
+      "7": [
+        "Defensive Tactics"
+      ],
+      "11": [
+        "Superior Hunter's Prey"
+      ],
+      "15": [
+        "Superior Hunter's Defense"
+      ]
+    },
+    "description": "Protect Nature and People from Destruction"
+  },
+  {
+    "name": "Thief",
+    "class_name": "Rogue",
+    "features_by_level": {
+      "3": [
+        "Fast Hands",
+        "Second-Story Work"
+      ],
+      "9": [
+        "Supreme Sneak"
+      ],
+      "13": [
+        "Use Magic Device"
+      ],
+      "17": [
+        "Thief's Reflexes"
+      ]
+    },
+    "description": "Hunt for Treasure as a Classic Adventurer"
+  },
+  {
+    "name": "Draconic Sorcery",
+    "class_name": "Sorcerer",
+    "features_by_level": {
+      "3": [
+        "Draconic Resilience",
+        "Draconic Spells"
+      ],
+      "6": [
+        "Elemental Affinity"
+      ],
+      "14": [
+        "Dragon Wings"
+      ],
+      "18": [
+        "Dragon Companion"
+      ]
+    },
+    "description": "Your innate magic comes from the gift of a dragon. Perhaps an ancient dragon facing death bequeathed some of its magical power to you or your ancestor. You might have absorbed magic from a site infused with dragons' power. Or perhaps you handled a treasure taken from a dragon's hoard that was steeped in draconic power. Or you might have a dragon for an ancestor."
+  },
+  {
+    "name": "Fiend Patron",
+    "class_name": "Warlock",
+    "features_by_level": {
+      "3": [
+        "Dark One's Blessing",
+        "Fiend Spells"
+      ],
+      "6": [
+        "Dark One's Own Luck"
+      ],
+      "10": [
+        "Fiendish Resilience"
+      ],
+      "14": [
+        "Hurl Through Hell"
+      ]
+    },
+    "description": "Your pact draws on the Lower Planes, the realms of perdition. You might forge a bargain with a demon lord, an archdevil, or another fiend that is especially mighty. That patron's aims are evil—the corruption or destruction of all things, ultimately including you—and your path is defined by the extent to which you strive against those aims."
+  },
+  {
+    "name": "Evoker",
+    "class_name": "Wizard",
+    "features_by_level": {
+      "3": [
+        "Evocation Savant",
+        "Potent Cantrip"
+      ],
+      "6": [
+        "Sculpt Spells"
+      ],
+      "10": [
+        "Empowered Evocation"
+      ],
+      "14": [
+        "Overchannel"
+      ]
+    },
+    "description": "Your studies focus on magic that creates powerful elemental effects such as bitter cold, searing flame, rolling thunder, crackling lightning, and burning acid. Some Evokers find employment in military forces, serving as artillery to blast armies from afar. Others use their power to protect others, while some seek their own gain."
+  }
+]

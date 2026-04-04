@@ -78,20 +78,34 @@ def _require_anthropic_sdk() -> object:
         sys.exit(1)
 
 
+_SECTION_TO_SCHEMA: dict[str, str] = {
+    "classes": "class",
+    "class_features": "class_feature",
+    "subclasses": "subclass",
+    "spells": "spell",
+    "backgrounds": "background",
+    "conditions": "condition",
+    "feats": "feat",
+    "monsters": "monster",
+    "species": "species",
+    "magic_items": "magic_item",
+    "rules_tables": "rules_table",
+}
+
+
 def _load_schema(section: str) -> dict:
-    schema_path = SCHEMAS_DIR / f"{section}.json"
-    if not schema_path.exists():
-        # Try without plural (e.g. 'spells' → 'spell.json')
-        singular = section.rstrip("s")
-        schema_path = SCHEMAS_DIR / f"{singular}.json"
-    if not schema_path.exists():
-        print(
-            f"ERROR: Schema not found for section '{section}'. "
-            f"Expected {SCHEMAS_DIR / (section + '.json')}",
-            file=sys.stderr,
-        )
-        sys.exit(1)
-    return json.loads(schema_path.read_text())
+    # Try explicit mapping first, then exact filename, then rstrip-s fallback
+    candidates = [_SECTION_TO_SCHEMA.get(section, ""), section, section.rstrip("s")]
+    for name in dict.fromkeys(c for c in candidates if c):  # deduplicate, preserve order
+        path = SCHEMAS_DIR / f"{name}.json"
+        if path.exists():
+            return json.loads(path.read_text())
+    print(
+        f"ERROR: Schema not found for section '{section}'. "
+        f"Expected {SCHEMAS_DIR / (section + '.json')}",
+        file=sys.stderr,
+    )
+    sys.exit(1)
 
 
 def _build_user_prompt(schema: dict, chunk_text: str) -> str:
@@ -219,17 +233,32 @@ def _parse_chunk_sdk(
     return []
 
 
-def deduplicate(records: list[dict]) -> list[dict]:
-    """Remove duplicate records by name (case-insensitive), keeping first occurrence."""
-    seen: set[str] = set()
+# Sections where name alone isn't unique — use a compound dedup key.
+# Format: list of field names joined with "|"
+_COMPOUND_DEDUP_KEYS: dict[str, list[str]] = {
+    "class_features": ["name", "class_name", "level"],
+    "subclasses": ["name", "class_name"],
+    "monster_actions": ["name", "monster_name"],
+}
+
+
+def deduplicate(records: list[dict], section: str = "") -> list[dict]:
+    """Remove duplicate records, keeping first occurrence.
+
+    Most sections deduplicate by name only.  Sections in _COMPOUND_DEDUP_KEYS
+    use a compound key to preserve records that share a name but differ by
+    class or level (e.g. "Ability Score Improvement" across all classes).
+    """
+    key_fields = _COMPOUND_DEDUP_KEYS.get(section, ["name"])
+    seen: set[tuple] = set()
     out: list[dict] = []
     for rec in records:
-        key = str(rec.get("name", "")).lower()
-        if key and key not in seen:
+        key = tuple(str(rec.get(f, "")).lower() for f in key_fields)
+        if all(k == "" for k in key):
+            out.append(rec)  # Records missing all key fields are kept as-is
+        elif key not in seen:
             seen.add(key)
             out.append(rec)
-        elif not key:
-            out.append(rec)  # Records without a name are kept as-is
     return out
 
 
@@ -306,7 +335,7 @@ def main() -> None:
         print(f"  Extracted {len(records)} record(s)")
         all_records.extend(records)
 
-    all_records = deduplicate(all_records)
+    all_records = deduplicate(all_records, section=section)
     print(f"\nTotal records after deduplication: {len(all_records)}")
 
     EXTRACTED_DIR.mkdir(parents=True, exist_ok=True)
