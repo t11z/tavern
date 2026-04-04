@@ -34,8 +34,7 @@ services:
     restart: unless-stopped
 
   5e-database:
-    # TODO: switch to ghcr.io/t11z/5e-database:v4.6.3-tavern.1 once the fork image is published (ADR-0010)
-    image: bagelbits/5e-database:v4.6.3
+    image: ghcr.io/t11z/5e-database:v4.6.3-tavern.1
     volumes:
       - srd_data:/data/db
     healthcheck:
