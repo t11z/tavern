@@ -6,26 +6,50 @@ query MongoDB directly and are unaware of the three-tier layering.
 Lookup order (first match wins):
   1. Campaign Override — scoped to a single campaign
   2. Instance Library  — custom content shared across all campaigns on this instance
-  3. SRD Baseline      — 5e-bits/5e-database v4.6.3 (MongoDB container)
+  3. SRD Baseline      — t11z/5e-database fork (ADR-0010), 2024-* collections
 
 Caching:
   SRD Baseline lookups are cached indefinitely after the first fetch — the
   5e-database container never changes at runtime.  Instance Library and Campaign
   Override lookups are never cached because they can change during a session.
 
-Schema notes (5e-bits/5e-database v4.6.3):
+Schema notes (t11z/5e-database, 2024 dataset per ADR-0010):
   Verify field names with:
     docker compose exec 5e-database mongosh 5e-database \\
-      --eval "db.classes.findOne({index:'barbarian'})"
+      --eval "db['2024-classes'].findOne({index:'barbarian'})"
     docker compose exec 5e-database mongosh 5e-database \\
-      --eval "db.levels.findOne({index:'barbarian-1'})"
+      --eval "db['2024-levels'].findOne({index:'barbarian-1'})"
   The ``index`` field is the primary lookup key (lowercase slug, e.g.
   "barbarian", "fireball", "goblin").
+  NOTE: db.levels does NOT work for hyphenated collection names; always use
+  db["2024-levels"] (bracket notation).
 """
 
 from typing import Any, Final
 
 from tavern.srd_db import get_srd_db
+
+# ---------------------------------------------------------------------------
+# MongoDB collection names (2024 dataset, per ADR-0010)
+# ---------------------------------------------------------------------------
+
+_COL_CLASSES = "2024-classes"
+_COL_LEVELS = "2024-levels"
+_COL_SPECIES = "2024-species"
+_COL_BACKGROUNDS = "2024-backgrounds"
+_COL_SPELLS = "2024-spells"
+_COL_MONSTERS = "2024-monsters"
+_COL_CONDITIONS = "2024-conditions"
+_COL_EQUIPMENT = "2024-equipment"
+_COL_FEATS = "2024-feats"
+_COL_MAGIC_ITEMS = "2024-magic-items"
+_COL_SUBCLASSES = "2024-subclasses"
+_COL_SUBSPECIES = "2024-subspecies"
+_COL_TRAITS = "2024-traits"
+_COL_PROFICIENCIES = "2024-proficiencies"
+_COL_ABILITY_SCORES = "2024-ability-scores"
+_COL_SKILLS = "2024-skills"
+_COL_EQUIPMENT_CATEGORIES = "2024-equipment-categories"
 
 # ---------------------------------------------------------------------------
 # Caster classification constants
@@ -40,6 +64,35 @@ NON_CASTERS: Final[frozenset[str]] = frozenset({"Barbarian", "Fighter", "Monk", 
 ALL_CLASSES: Final[frozenset[str]] = (
     FULL_CASTERS | HALF_CASTERS | NON_CASTERS | frozenset({"Warlock"})
 )
+
+# ---------------------------------------------------------------------------
+# Temporary constants — data not yet in fork's 2024-* collections (ADR-0010 §7)
+# ---------------------------------------------------------------------------
+
+# TODO(ADR-0010): Remove when 2024-levels includes XP data
+# SRD 5.2.1, "Character Advancement" table (p. 15)
+_XP_THRESHOLDS: Final[list[int]] = [
+    0,
+    300,
+    900,
+    2700,
+    6500,
+    14000,
+    23000,
+    34000,
+    48000,
+    64000,
+    85000,
+    100000,
+    120000,
+    140000,
+    165000,
+    195000,
+    225000,
+    265000,
+    305000,
+    355000,
+]
 
 # ---------------------------------------------------------------------------
 # SRD Baseline cache
@@ -66,12 +119,15 @@ async def _layered_lookup(
     """
     db = get_srd_db()
 
+    # Entity name without "2024-" prefix — used for custom_ collections
+    entity = collection_name.removeprefix("2024-")
+
     # 1. Campaign Override
     if campaign_id:
         result = await db.campaign_overrides.find_one(
             {
                 "campaign_id": campaign_id,
-                "collection": collection_name,
+                "collection": entity,
                 "index": index,
             }
         )
@@ -80,7 +136,7 @@ async def _layered_lookup(
             return override
 
     # 2. Instance Library
-    custom_result = await db[f"custom_{collection_name}"].find_one({"index": index})
+    custom_result = await db[f"custom_{entity}"].find_one({"index": index})
     if custom_result is not None:
         return _strip_id(dict(custom_result))
 
@@ -109,10 +165,10 @@ async def _get_level_doc(class_index: str, level: int) -> dict[str, Any] | None:
 
     db = get_srd_db()
     index = f"{class_index}-{level}"
-    result = await db.levels.find_one({"index": index})
+    result = await db[_COL_LEVELS].find_one({"index": index})
     if result is None:
         # Some collections use class.index + level as a compound filter
-        result = await db.levels.find_one({"class.index": class_index, "level": level})
+        result = await db[_COL_LEVELS].find_one({"class.index": class_index, "level": level})
     if result is not None:
         doc = _strip_id(dict(result))
         _levels_cache[cache_key] = doc
@@ -131,7 +187,7 @@ async def get_monster(index: str, campaign_id: str | None = None) -> dict[str, A
     Applies layered lookup: campaign override → instance library → SRD baseline.
     *index* should be the lowercase slug (e.g. ``"goblin"``).
     """
-    return await _layered_lookup("monsters", index.lower(), campaign_id)
+    return await _layered_lookup(_COL_MONSTERS, index.lower(), campaign_id)
 
 
 async def get_spell(index: str, campaign_id: str | None = None) -> dict[str, Any] | None:
@@ -139,7 +195,7 @@ async def get_spell(index: str, campaign_id: str | None = None) -> dict[str, Any
 
     *index* should be the lowercase slug (e.g. ``"fireball"``).
     """
-    return await _layered_lookup("spells", index.lower(), campaign_id)
+    return await _layered_lookup(_COL_SPELLS, index.lower(), campaign_id)
 
 
 async def get_class(index: str, campaign_id: str | None = None) -> dict[str, Any] | None:
@@ -147,16 +203,16 @@ async def get_class(index: str, campaign_id: str | None = None) -> dict[str, Any
 
     *index* should be the lowercase slug (e.g. ``"barbarian"``).
     """
-    return await _layered_lookup("classes", index.lower(), campaign_id)
+    return await _layered_lookup(_COL_CLASSES, index.lower(), campaign_id)
 
 
 async def get_species(index: str, campaign_id: str | None = None) -> dict[str, Any] | None:
     """Return the species/race document for *index*, or ``None`` if not found.
 
-    Checks the ``races`` collection (the 5e-database collection name).
+    Checks the ``2024-species`` collection (per ADR-0010).
     *index* should be the lowercase slug (e.g. ``"elf"``).
     """
-    return await _layered_lookup("races", index.lower(), campaign_id)
+    return await _layered_lookup(_COL_SPECIES, index.lower(), campaign_id)
 
 
 async def get_background(index: str, campaign_id: str | None = None) -> dict[str, Any] | None:
@@ -164,7 +220,7 @@ async def get_background(index: str, campaign_id: str | None = None) -> dict[str
 
     *index* should be the lowercase slug (e.g. ``"acolyte"``).
     """
-    return await _layered_lookup("backgrounds", index.lower(), campaign_id)
+    return await _layered_lookup(_COL_BACKGROUNDS, index.lower(), campaign_id)
 
 
 async def get_equipment(index: str, campaign_id: str | None = None) -> dict[str, Any] | None:
@@ -172,7 +228,7 @@ async def get_equipment(index: str, campaign_id: str | None = None) -> dict[str,
 
     *index* should be the lowercase slug (e.g. ``"longsword"``).
     """
-    return await _layered_lookup("equipment", index.lower(), campaign_id)
+    return await _layered_lookup(_COL_EQUIPMENT, index.lower(), campaign_id)
 
 
 async def get_feat(index: str, campaign_id: str | None = None) -> dict[str, Any] | None:
@@ -180,7 +236,7 @@ async def get_feat(index: str, campaign_id: str | None = None) -> dict[str, Any]
 
     *index* should be the lowercase slug (e.g. ``"alert"``).
     """
-    return await _layered_lookup("feats", index.lower(), campaign_id)
+    return await _layered_lookup(_COL_FEATS, index.lower(), campaign_id)
 
 
 async def get_condition(index: str, campaign_id: str | None = None) -> dict[str, Any] | None:
@@ -188,7 +244,7 @@ async def get_condition(index: str, campaign_id: str | None = None) -> dict[str,
 
     *index* should be the lowercase slug (e.g. ``"blinded"``).
     """
-    return await _layered_lookup("conditions", index.lower(), campaign_id)
+    return await _layered_lookup(_COL_CONDITIONS, index.lower(), campaign_id)
 
 
 async def get_magic_item(index: str, campaign_id: str | None = None) -> dict[str, Any] | None:
@@ -196,7 +252,7 @@ async def get_magic_item(index: str, campaign_id: str | None = None) -> dict[str
 
     *index* should be the lowercase slug (e.g. ``"bag-of-holding"``).
     """
-    return await _layered_lookup("magic-items", index.lower(), campaign_id)
+    return await _layered_lookup(_COL_MAGIC_ITEMS, index.lower(), campaign_id)
 
 
 # ---------------------------------------------------------------------------
@@ -210,47 +266,47 @@ async def list_monsters(campaign_id: str | None = None, **filters: Any) -> list[
     Custom monsters from the Instance Library and Campaign Overrides are
     prepended to the SRD baseline results.
     """
-    return await _list_merged("monsters", campaign_id, **filters)
+    return await _list_merged(_COL_MONSTERS, campaign_id, **filters)
 
 
 async def list_spells(campaign_id: str | None = None, **filters: Any) -> list[dict[str, Any]]:
     """Return spells matching *filters*, merged with custom content."""
-    return await _list_merged("spells", campaign_id, **filters)
+    return await _list_merged(_COL_SPELLS, campaign_id, **filters)
 
 
 async def list_classes(campaign_id: str | None = None) -> list[dict[str, Any]]:
     """Return all class documents."""
-    return await _list_merged("classes", campaign_id)
+    return await _list_merged(_COL_CLASSES, campaign_id)
 
 
 async def list_species(campaign_id: str | None = None) -> list[dict[str, Any]]:
     """Return all species/race documents."""
-    return await _list_merged("races", campaign_id)
+    return await _list_merged(_COL_SPECIES, campaign_id)
 
 
 async def list_backgrounds(campaign_id: str | None = None) -> list[dict[str, Any]]:
     """Return all background documents."""
-    return await _list_merged("backgrounds", campaign_id)
+    return await _list_merged(_COL_BACKGROUNDS, campaign_id)
 
 
 async def list_feats(campaign_id: str | None = None) -> list[dict[str, Any]]:
     """Return all feat documents."""
-    return await _list_merged("feats", campaign_id)
+    return await _list_merged(_COL_FEATS, campaign_id)
 
 
 async def list_conditions(campaign_id: str | None = None) -> list[dict[str, Any]]:
     """Return all condition documents."""
-    return await _list_merged("conditions", campaign_id)
+    return await _list_merged(_COL_CONDITIONS, campaign_id)
 
 
 async def list_equipment(campaign_id: str | None = None) -> list[dict[str, Any]]:
     """Return all equipment documents."""
-    return await _list_merged("equipment", campaign_id)
+    return await _list_merged(_COL_EQUIPMENT, campaign_id)
 
 
 async def list_magic_items(campaign_id: str | None = None) -> list[dict[str, Any]]:
     """Return all magic item documents."""
-    return await _list_merged("magic-items", campaign_id)
+    return await _list_merged(_COL_MAGIC_ITEMS, campaign_id)
 
 
 async def _list_merged(
@@ -264,9 +320,12 @@ async def _list_merged(
     results: list[dict[str, Any]] = []
     seen_indices: set[str] = set()
 
+    # Entity name without "2024-" prefix — used for custom_ collections
+    entity = collection_name.removeprefix("2024-")
+
     # Campaign Override entries first
     if campaign_id:
-        override_query = {"campaign_id": campaign_id, "collection": collection_name}
+        override_query = {"campaign_id": campaign_id, "collection": entity}
         async for doc in db.campaign_overrides.find(override_query):
             data: dict[str, Any] = doc["data"]
             idx = data.get("index", "")
@@ -275,7 +334,7 @@ async def _list_merged(
                 seen_indices.add(idx)
 
     # Instance Library
-    async for doc in db[f"custom_{collection_name}"].find(query):
+    async for doc in db[f"custom_{entity}"].find(query):
         clean = _strip_id(dict(doc))
         idx = clean.get("index", "")
         if idx not in seen_indices:
@@ -375,16 +434,10 @@ async def get_xp_thresholds() -> list[int]:
     """Return the XP threshold list (index 0 = level 1, index 19 = level 20).
 
     Each value is the minimum XP required to reach that level.
+    Uses the _XP_THRESHOLDS constant until 2024-levels is available (ADR-0010).
     """
-    thresholds: list[int] = []
-    for level in range(1, 21):
-        doc = await _get_level_doc("barbarian", level)
-        if doc is None:
-            raise ValueError(f"Level data not found for level {level}")
-        # 5e-database field: experience_points
-        xp_value = doc.get("experience_points", doc.get("experience_points_raw", 0))
-        thresholds.append(int(xp_value))
-    return thresholds
+    # TODO(ADR-0010): Replace with 2024-levels query when collection is populated
+    return list(_XP_THRESHOLDS)
 
 
 async def get_class_spell_slots(class_name: str, class_level: int) -> dict[int, int]:

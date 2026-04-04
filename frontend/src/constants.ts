@@ -31,18 +31,11 @@ export interface BackgroundDef {
   eligible: [string, string, string]
 }
 
+// SRD 5.2.1 backgrounds only (p.83-86). Non-SRD backgrounds removed per ADR-0010.
 export const BACKGROUNDS: BackgroundDef[] = [
   { name: 'Acolyte', eligible: ['INT', 'WIS', 'CHA'] },
-  { name: 'Charlatan', eligible: ['DEX', 'CON', 'CHA'] },
   { name: 'Criminal', eligible: ['DEX', 'INT', 'CHA'] },
-  { name: 'Entertainer', eligible: ['STR', 'DEX', 'CHA'] },
-  { name: 'Folk Hero', eligible: ['STR', 'CON', 'WIS'] },
-  { name: 'Guild Artisan', eligible: ['DEX', 'INT', 'CHA'] },
-  { name: 'Hermit', eligible: ['CON', 'INT', 'WIS'] },
-  { name: 'Noble', eligible: ['INT', 'WIS', 'CHA'] },
-  { name: 'Outlander', eligible: ['STR', 'CON', 'WIS'] },
   { name: 'Sage', eligible: ['CON', 'INT', 'WIS'] },
-  { name: 'Sailor', eligible: ['STR', 'DEX', 'WIS'] },
   { name: 'Soldier', eligible: ['STR', 'DEX', 'CON'] },
 ]
 

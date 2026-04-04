@@ -194,8 +194,10 @@ async def validate_background_ability_bonus(
 def _extract_eligible_abilities(bg_doc: dict[str, Any], background_name: str) -> list[str]:
     """Extract the three eligible ability abbreviations from a background document.
 
-    Checks the ``ability_scores_eligible`` field first (Tavern custom format),
-    then falls back to parsing 5e-database ``ability_bonuses`` if present.
+    Checks fields in order:
+    1. ``ability_scores_eligible`` — Tavern custom Instance Library format
+    2. ``ability_scores``          — 2024 SRD format (ADR-0010)
+    3. ``ability_bonuses``         — 2014 5e-database format (fallback)
 
     Raises:
         ValueError: If eligible abilities cannot be determined.
@@ -204,7 +206,18 @@ def _extract_eligible_abilities(bg_doc: dict[str, Any], background_name: str) ->
     if "ability_scores_eligible" in bg_doc:
         return list(bg_doc["ability_scores_eligible"])[:3]
 
-    # 5e-database format: ability_bonuses list with ability_score.index
+    # 2024 SRD format: ability_scores array of {index, name, url} refs
+    if "ability_scores" in bg_doc:
+        abilities = [
+            ref["index"].upper()
+            for ref in bg_doc["ability_scores"]
+            if isinstance(ref, dict) and "index" in ref
+        ]
+        abilities = [a for a in abilities if a][:3]
+        if len(abilities) >= 3:
+            return abilities[:3]
+
+    # 2014 5e-database format: ability_bonuses list with ability_score.index
     if "ability_bonuses" in bg_doc:
         abilities = [
             b.get("ability_score", {}).get("index", "").upper()
