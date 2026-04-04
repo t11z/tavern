@@ -33,4 +33,4 @@ COPY --from=frontend-builder /app/frontend/dist ./backend/tavern/static/
 
 EXPOSE 3000
 
-CMD ["uv", "run", "uvicorn", "tavern.main:app", "--host", "0.0.0.0", "--port", "3000"]
+CMD ["uv", "run", "--no-dev", "uvicorn", "tavern.main:app", "--host", "0.0.0.0", "--port", "3000"]
