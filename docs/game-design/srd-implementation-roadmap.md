@@ -24,7 +24,7 @@ This document defines the implementation plan for making Tavern playable and pro
 
 ### SRD Data — Available and consumed
 
-The 5e-database MongoDB container (v4.6.3) runs via Docker Compose. `core/srd_data.py` provides the complete data access layer. `core/characters.py` reads all SRD reference data from MongoDB — no hardcoded class tables, spell slot progressions, species traits, background data, or feat data remain in engine code. `core/combat.py` has no hardcoded SRD data (damage types and action types are enums, not data lookups).
+The 5e-database MongoDB container (t11z/5e-database fork, v4.6.3-tavern.1) runs via Docker Compose. See ADR-0010. `core/srd_data.py` provides the complete data access layer. `core/characters.py` reads SRD reference data from MongoDB via srd_data.py. Temporary Python constants in srd_data.py fill gaps where the fork's 2024-* collections are incomplete (see ADR-0010 §7). These constants are marked for removal as the fork's data matures. `core/combat.py` has no hardcoded SRD data (damage types and action types are enums, not data lookups).
 
 ### DM Layer — Functional
 
@@ -280,7 +280,7 @@ Per ADR-0005, both clients are first-class. The API is the bottleneck — once t
 
 ## Review Triggers
 
-- If the 5e-database data for any collection has errors or gaps that affect gameplay, evaluate contributing fixes upstream vs. using Campaign Overrides as a workaround. File upstream issues regardless.
+- If the fork's 2024-* data has errors or gaps that affect gameplay: fix in the fork, release a new tavern-suffixed tag, and submit the fix as an upstream PR. Campaign Overrides are for per-deployment customisation, not for SRD corrections. File upstream issues regardless.
 - If AoE geometry implementation in M2 exceeds 3 sessions of effort, evaluate a simplified model (discrete zones instead of continuous geometry) as an intermediate step.
 - If the turn lifecycle latency (action → narrative response) exceeds 8 seconds excluding Claude API time, profile and optimize the engine/context builder path before adding more features.
 - If either client falls more than one milestone behind the other, evaluate whether to pause new server features and focus on client parity.

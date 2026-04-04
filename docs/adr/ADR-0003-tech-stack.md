@@ -141,7 +141,7 @@ flowchart LR
 **Services:**
 - `tavern`: FastAPI application serving both the API and the static web client. Multi-stage build (Node.js for frontend build → Python for runtime). Exposes port 3000.
 - `postgres`: PostgreSQL 16 (official image). Data persisted via named volume. Healthcheck ensures readiness before `tavern` starts.
-- `5e-database`: MongoDB with SRD data (5e-bits/5e-database image, pinned to v4.6.3). Data persisted via named volume. Also stores Instance Library and Campaign Override collections.
+- `5e-database`: MongoDB with SRD data (t11z/5e-database fork, published to GHCR). Fork of 5e-bits/5e-database with completed 2024-* collections. See ADR-0010.
 - `discord-bot` (optional): Discord bot client. Connects to the Tavern API. Only starts if `DISCORD_BOT_TOKEN` is set in the environment.
 
 **User-facing configuration:**
@@ -257,4 +257,3 @@ The final image contains Python, the application code, and the pre-built web cli
 - If uv's ecosystem trajectory stalls or the project encounters compatibility issues, fall back to Poetry.
 - If the contributor base is predominantly TypeScript developers and Python is a barrier, reconsider the backend language — but only if the Anthropic SDK parity condition is met.
 - If discord.py becomes unmaintained or falls behind Discord's API, evaluate alternative Python Discord libraries or a migration to discord.js (accepting the language split).
-- If 5e-bits/5e-database is abandoned or diverges from the SRD, evaluate forking the dataset or an alternative SRD data source.

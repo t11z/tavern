@@ -8,6 +8,27 @@ Tavern is an open source, self-hosted, SRD 5e-compatible RPG engine with an LLM-
 
 Before starting any task, read all accepted ADRs in `docs/adr/`. They are binding architectural constraints — not background reading, not suggestions. Do not contradict an accepted ADR without including a superseding ADR in the same changeset.
 
+### SRD Data Source (ADR-0010)
+ 
+- Tavern's SRD data comes from `t11z/5e-database` (fork of `5e-bits/5e-database`), **not** the upstream image.
+- All MongoDB collection names use the `2024-` prefix: `2024-classes`, `2024-spells`, `2024-monsters`, etc.
+- **Never** use unprefixed collection names (`classes`, `spells`). These do not exist.
+- **Never** use `2014-` prefixed collections. Tavern implements 2024 SRD mechanics.
+- `db.levels` (attribute access) does not work for prefixed collections. Always use `db["2024-levels"]` (bracket notation).
+ 
+### Temporary Python Constants (ADR-0010 §7)
+ 
+- `srd_data.py` may contain Python constants as fallback for data not yet in the fork's MongoDB.
+- Every constant **must** include an SRD 5.2.1 page reference in a comment.
+- Constants are temporary — remove them when the fork's database includes the data.
+- When adding a new constant, also add a TODO comment: `# TODO(ADR-0010): Remove when 2024-{collection} includes this data`.
+
+## Update existing MongoDB references
+ 
+Any existing reference to `5e-bits/5e-database` or `bagelbits/5e-database` should be updated to `t11z/5e-database` / `ghcr.io/t11z/5e-database`.
+ 
+Any existing reference to collection names without the `2024-` prefix should be flagged as incorrect.
+
 ## Architecture Decision Authority
 
 Claude Code must not make architecture decisions. Architecture decisions are made by the project maintainer and documented as ADRs.
