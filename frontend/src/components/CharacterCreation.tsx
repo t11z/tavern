@@ -55,15 +55,6 @@ export function CharacterCreation({ campaignId, onDone, onCancel }: Props) {
   const available = STANDARD_ARRAY.filter((v) => !usedValues.includes(v))
   const allAssigned = STANDARD_ARRAY.every((v) => usedValues.includes(v))
 
-  // Final scores with background bonuses applied
-  const finalScores: Record<string, number> = Object.fromEntries(
-    ABILITIES.map((a) => {
-      const base = form.scores[a] || 0
-      const bonus = (a === form.bonus2 ? 2 : 0) + (a === form.bonus1 ? 1 : 0)
-      return [a, base + bonus]
-    }),
-  )
-
   // ---- Handlers ----
   const setField = <K extends keyof FormState>(key: K, value: FormState[K]) =>
     setForm((f) => ({ ...f, [key]: value }))

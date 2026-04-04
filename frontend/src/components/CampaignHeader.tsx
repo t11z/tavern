@@ -1,7 +1,10 @@
-import type { Campaign } from '../types'
+interface CampaignInfo {
+  name: string
+  turn_count: number
+}
 
 interface Props {
-  campaign: Campaign
+  campaign: CampaignInfo
   wsStatus: 'connecting' | 'open' | 'closed' | 'error'
 }
 
