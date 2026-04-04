@@ -194,12 +194,12 @@ class GameplayCog(commands.Cog):
         await interaction.response.defer(thinking=True)
 
         try:
-            data = await self.api.get_turn_history(str(binding.campaign_id), limit=n)
+            data = await self.api.get_turn_history(str(binding.campaign_id), page_size=n)
         except TavernAPIError as exc:
             await interaction.followup.send(f"❌ {exc.message}", ephemeral=True)
             return
 
-        turns: list[dict] = data if isinstance(data, list) else data.get("turns", [])
+        turns: list[dict] = data.get("turns", []) if isinstance(data, dict) else data  # type: ignore[assignment]
 
         if not turns:
             await interaction.followup.send("No turns recorded yet.", ephemeral=True)
@@ -212,10 +212,10 @@ class GameplayCog(commands.Cog):
         lines: list[str] = []
         for turn in turns:
             char_name = turn.get("character_name") or turn.get("character_id", "?")
-            action = turn.get("action", "—")
-            summary = turn.get("summary") or ""
+            action = turn.get("player_action") or turn.get("action", "—")
+            summary = turn.get("rules_result") or turn.get("narrative_response") or ""
             if summary:
-                lines.append(f"⚔️ **{char_name}**: {action} → {summary}")
+                lines.append(f"⚔️ **{char_name}**: {action} → {summary[:80]}")
             else:
                 lines.append(f"⚔️ **{char_name}**: {action}")
 
@@ -235,13 +235,26 @@ class GameplayCog(commands.Cog):
 
         await interaction.response.defer(thinking=True)
 
+        # Try the dedicated recap endpoint; fall back to recent turn narratives.
         try:
             data = await self.api.get_recap(str(binding.campaign_id))
-        except TavernAPIError as exc:
-            await interaction.followup.send(f"❌ {exc.message}", ephemeral=True)
-            return
+            summary: str = data.get("summary") or data.get("recap") or ""
+        except TavernAPIError:
+            summary = ""
 
-        summary: str = data.get("summary") or data.get("recap") or "No recap available."
+        if not summary:
+            # Build a recap from the last 5 turn narratives.
+            try:
+                history = await self.api.get_turn_history(str(binding.campaign_id), page_size=5)
+                turns: list[dict] = history.get("turns", [])  # type: ignore[assignment]
+                narratives = [
+                    t.get("narrative_response") or "" for t in turns if t.get("narrative_response")
+                ]
+                summary = "\n\n".join(narratives) if narratives else "No turns recorded yet."
+            except TavernAPIError as exc:
+                await interaction.followup.send(f"❌ {exc.message}", ephemeral=True)
+                return
+
         for chunk in _split_narrative(summary):
             await interaction.followup.send(chunk)
 
