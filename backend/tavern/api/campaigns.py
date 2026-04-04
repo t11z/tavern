@@ -7,6 +7,7 @@ State machine (ADR-0004):
 
 from __future__ import annotations
 
+import logging
 import uuid
 from datetime import UTC, datetime
 from typing import Annotated
@@ -16,7 +17,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from tavern.api.dependencies import get_db_session
+from tavern.api.dependencies import get_db_session, get_narrator
 from tavern.api.errors import bad_request, conflict, not_found
 from tavern.api.schemas import (
     CampaignCreateRequest,
@@ -26,8 +27,11 @@ from tavern.api.schemas import (
     CampaignUpdateRequest,
     SessionResponse,
 )
+from tavern.dm.narrator import Narrator
 from tavern.models.campaign import Campaign, CampaignState
 from tavern.models.session import Session
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/campaigns", tags=["campaigns"])
 
@@ -129,22 +133,50 @@ def _campaign_to_detail(campaign: Campaign) -> CampaignDetailResponse:
 # ---------------------------------------------------------------------------
 
 DbSession = Annotated[AsyncSession, Depends(get_db_session)]
+NarratorDep = Annotated[Narrator, Depends(get_narrator)]
+
+_FALLBACK_SCENE_CONTEXT = "Your adventure is about to begin."
 
 
 @router.post("", status_code=201, response_model=CampaignDetailResponse)
 async def create_campaign(
     body: CampaignCreateRequest,
     db: DbSession,
+    narrator: NarratorDep,
 ) -> CampaignDetailResponse:
-    """Create a new campaign in Paused status."""
+    """Create a new campaign in Paused status.
+
+    Calls Claude (Haiku) to generate a campaign brief and opening scene.
+    If the call fails, the campaign is still created with static fallback text.
+    """
     preset = _tone_preset(body.tone)
     world_state = dict(_DEFAULT_WORLD_STATE)
     world_state["tone"] = body.tone
 
+    # Fallback values — overwritten on successful brief generation
+    world_seed: str = preset["world_seed"] or ""
+    scene_context: str = _FALLBACK_SCENE_CONTEXT
+
+    # Attempt to generate a Claude-authored brief and opening scene (Haiku, non-blocking failure)
+    try:
+        brief = await narrator.generate_campaign_brief(name=body.name, tone=body.tone)
+        world_seed = brief["campaign_brief"]
+        scene_context = brief["opening_scene"]
+        world_state["location"] = brief["location"]
+        world_state["environment"] = brief["environment"]
+        world_state["time_of_day"] = brief["time_of_day"]
+    except Exception as exc:
+        logger.warning(
+            "Campaign brief generation failed for %r (tone=%r) — using fallback: %s",
+            body.name,
+            body.tone,
+            exc,
+        )
+
     campaign = Campaign(
         name=body.name,
         status="paused",
-        world_seed=preset["world_seed"],
+        world_seed=world_seed,
         dm_persona=preset["dm_persona"],
     )
     db.add(campaign)
@@ -153,7 +185,7 @@ async def create_campaign(
     state = CampaignState(
         campaign_id=campaign.id,
         rolling_summary="",
-        scene_context="Your adventure is about to begin.",
+        scene_context=scene_context,
         world_state=world_state,
         turn_count=0,
     )

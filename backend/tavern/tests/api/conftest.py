@@ -28,6 +28,13 @@ from tavern.models.base import Base
 MOCK_NARRATIVE = "The goblin snarls and lunges forward, rusted blade flashing."
 MOCK_SUMMARY = "Turn 1: The party engaged the goblins. Victory was costly."
 MOCK_CHUNKS = ["The goblin ", "snarls and ", "lunges forward."]
+MOCK_CAMPAIGN_BRIEF = {
+    "campaign_brief": "An ancient evil stirs beneath the cobblestones of Thornwall.",
+    "opening_scene": "You stand at the gates of Thornwall as torches flicker in the evening wind.",
+    "location": "Thornwall",
+    "environment": "stone-cobbled city square, evening",
+    "time_of_day": "evening",
+}
 
 # ---------------------------------------------------------------------------
 # Dedicated test database (StaticPool: all sessions share the same connection)
@@ -67,6 +74,7 @@ def mock_narrator() -> Narrator:
     narrator = MagicMock(spec=Narrator)
     narrator.narrate_turn = AsyncMock(return_value=MOCK_NARRATIVE)
     narrator.update_summary = AsyncMock(return_value=MOCK_SUMMARY)
+    narrator.generate_campaign_brief = AsyncMock(return_value=MOCK_CAMPAIGN_BRIEF)
 
     async def _stream(*args, **kwargs):  # type: ignore[no-untyped-def]
         for chunk in MOCK_CHUNKS:

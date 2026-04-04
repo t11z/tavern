@@ -1,6 +1,6 @@
 # Architecture Snapshot
 
-> Last updated: 2026-04-04 — Integrated Rules Engine into turn pipeline; added core/action_analyzer.py
+> Last updated: 2026-04-04 — Campaign creation generates Claude-authored brief and opening scene
 >
 > This document is maintained by Claude Code per the rules in CLAUDE.md.
 > It is consumed by the architecture consultant to inform decisions without
@@ -23,10 +23,10 @@ backend/tavern/
 │   ├── spells.py           # Spell resolution orchestrator: slot validation, attack/save/auto-hit routing, damage/healing calculation, condition application
 │   ├── srd_data.py         # SRD Data Access Layer: three-tier lookup (Campaign Override → Instance Library → SRD Baseline)
 ├── dm/                 # DM layer — Narrator, Context Builder, LLM provider abstraction
-│   ├── narrator.py         # Narrator class; model routing (Sonnet/Haiku); streaming narration and summary compression
+│   ├── narrator.py         # Narrator class; model routing (Sonnet/Haiku); streaming narration, summary compression, campaign brief generation (Haiku)
 │   └── context_builder.py  # StateSnapshot, TurnContext; builds and serializes game state for the Narrator
 ├── api/                # FastAPI REST endpoints and WebSocket handler
-│   ├── campaigns.py        # Campaign CRUD + session lifecycle
+│   ├── campaigns.py        # Campaign CRUD + session lifecycle; calls Narrator for Claude-generated opening scene on create
 │   ├── characters.py       # Character creation and retrieval
 │   ├── turns.py            # Turn submission (202) and retrieval; wires action_analyzer + Rules Engine; broadcasts character.updated
 │   ├── ws.py               # WebSocket endpoint + ConnectionManager
