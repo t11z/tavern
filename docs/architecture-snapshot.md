@@ -1,6 +1,6 @@
 # Architecture Snapshot
 
-> Last updated: 2026-04-04 — Moved srd_tables.py to tests/fixtures/srd_fixtures.py; fixed species/races naming in api/srd.py
+> Last updated: 2026-04-04 — Added core/spells.py spell resolution orchestrator
 >
 > This document is maintained by Claude Code per the rules in CLAUDE.md.
 > It is consumed by the architecture consultant to inform decisions without
@@ -19,6 +19,7 @@ backend/tavern/
 │   ├── characters.py       # Ability modifiers, HP, spell slots, proficiency bonus, standard array validation (async)
 │   ├── combat.py           # Attack resolution, damage application, initiative, grapple/shove, death saves
 │   ├── conditions.py       # 15 SRD conditions, attack/save modifiers, speed, incapacitation logic
+│   ├── spells.py           # Spell resolution orchestrator: slot validation, attack/save/auto-hit routing, damage/healing calculation, condition application
 │   ├── srd_data.py         # SRD Data Access Layer: three-tier lookup (Campaign Override → Instance Library → SRD Baseline)
 ├── dm/                 # DM layer — Narrator, Context Builder, LLM provider abstraction
 │   ├── narrator.py         # Narrator class; model routing (Sonnet/Haiku); streaming narration and summary compression
