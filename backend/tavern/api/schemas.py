@@ -147,6 +147,7 @@ class TurnListItem(BaseModel):
     sequence_number: int
     character_id: uuid.UUID
     player_action: str
+    rules_result: str | None = None
     narrative_response: str | None = None
     created_at: datetime
 
