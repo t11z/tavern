@@ -228,7 +228,7 @@ class _ConfirmEndView(discord.ui.View):
     async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
         await interaction.response.defer(thinking=True)
         try:
-            await self.cog.api.patch_campaign_config(self.campaign_id, {"status": "ended"})
+            await self.cog.api.patch_campaign(self.campaign_id, {"status": "concluded"})
         except TavernAPIError as exc:
             logger.error("Failed to end campaign %s: %s", self.campaign_id, exc)
             await interaction.followup.send(
@@ -379,6 +379,17 @@ class CampaignCog(commands.Cog):
         campaign_name = campaign.get("name", "Campaign")
         channel = interaction.channel
 
+        # Start the session on the server (transitions campaign to Active).
+        try:
+            await self.api.start_session(campaign_id)
+        except TavernAPIError as exc:
+            # 409 means a session is already active — that's fine, just reconnect.
+            if exc.status_code != 409:
+                await interaction.response.send_message(
+                    f"❌ Could not start session: {exc.message}", ephemeral=True
+                )
+                return
+
         # Activate game mode.
         self.state.set_game_mode(interaction.channel_id)  # type: ignore[arg-type]
 
@@ -445,13 +456,21 @@ class CampaignCog(commands.Cog):
             except discord.Forbidden:
                 pass
 
+        # End the session on the server (transitions campaign to Paused).
+        try:
+            await self.api.end_session(campaign_id)
+        except TavernAPIError as exc:
+            # 409 means no active session — that's fine, just clean up locally.
+            if exc.status_code != 409:
+                logger.warning("Could not end session for campaign %s: %s", campaign_id, exc)
+
         # Signal WebSocketCog to disconnect.
         self.bot.dispatch("tavern_session_stop", campaign_id, interaction.channel_id)
 
         # Fetch turn count for summary.
         turns_played = 0
         try:
-            history = await self.api.get_turn_history(campaign_id, limit=1)
+            history = await self.api.get_turn_history(campaign_id, page_size=1)
             turns_played = history.get("total", 0)
         except TavernAPIError:
             pass

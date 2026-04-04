@@ -1,28 +1,32 @@
 """Character cog — /character subcommands and guided creation threads.
 
 Commands:
-    /character create     Start guided (Path 1) character creation in a thread
+    /character create     Start guided character creation in a thread
     /character sheet      Post your character sheet (or another player's)
     /character inventory  Detailed equipment embed
     /character spells     Spells and spell-slot embed
 
-Creation flow:
+Creation flow (local wizard — no LLM):
     1. /character create → bot opens a thread named "{user}'s Character"
-    2. Bot posts Claude's first question (from the API) in the thread
-    3. Player replies in the thread; bot forwards each message to the API
-    4. API replies with Claude's next question or a completion signal
-    5. On completion: character sheet embed posted in the MAIN channel,
-       "✅ Character created!" posted in thread, thread archived
+    2. Bot walks through five steps in the thread:
+         Step 0: character name
+         Step 1: class (numbered list)
+         Step 2: species (numbered list)
+         Step 3: background (numbered list)
+         Step 4: standard array assignment (six scores for STR DEX CON INT WIS CHA)
+         Step 5: background ability bonuses (+2/+1 or +1/+1/+1)
+    3. On completion: POST /api/campaigns/{id}/characters, sheet embed in main channel,
+       thread archived.
 
-Active sessions are tracked in ``_sessions: dict[thread_id → CreationSession]``
-so the on_message listener can route thread messages to the right API session.
-Only the creating player can send messages that are forwarded to the API.
+Active sessions are tracked in ``_sessions: dict[thread_id → CreationSession]``.
+Only the creating player's messages advance the wizard.
 """
 
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+import re
+from dataclasses import dataclass, field
 
 import discord
 from discord import app_commands
@@ -39,6 +43,111 @@ from ..services.identity import IdentityService
 
 logger = logging.getLogger(__name__)
 
+# ---------------------------------------------------------------------------
+# SRD constants (mirrors frontend/src/constants.ts)
+# ---------------------------------------------------------------------------
+
+_SRD_CLASSES = [
+    "Barbarian",
+    "Bard",
+    "Cleric",
+    "Druid",
+    "Fighter",
+    "Monk",
+    "Paladin",
+    "Ranger",
+    "Rogue",
+    "Sorcerer",
+    "Warlock",
+    "Wizard",
+]
+
+_SRD_SPECIES = [
+    "Dragonborn",
+    "Dwarf",
+    "Elf",
+    "Gnome",
+    "Half-Elf",
+    "Half-Orc",
+    "Halfling",
+    "Human",
+    "Tiefling",
+]
+
+_SRD_BACKGROUNDS = [
+    "Acolyte",
+    "Charlatan",
+    "Criminal",
+    "Entertainer",
+    "Folk Hero",
+    "Guild Artisan",
+    "Hermit",
+    "Noble",
+    "Outlander",
+    "Sage",
+    "Sailor",
+    "Soldier",
+]
+
+_STANDARD_ARRAY = [15, 14, 13, 12, 10, 8]
+_ABILITIES = ["STR", "DEX", "CON", "INT", "WIS", "CHA"]
+
+# Regex to parse bonus notation like "STR+2 CON+1" or "STR+1 DEX+1 CON+1"
+_BONUS_RE = re.compile(r"([A-Za-z]{3})\+(\d)")
+
+
+def _numbered_list(items: list[str]) -> str:
+    return "\n".join(f"{i + 1}. {item}" for i, item in enumerate(items))
+
+
+def _parse_choice(text: str, options: list[str]) -> str | None:
+    """Return the option matching a number (1-based) or a case-insensitive name."""
+    text = text.strip()
+    if text.isdigit():
+        idx = int(text) - 1
+        if 0 <= idx < len(options):
+            return options[idx]
+        return None
+    for opt in options:
+        if opt.lower() == text.lower():
+            return opt
+    return None
+
+
+def _parse_standard_array(text: str) -> dict[str, int] | None:
+    """Parse '15 14 13 12 10 8' (in STR DEX CON INT WIS CHA order)."""
+    parts = text.split()
+    if len(parts) != 6:
+        return None
+    try:
+        values = [int(p) for p in parts]
+    except ValueError:
+        return None
+    if sorted(values, reverse=True) != _STANDARD_ARRAY:
+        return None
+    return dict(zip(_ABILITIES, values))
+
+
+def _parse_bonuses(text: str) -> dict[str, int] | None:
+    """Parse '+2/+1' or '+1/+1/+1' bonus notation.
+
+    Accepted formats:
+      STR+2 CON+1          → {STR: 2, CON: 1}
+      STR+1 DEX+1 CON+1   → {STR: 1, DEX: 1, CON: 1}
+    """
+    matches = _BONUS_RE.findall(text.upper())
+    if len(matches) not in (2, 3):
+        return None
+    bonuses: dict[str, int] = {}
+    for ability, value in matches:
+        if ability not in _ABILITIES:
+            return None
+        bonuses[ability] = int(value)
+    values = sorted(bonuses.values(), reverse=True)
+    if values not in ([2, 1], [1, 1, 1]):
+        return None
+    return bonuses
+
 
 # ---------------------------------------------------------------------------
 # Session state
@@ -50,15 +159,16 @@ class CreationSession:
     """Tracks a single guided-creation conversation in a Discord thread."""
 
     user_id: int
-    """Discord user ID of the player creating the character."""
     campaign_id: str
-    """Tavern campaign UUID string."""
-    api_session_id: str
-    """Session ID returned by ``POST .../characters/creation``."""
     thread_id: int
-    """Discord thread ID where the conversation is happening."""
     channel_id: int
-    """Main text channel ID — where the completed sheet is posted."""
+    step: int = 0
+    name: str = ""
+    class_name: str = ""
+    species: str = ""
+    background: str = ""
+    ability_scores: dict[str, int] = field(default_factory=dict)
+    background_bonuses: dict[str, int] = field(default_factory=dict)
 
 
 # ---------------------------------------------------------------------------
@@ -95,7 +205,7 @@ class CharacterCog(commands.Cog):
 
     @character.command(name="create", description="Start guided character creation.")
     async def create(self, interaction: discord.Interaction) -> None:
-        """Open a private thread and start a guided character creation conversation."""
+        """Open a thread and start a local creation wizard."""
         channel_id: int = interaction.channel_id  # type: ignore[assignment]
         binding = self.state.get_binding(channel_id)
         if binding is None:
@@ -110,9 +220,9 @@ class CharacterCog(commands.Cog):
 
         await interaction.response.defer(thinking=True)
 
-        # Ensure the user has a Tavern account so identity resolves correctly.
+        # Ensure the user has a Tavern account.
         try:
-            tavern_user = await self.identity.get_tavern_user(user.id, user.display_name)
+            await self.identity.get_tavern_user(user.id, user.display_name)
         except TavernAPIError as exc:
             await interaction.followup.send(
                 f"❌ Could not resolve your account: {exc.message}", ephemeral=True
@@ -128,26 +238,9 @@ class CharacterCog(commands.Cog):
             )
             return
 
-        # Start the guided creation session via the API.
-        try:
-            creation_resp = await self.api.start_character_creation(
-                campaign_id, str(tavern_user.id), user.display_name
-            )
-        except TavernAPIError as exc:
-            await interaction.followup.send(
-                f"❌ Could not start character creation: {exc.message}", ephemeral=True
-            )
-            return
-
-        session_id: str = creation_resp.get("session_id", "")
-        first_message: str = (
-            creation_resp.get("message") or "Let's begin your character creation journey!"
-        )
-        status: str = creation_resp.get("status", "in_progress")
-
-        # Post the interaction response and create a thread from it.
+        # Post and create a thread from the response.
         await interaction.followup.send(
-            f"⚔️ {user.mention} — your character creation thread is below!"
+            f"⚔️ {user.mention} — character creation thread started below!"
         )
         anchor_msg = await interaction.original_response()
 
@@ -164,23 +257,14 @@ class CharacterCog(commands.Cog):
             )
             return
 
-        # If creation somehow completed immediately (rare), skip straight to finish.
-        if status == "complete":
-            character_data = creation_resp.get("character") or {}
-            await self._finish_creation(thread, channel_id, user, character_data, first_message)
-            return
-
-        # Store the session and post Claude's first question in the thread.
         session = CreationSession(
             user_id=user.id,
             campaign_id=campaign_id,
-            api_session_id=session_id,
             thread_id=thread.id,
             channel_id=channel_id,
         )
         self._sessions[thread.id] = session
-
-        await thread.send(first_message)
+        await self._send_step(thread, session)
 
     # ------------------------------------------------------------------
     # /character sheet
@@ -288,7 +372,7 @@ class CharacterCog(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message) -> None:
-        """Forward player replies in creation threads to the API."""
+        """Advance the creation wizard when the player replies in their thread."""
         if message.author.bot:
             return
 
@@ -297,73 +381,177 @@ class CharacterCog(commands.Cog):
         if session is None:
             return
 
-        # Only the creating player's messages are forwarded.
+        # Only the creating player's messages advance the wizard.
         if message.author.id != session.user_id:
             return
 
-        # Send to API.
-        try:
-            resp = await self.api.submit_creation_step(
-                session.campaign_id, session.api_session_id, message.content
+        await self._handle_step(message.channel, session, message.content.strip())  # type: ignore[arg-type]
+
+    # ------------------------------------------------------------------
+    # Wizard steps
+    # ------------------------------------------------------------------
+
+    async def _send_step(self, thread: discord.Thread, session: CreationSession) -> None:
+        """Post the prompt for the current wizard step."""
+        step = session.step
+        if step == 0:
+            await thread.send("**Step 1 of 5 — Name**\nWhat is your character's name?")
+        elif step == 1:
+            await thread.send(
+                f"**Step 2 of 5 — Class**\nChoose a class (type the number or name):\n"
+                f"{_numbered_list(_SRD_CLASSES)}"
             )
+        elif step == 2:
+            await thread.send(
+                f"**Step 3 of 5 — Species**\nChoose a species:\n{_numbered_list(_SRD_SPECIES)}"
+            )
+        elif step == 3:
+            await thread.send(
+                f"**Step 4 of 5 — Background**\nChoose a background:\n"
+                f"{_numbered_list(_SRD_BACKGROUNDS)}"
+            )
+        elif step == 4:
+            array_str = " ".join(str(n) for n in _STANDARD_ARRAY)
+            await thread.send(
+                f"**Step 5 of 5 — Ability Scores**\n"
+                f"Assign the standard array `[{array_str}]` to your abilities.\n"
+                f"Type 6 numbers in this order: **STR DEX CON INT WIS CHA**\n"
+                f"Each value must be used exactly once.\n"
+                f"Example: `15 14 13 12 10 8`"
+            )
+        elif step == 5:
+            await thread.send(
+                "**Step 6 of 6 — Background Bonuses**\n"
+                "Assign your background's ability score bonuses.\n"
+                "Valid distributions:\n"
+                "• `+2/+1` split — e.g. `STR+2 CON+1`\n"
+                "• `+1/+1/+1` spread — e.g. `STR+1 DEX+1 CON+1`\n"
+                "Type your choice:"
+            )
+
+    async def _handle_step(
+        self, thread: discord.Thread, session: CreationSession, text: str
+    ) -> None:
+        """Process the player's reply for the current step and advance or re-prompt."""
+        step = session.step
+
+        if step == 0:
+            if not text:
+                await thread.send("Please enter a name for your character.")
+                return
+            session.name = text
+            session.step = 1
+            await self._send_step(thread, session)
+
+        elif step == 1:
+            choice = _parse_choice(text, _SRD_CLASSES)
+            if choice is None:
+                await thread.send(
+                    f"❌ Not a valid class. Type a number (1–{len(_SRD_CLASSES)}) or a class name."
+                )
+                return
+            session.class_name = choice
+            session.step = 2
+            await self._send_step(thread, session)
+
+        elif step == 2:
+            choice = _parse_choice(text, _SRD_SPECIES)
+            if choice is None:
+                await thread.send(
+                    f"❌ Not a valid species. "
+                    f"Type a number (1–{len(_SRD_SPECIES)}) or a species name."
+                )
+                return
+            session.species = choice
+            session.step = 3
+            await self._send_step(thread, session)
+
+        elif step == 3:
+            choice = _parse_choice(text, _SRD_BACKGROUNDS)
+            if choice is None:
+                await thread.send(
+                    f"❌ Not a valid background. Type a number (1–{len(_SRD_BACKGROUNDS)}) "
+                    f"or a background name."
+                )
+                return
+            session.background = choice
+            session.step = 4
+            await self._send_step(thread, session)
+
+        elif step == 4:
+            scores = _parse_standard_array(text)
+            if scores is None:
+                array_str = " ".join(str(n) for n in _STANDARD_ARRAY)
+                await thread.send(
+                    f"❌ Invalid assignment. Provide exactly 6 numbers using each of "
+                    f"[{array_str}] once, in STR DEX CON INT WIS CHA order."
+                )
+                return
+            session.ability_scores = scores
+            session.step = 5
+            await self._send_step(thread, session)
+
+        elif step == 5:
+            bonuses = _parse_bonuses(text)
+            if bonuses is None:
+                await thread.send(
+                    "❌ Invalid bonus format.\n"
+                    "Use `ABL+2 ABL+1` (e.g. `STR+2 CON+1`) or "
+                    "`ABL+1 ABL+1 ABL+1` (e.g. `STR+1 DEX+1 CON+1`)."
+                )
+                return
+            session.background_bonuses = bonuses
+            await self._submit(thread, session)
+
+    async def _submit(self, thread: discord.Thread, session: CreationSession) -> None:
+        """Submit the completed character to the API and finish the wizard."""
+        await thread.send("⏳ Creating your character...")
+
+        data = {
+            "name": session.name,
+            "class_name": session.class_name,
+            "species": session.species,
+            "background": session.background,
+            "ability_scores": session.ability_scores,
+            "ability_score_method": "standard_array",
+            "background_bonuses": session.background_bonuses,
+            "equipment_choices": "package_a",
+            "languages": [],
+        }
+
+        try:
+            char_data = await self.api.create_character(session.campaign_id, data)
         except TavernAPIError as exc:
-            logger.error("Creation step failed for session %s: %s", session.api_session_id, exc)
-            await message.channel.send(f"❌ Error: {exc.message}")
+            await thread.send(f"❌ Character creation failed: {exc.message}\nPlease start over.")
+            del self._sessions[session.thread_id]
             return
 
-        reply_text: str = resp.get("message") or ""
-        status: str = resp.get("status", "in_progress")
-
-        if reply_text:
-            await message.channel.send(reply_text)
-
-        if status == "complete":
-            character_data = resp.get("character") or {}
-            main_channel = await self._get_text_channel(session.channel_id)
-            await self._finish_creation(
-                message.channel,  # type: ignore[arg-type]
-                session.channel_id,
-                message.author,
-                character_data,
-                reply_text,
-                main_channel=main_channel,
-            )
-            del self._sessions[thread_id]
-            # Invalidate identity cache so the new character is discovered.
-            self.identity._character_cache.pop((session.user_id, session.campaign_id), None)
-
-    # ------------------------------------------------------------------
-    # Helpers
-    # ------------------------------------------------------------------
-
-    async def _finish_creation(
-        self,
-        thread: discord.Thread,
-        channel_id: int,
-        user: discord.User | discord.Member,
-        character_data: dict,  # type: ignore[type-arg]
-        completion_message: str,
-        main_channel: discord.TextChannel | None = None,
-    ) -> None:
-        """Post the completed character sheet in the main channel and close the thread."""
-        # Build and post character sheet in the main channel.
-        if main_channel is None:
-            main_channel = await self._get_text_channel(channel_id)
-
+        # Post character sheet in main channel.
+        main_channel = await self._get_text_channel(session.channel_id)
         if main_channel is not None:
-            sheet_embed = build_character_sheet_embed(character_data)
-            char_name = character_data.get("name") or user.display_name
+            sheet_embed = build_character_sheet_embed(char_data)
+            char_name = char_data.get("name") or session.name
+            user = thread.guild.get_member(session.user_id) if thread.guild else None
+            mention = user.mention if user else f"<@{session.user_id}>"
             await main_channel.send(
-                f"🎉 {user.mention}'s character **{char_name}** is ready for adventure!",
+                f"🎉 {mention}'s character **{char_name}** is ready for adventure!",
                 embed=sheet_embed,
             )
 
-        # Confirm and archive the creation thread.
+        # Archive the thread.
         try:
             await thread.send("✅ Character created! This thread is now archived.")
             await thread.edit(archived=True, locked=True)
         except (discord.Forbidden, discord.HTTPException) as exc:
             logger.warning("Could not archive creation thread %s: %s", thread.id, exc)
+
+        # Invalidate identity cache so the new character is discovered.
+        self.identity._character_cache.pop((session.user_id, session.campaign_id), None)
+        del self._sessions[session.thread_id]
+
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
 
     async def _get_text_channel(self, channel_id: int) -> discord.TextChannel | None:
         channel = self.bot.get_channel(channel_id)

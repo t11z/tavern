@@ -22,6 +22,9 @@ export function ChatLog({ turns, streamingNarrative }: Props) {
       {turns.map((t) => (
         <div key={t.turn_id} style={styles.entry}>
           <p style={styles.action}>&gt; {t.player_action}</p>
+          {t.rules_result && (
+            <p style={styles.rulesResult}>{t.rules_result}</p>
+          )}
           {t.narrative && <p style={styles.narrative}>{t.narrative}</p>}
         </div>
       ))}
@@ -58,12 +61,21 @@ const styles: Record<string, React.CSSProperties> = {
   entry: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '0.6rem',
+    gap: '0.5rem',
   },
   action: {
     color: 'var(--color-gold-dim)',
     fontStyle: 'italic',
     fontSize: '0.9rem',
+  },
+  rulesResult: {
+    color: 'var(--color-parchment-dim)',
+    fontSize: '0.82rem',
+    fontFamily: 'var(--font-mono)',
+    background: 'rgba(255,255,255,0.03)',
+    border: '1px solid var(--color-border)',
+    borderRadius: '3px',
+    padding: '0.3rem 0.6rem',
   },
   narrative: {
     color: 'var(--color-parchment)',

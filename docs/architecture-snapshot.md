@@ -19,6 +19,7 @@ backend/tavern/
 │   ├── characters.py       # Ability modifiers, HP, spell slots, proficiency bonus, standard array validation (async)
 │   ├── combat.py           # Attack resolution, damage application, initiative, grapple/shove, death saves
 │   ├── conditions.py       # 15 SRD conditions, attack/save modifiers, speed, incapacitation logic
+│   ├── action_analyzer.py  # Keyword-based action classification (no LLM): ActionCategory enum, ActionAnalysis dataclass, analyze_action()
 │   ├── spells.py           # Spell resolution orchestrator: slot validation, attack/save/auto-hit routing, damage/healing calculation, condition application
 │   ├── srd_data.py         # SRD Data Access Layer: three-tier lookup (Campaign Override → Instance Library → SRD Baseline)
 ├── dm/                 # DM layer — Narrator, Context Builder, LLM provider abstraction
@@ -26,9 +27,9 @@ backend/tavern/
 │   ├── context_builder.py  # StateSnapshot, TurnContext; builds and serializes game state for the Narrator
 │   └── summary.py          # Rolling summary helpers: build_turn_summary_input(), trim_summary(); enforces 500-token budget
 ├── api/                # FastAPI REST endpoints and WebSocket handler
-│   ├── campaigns.py        # Campaign CRUD + session lifecycle
+│   ├── campaigns.py        # Campaign CRUD + session lifecycle; calls Narrator for Claude-generated opening scene on create
 │   ├── characters.py       # Character creation and retrieval
-│   ├── turns.py            # Turn submission (202) and retrieval
+│   ├── turns.py            # Turn submission (202) and retrieval; wires action_analyzer + Rules Engine; broadcasts character.updated
 │   ├── ws.py               # WebSocket endpoint + ConnectionManager
 │   ├── srd.py              # Custom SRD content: Instance Library CRUD + Campaign Override CRUD
 │   ├── dependencies.py     # Shared FastAPI dependencies (get_db_session, get_narrator, get_session_factory)
@@ -77,17 +78,22 @@ backend/tavern/
 └── multiplayer/        # Placeholder — future multiplayer support
 
 frontend/src/
-├── App.tsx             # Root component — campaign/character selection, WS integration
+├── App.tsx             # Screen router: campaigns → campaign detail → character creation → game session
 ├── main.tsx            # Vite entry point
-├── types.ts            # Shared TypeScript types: Campaign, CharacterState, SessionState, WsEvent union
-├── index.css           # Tavern design tokens and global resets
+├── types.ts            # Shared TypeScript types: Campaign, CampaignDetail, CharacterState, SessionState, WsEvent union (incl. character.updated)
+├── constants.ts        # SRD constants: classes, species, backgrounds (with eligible abilities), standard array, tone presets
+├── index.css           # Tavern design tokens, global resets, blink keyframe
 ├── hooks/
 │   └── useWebSocket.ts     # WS lifecycle, reconnect with configurable delay, JSON parsing
 └── components/
-    ├── CampaignHeader.tsx  # Campaign title, status, scene context
-    ├── CharacterPanel.tsx  # Character sheet, HP, spell slots, conditions
-    ├── ChatLog.tsx         # Turn history with narratives
-    └── ChatInput.tsx       # Player action submission
+    ├── CampaignList.tsx    # Screen 1: campaign list + new campaign form (name, tone preset)
+    ├── CampaignDetail.tsx  # Screen 2: campaign view, character list, start/rejoin session button
+    ├── CharacterCreation.tsx # Screen 3: 2-step wizard (class/species/background/bonuses → standard array assignment)
+    ├── GameSession.tsx     # Screen 4: game loop with sidebar, chat, WS streaming, end session
+    ├── CampaignHeader.tsx  # Campaign title, turn count, WS status dot
+    ├── CharacterPanel.tsx  # Character card: HP bar, AC, spell slots; clickable to set active
+    ├── ChatLog.tsx         # Turn history with rules_result (monospace) + narrative; streaming cursor
+    └── ChatInput.tsx       # Textarea + Act button; disabled while streaming or disconnected
 
 scripts/
 └── setup-repo.sh       # GitHub repository configuration (labels, branch protection, issue templates)
@@ -110,7 +116,7 @@ Infrastructure/
 ## Dependency Graph
 
 ```
-api/     ──→ core/
+api/     ──→ core/   (including core/action_analyzer.py, core/spells.py, core/combat.py)
 api/     ──→ dm/
 api/     ──→ models/
 api/     ──→ srd_db
@@ -212,7 +218,7 @@ Events the discord_bot `gameplay.py` cog is ready to handle (not yet emitted by 
 |---|---|---|
 | player.joined | server → client | display_name, character_name |
 | player.left | server → client | display_name, character_name |
-| character.updated | server → client | character_id, campaign_id (HP/condition changes) |
+| character.updated | server → client | character_id, campaign_id, hp, spell_slots (emitted by turns.py when engine mutates state) |
 | turn.self_reaction_window | server → client | roll_id, turn_id, rolling_character_id, available_reactions, window_seconds |
 | turn.reaction_window | server → client | roll_id, turn_id, roll_context, reactors (list of character_id + reactions), window_seconds |
 | turn.reaction_used | server → client | roll_id, turn_id, reactor (character_id, reaction_id, uses_remaining) |

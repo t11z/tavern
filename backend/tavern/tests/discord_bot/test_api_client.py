@@ -112,25 +112,38 @@ class TestGetCampaign:
 
 
 class TestGetCampaignConfig:
-    async def test_calls_correct_url(self, api: TavernAPI) -> None:
-        api._client.get = AsyncMock(return_value=ok({"rolling_mode": "interactive"}))
+    async def test_delegates_to_get_campaign(self, api: TavernAPI) -> None:
+        # get_campaign_config has no dedicated API endpoint — it calls GET /api/campaigns/{id}
+        api._client.get = AsyncMock(return_value=ok({"id": CAMPAIGN_ID, "name": "X"}))
         await api.get_campaign_config(CAMPAIGN_ID)
-        api._client.get.assert_called_once_with(f"/api/campaigns/{CAMPAIGN_ID}/config")
+        api._client.get.assert_called_once_with(f"/api/campaigns/{CAMPAIGN_ID}")
 
 
 class TestPatchCampaignConfig:
-    async def test_calls_patch_with_settings(self, api: TavernAPI) -> None:
-        settings = {"rolling_mode": "hybrid", "reaction_window": 10}
-        api._client.patch = AsyncMock(return_value=ok(settings))
-        await api.patch_campaign_config(CAMPAIGN_ID, settings)
+    async def test_passes_name_and_status_only(self, api: TavernAPI) -> None:
+        # patch_campaign_config forwards to PATCH /api/campaigns/{id};
+        # only name/status are accepted — unsupported keys are dropped.
+        api._client.patch = AsyncMock(return_value=ok({"id": CAMPAIGN_ID}))
+        await api.patch_campaign_config(
+            CAMPAIGN_ID, {"status": "concluded", "rolling_mode": "hybrid"}
+        )
         api._client.patch.assert_called_once_with(
-            f"/api/campaigns/{CAMPAIGN_ID}/config", json=settings
+            f"/api/campaigns/{CAMPAIGN_ID}", json={"status": "concluded"}
         )
 
-    async def test_raises_422_on_invalid_value(self, api: TavernAPI) -> None:
+    async def test_drops_unsupported_keys(self, api: TavernAPI) -> None:
+        api._client.patch = AsyncMock(return_value=ok({"id": CAMPAIGN_ID}))
+        await api.patch_campaign_config(
+            CAMPAIGN_ID, {"rolling_mode": "hybrid", "reaction_window": 10}
+        )
+        _, kwargs = api._client.patch.call_args
+        # Neither key is name/status — both dropped → empty body
+        assert kwargs["json"] == {}
+
+    async def test_raises_on_error(self, api: TavernAPI) -> None:
         api._client.patch = AsyncMock(return_value=err(422, "Invalid value"))
         with pytest.raises(TavernAPIError) as exc_info:
-            await api.patch_campaign_config(CAMPAIGN_ID, {"turn_timeout": 5})
+            await api.patch_campaign_config(CAMPAIGN_ID, {"status": "invalid"})
         assert exc_info.value.status_code == 422
 
 
@@ -150,18 +163,24 @@ class TestSubmitTurn:
 
 
 class TestGetTurnHistory:
-    async def test_passes_limit_param(self, api: TavernAPI) -> None:
+    async def test_passes_page_size_param(self, api: TavernAPI) -> None:
         api._client.get = AsyncMock(return_value=ok({"turns": []}))
-        await api.get_turn_history(CAMPAIGN_ID, limit=10)
+        await api.get_turn_history(CAMPAIGN_ID, page_size=10)
         api._client.get.assert_called_once_with(
-            f"/api/campaigns/{CAMPAIGN_ID}/turns", params={"limit": 10}
+            f"/api/campaigns/{CAMPAIGN_ID}/turns", params={"page_size": 10, "page": 1}
         )
 
-    async def test_default_limit_is_5(self, api: TavernAPI) -> None:
+    async def test_default_page_size_is_5(self, api: TavernAPI) -> None:
         api._client.get = AsyncMock(return_value=ok({"turns": []}))
         await api.get_turn_history(CAMPAIGN_ID)
         _, kwargs = api._client.get.call_args
-        assert kwargs["params"]["limit"] == 5
+        assert kwargs["params"]["page_size"] == 5
+
+    async def test_passes_page_param(self, api: TavernAPI) -> None:
+        api._client.get = AsyncMock(return_value=ok({"turns": []}))
+        await api.get_turn_history(CAMPAIGN_ID, page_size=5, page=2)
+        _, kwargs = api._client.get.call_args
+        assert kwargs["params"]["page"] == 2
 
 
 # ---------------------------------------------------------------------------

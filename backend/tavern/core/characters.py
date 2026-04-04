@@ -15,9 +15,11 @@ SRD 5.2.1 notes
 """
 
 import math
+from dataclasses import dataclass, field
 from typing import Any, Final
 
 from tavern.core import srd_data
+from tavern.core.dice import roll
 from tavern.core.srd_data import ALL_CLASSES, FULL_CASTERS, HALF_CASTERS
 
 # ---------------------------------------------------------------------------
@@ -80,6 +82,11 @@ __all__ = [
     "feat_data",
     "level_for_xp",
     "can_multiclass",
+    # rest mechanics
+    "ShortRestResult",
+    "LongRestResult",
+    "apply_short_rest",
+    "apply_long_rest",
 ]
 
 # ---------------------------------------------------------------------------
@@ -530,6 +537,217 @@ async def can_multiclass(
             if ability_scores.get(ability, 0) < 13:
                 return False
     return True
+
+
+# ---------------------------------------------------------------------------
+# Rest mechanics — SRD 5.2.1 pp.17-18
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class ShortRestResult:
+    """Outcome of a Short Rest with optional hit die spending.
+
+    SRD 5.2.1 p.17:
+    'A Short Rest is a period of downtime, at least 1 hour long, during which
+    a character does nothing more strenuous than eating, drinking, reading, and
+    tending to wounds.  A character can spend one or more Hit Dice at the end of
+    a Short Rest, up to the character's maximum number of Hit Dice, which is
+    equal to the character's level.'
+    """
+
+    hp_regained: int
+    hit_dice_spent: int
+    hit_dice_remaining: int
+    new_hp: int
+    rolls: list[int] = field(default_factory=list)
+    """Individual hit die roll results (before adding CON modifier) for display."""
+
+    description: str = ""
+
+
+@dataclass
+class LongRestResult:
+    """Outcome of a Long Rest.
+
+    SRD 5.2.1 p.17:
+    'A Long Rest is a period of extended downtime, at least 8 hours long.
+    A character regains all lost Hit Points at the end of a Long Rest.
+    The character also regains spent Hit Dice, up to a number of dice equal
+    to half of the character's total number of them (minimum of one die).'
+    """
+
+    hp_restored: int
+    """HP actually restored (max_hp − old_hp); 0 if already at full HP."""
+
+    spell_slots_restored: dict[int, int]
+    """Spell level → number of slots restored (0 for each already-full level)."""
+
+    hit_dice_restored: int
+    new_hp: int
+    new_hit_dice: int
+    description: str = ""
+
+
+async def apply_short_rest(
+    character_state: dict,
+    hit_dice_to_spend: int = 0,
+    seed: int | None = None,
+) -> ShortRestResult:
+    """Resolve a Short Rest, optionally spending hit dice to recover HP.
+
+    Args:
+        character_state: Current character state.  Expected keys:
+            ``hp`` (int), ``max_hp`` (int),
+            ``hit_dice_remaining`` (int),
+            ``class_name`` (str), ``level`` (int),
+            ``con_modifier`` (int).
+        hit_dice_to_spend: Number of hit dice to roll for healing.
+            0 is valid (rest without spending dice).
+        seed: Optional integer seed for reproducible rolls.
+
+    Returns:
+        ``ShortRestResult`` with updated HP and hit dice counts.
+
+    Raises:
+        ValueError: If ``hit_dice_to_spend`` exceeds ``hit_dice_remaining``.
+    """
+    current_hp: int = int(character_state.get("hp", 0))
+    max_hp: int = int(character_state.get("max_hp", 1))
+    hit_dice_remaining: int = int(character_state.get("hit_dice_remaining", 0))
+    class_name: str = character_state.get("class_name", "")
+    con_modifier: int = int(character_state.get("con_modifier", 0))
+
+    if hit_dice_to_spend < 0:
+        raise ValueError(f"hit_dice_to_spend must be >= 0, got {hit_dice_to_spend}")
+    if hit_dice_to_spend > hit_dice_remaining:
+        raise ValueError(
+            f"Cannot spend {hit_dice_to_spend} hit dice; only {hit_dice_remaining} remaining"
+        )
+
+    rolls: list[int] = []
+    total_healed = 0
+
+    if hit_dice_to_spend > 0:
+        hit_die = await srd_data.get_class_hit_die(class_name)
+        notation = f"1d{hit_die}"
+        for i in range(hit_dice_to_spend):
+            die_seed = (seed + i) if seed is not None else None
+            result = roll(notation, seed=die_seed)
+            rolls.append(result.total)
+            # SRD p.17: add CON modifier per die; minimum 0 per die
+            total_healed += max(0, result.total + con_modifier)
+
+    new_hp = min(max_hp, current_hp + total_healed)
+    actual_healed = new_hp - current_hp
+    new_hit_dice = hit_dice_remaining - hit_dice_to_spend
+
+    description = _short_rest_description(hit_dice_to_spend, rolls, con_modifier, actual_healed)
+
+    return ShortRestResult(
+        hp_regained=actual_healed,
+        hit_dice_spent=hit_dice_to_spend,
+        hit_dice_remaining=new_hit_dice,
+        new_hp=new_hp,
+        rolls=rolls,
+        description=description,
+    )
+
+
+async def apply_long_rest(
+    character_state: dict,
+) -> LongRestResult:
+    """Resolve a Long Rest: full HP, full spell slots, partial hit die recovery.
+
+    Args:
+        character_state: Current character state.  Expected keys:
+            ``hp`` (int), ``max_hp`` (int),
+            ``hit_dice_remaining`` (int),
+            ``level`` (int), ``class_name`` (str),
+            ``spell_slots_used`` (dict[int, int], spell level → slots expended).
+
+    Returns:
+        ``LongRestResult`` with restored HP, spell slots, and hit dice.
+    """
+    current_hp: int = int(character_state.get("hp", 0))
+    max_hp: int = int(character_state.get("max_hp", 1))
+    level: int = int(character_state.get("level", 1))
+    hit_dice_remaining: int = int(character_state.get("hit_dice_remaining", 0))
+    spell_slots_used: dict[int, int] = character_state.get("spell_slots_used", {})
+
+    # Full HP recovery
+    new_hp = max_hp
+    hp_restored = max_hp - current_hp
+
+    # Spell slot recovery — restore all expended slots
+    spell_slots_restored: dict[int, int] = {}
+    for spell_level_str, used in spell_slots_used.items():
+        spell_level = int(spell_level_str)
+        if used > 0:
+            spell_slots_restored[spell_level] = used
+
+    # Hit dice recovery: regain up to half total (rounded down), minimum 1
+    # SRD p.17: "up to a number of dice equal to half of the character's total"
+    total_hit_dice = level
+    spent = total_hit_dice - hit_dice_remaining
+    dice_to_restore = min(spent, max(1, level // 2))
+    new_hit_dice = min(total_hit_dice, hit_dice_remaining + dice_to_restore)
+    actual_dice_restored = new_hit_dice - hit_dice_remaining
+
+    # Death save reset — caller owns the death save state; we report the reset
+    # as part of the description (state mutation is the API layer's job).
+
+    description = _long_rest_description(hp_restored, spell_slots_restored, actual_dice_restored)
+
+    return LongRestResult(
+        hp_restored=hp_restored,
+        spell_slots_restored=spell_slots_restored,
+        hit_dice_restored=actual_dice_restored,
+        new_hp=new_hp,
+        new_hit_dice=new_hit_dice,
+        description=description,
+    )
+
+
+def _short_rest_description(
+    dice_spent: int,
+    rolls: list[int],
+    con_modifier: int,
+    hp_regained: int,
+) -> str:
+    if dice_spent == 0:
+        return "Short rest taken; no hit dice spent."
+    roll_str = ", ".join(str(r) for r in rolls)
+    mod_str = (
+        f" + {con_modifier} CON"
+        if con_modifier > 0
+        else (f" {con_modifier} CON" if con_modifier < 0 else "")
+    )
+    return (
+        f"Short rest: spent {dice_spent} hit {'die' if dice_spent == 1 else 'dice'} "
+        f"(rolled {roll_str}{mod_str}), regained {hp_regained} HP."
+    )
+
+
+def _long_rest_description(
+    hp_restored: int,
+    spell_slots_restored: dict[int, int],
+    hit_dice_restored: int,
+) -> str:
+    parts = ["Long rest:"]
+    if hp_restored > 0:
+        parts.append(f"restored {hp_restored} HP")
+    else:
+        parts.append("already at full HP")
+    slot_total = sum(spell_slots_restored.values())
+    if slot_total:
+        parts.append(f"restored {slot_total} spell slot(s)")
+    if hit_dice_restored:
+        parts.append(
+            f"regained {hit_dice_restored} hit {'die' if hit_dice_restored == 1 else 'dice'}"
+        )
+    parts.append("death saves reset.")
+    return " ".join(parts)
 
 
 # ---------------------------------------------------------------------------

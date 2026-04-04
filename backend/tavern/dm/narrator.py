@@ -18,6 +18,7 @@ Prompt caching (ADR-0002):
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 from collections.abc import AsyncGenerator
@@ -234,6 +235,64 @@ class AnthropicProvider:
                 f"Anthropic API rate limit exceeded — retry after a moment: {exc}"
             ) from exc
 
+    async def generate_campaign_brief(self, name: str, tone: str) -> dict[str, str]:
+        """Generate a campaign brief and opening scene using Claude Haiku.
+
+        Returns a dict with keys:
+            campaign_brief, opening_scene, location, environment, time_of_day
+
+        Raises:
+            TimeoutError: If the request times out.
+            RuntimeError: If the API rate limit is exceeded.
+            ValueError: If the response cannot be parsed or is missing fields.
+        """
+        prompt = (
+            "You are setting up a new D&D 5e campaign. Generate the opening scene.\n\n"
+            f"Campaign name: {name}\n"
+            f"Tone: {tone}\n\n"
+            "Respond with ONLY a JSON object, no other text:\n"
+            "{\n"
+            '  "campaign_brief": "2-3 sentences describing the campaign premise",\n'
+            '  "opening_scene": "2-3 sentences describing what the players see right now",\n'
+            '  "location": "Name of the starting location",\n'
+            '  "environment": "Atmospheric conditions (e.g., \'dimly lit tavern\')",\n'
+            '  "time_of_day": "morning"\n'
+            "}"
+        )
+
+        try:
+            response = await self._client.messages.create(
+                model=MODEL_MAP["low"],
+                max_tokens=500,
+                temperature=0.3,
+                messages=[{"role": "user", "content": prompt}],
+            )
+        except anthropic.APITimeoutError as exc:
+            raise TimeoutError(f"Anthropic API request timed out: {exc}") from exc
+        except anthropic.RateLimitError as exc:
+            raise RuntimeError(
+                f"Anthropic API rate limit exceeded — retry after a moment: {exc}"
+            ) from exc
+
+        if not response.content:
+            raise ValueError("Anthropic API returned an empty response")
+
+        raw = response.content[0].text  # type: ignore[union-attr]
+
+        # Strip optional markdown code fences before parsing
+        cleaned = re.sub(r"```(?:json)?\s*", "", raw).strip().rstrip("`").strip()
+        try:
+            brief: dict[str, str] = json.loads(cleaned)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"Could not parse campaign brief JSON: {exc}") from exc
+
+        required = {"campaign_brief", "opening_scene", "location", "environment", "time_of_day"}
+        missing = required - brief.keys()
+        if missing:
+            raise ValueError(f"Campaign brief response missing fields: {missing}")
+
+        return brief
+
     async def compress_summary(
         self,
         turns: list[str],
@@ -358,3 +417,18 @@ class Narrator:
         Always delegates to the provider's compress_summary (Haiku per ADR-0002).
         """
         return await self._provider.compress_summary(recent_turns, current_summary)
+
+    async def generate_campaign_brief(self, name: str, tone: str) -> dict[str, str]:
+        """Generate a campaign brief and opening scene using Claude Haiku.
+
+        Returns a dict with keys:
+            campaign_brief, opening_scene, location, environment, time_of_day
+
+        Raises:
+            TimeoutError, RuntimeError, ValueError — caller should handle all
+            and fall back to static defaults.
+        """
+        generate_fn = getattr(self._provider, "generate_campaign_brief", None)
+        if generate_fn is None:
+            raise NotImplementedError("Provider does not support campaign brief generation")
+        return await generate_fn(name, tone)

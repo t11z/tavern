@@ -162,6 +162,10 @@ def mock_srd_data(monkeypatch):
             raise ValueError(f"Unknown feat: {feat_name!r}")
         return ALL_FEATS[feat_name]
 
+    async def _get_spell(index: str, campaign_id: str | None = None) -> dict | None:
+        # Default mock: no spell data — callers must patch individually for spell tests.
+        return None
+
     monkeypatch.setattr(srd_mod, "get_proficiency_bonus", _get_proficiency_bonus)
     monkeypatch.setattr(srd_mod, "get_class_hit_die", _get_class_hit_die)
     monkeypatch.setattr(srd_mod, "get_class_fixed_hp_per_level", _get_class_fixed_hp_per_level)
@@ -185,3 +189,4 @@ def mock_srd_data(monkeypatch):
     )
     monkeypatch.setattr(srd_mod, "get_species_data", _get_species_data)
     monkeypatch.setattr(srd_mod, "get_feat_doc", _get_feat_doc)
+    monkeypatch.setattr(srd_mod, "get_spell", _get_spell)
