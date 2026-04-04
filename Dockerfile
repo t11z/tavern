@@ -30,6 +30,8 @@ RUN uv sync --no-dev --no-editable
 # Copy the built frontend into the static serving directory
 COPY --from=frontend-builder /app/frontend/dist ./backend/tavern/static/
 
+ENV PYTHONPATH=/app/backend
+
 EXPOSE 3000
 
 CMD ["/app/.venv/bin/uvicorn", "tavern.main:app", "--host", "0.0.0.0", "--port", "3000"]
