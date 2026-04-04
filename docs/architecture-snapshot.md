@@ -1,6 +1,6 @@
 # Architecture Snapshot
 
-> Last updated: 2026-04-04 — Added core/spells.py spell resolution orchestrator
+> Last updated: 2026-04-04 — Integrated Rules Engine into turn pipeline; added core/action_analyzer.py
 >
 > This document is maintained by Claude Code per the rules in CLAUDE.md.
 > It is consumed by the architecture consultant to inform decisions without
@@ -19,6 +19,7 @@ backend/tavern/
 │   ├── characters.py       # Ability modifiers, HP, spell slots, proficiency bonus, standard array validation (async)
 │   ├── combat.py           # Attack resolution, damage application, initiative, grapple/shove, death saves
 │   ├── conditions.py       # 15 SRD conditions, attack/save modifiers, speed, incapacitation logic
+│   ├── action_analyzer.py  # Keyword-based action classification (no LLM): ActionCategory enum, ActionAnalysis dataclass, analyze_action()
 │   ├── spells.py           # Spell resolution orchestrator: slot validation, attack/save/auto-hit routing, damage/healing calculation, condition application
 │   ├── srd_data.py         # SRD Data Access Layer: three-tier lookup (Campaign Override → Instance Library → SRD Baseline)
 ├── dm/                 # DM layer — Narrator, Context Builder, LLM provider abstraction
@@ -27,7 +28,7 @@ backend/tavern/
 ├── api/                # FastAPI REST endpoints and WebSocket handler
 │   ├── campaigns.py        # Campaign CRUD + session lifecycle
 │   ├── characters.py       # Character creation and retrieval
-│   ├── turns.py            # Turn submission (202) and retrieval
+│   ├── turns.py            # Turn submission (202) and retrieval; wires action_analyzer + Rules Engine; broadcasts character.updated
 │   ├── ws.py               # WebSocket endpoint + ConnectionManager
 │   ├── srd.py              # Custom SRD content: Instance Library CRUD + Campaign Override CRUD
 │   ├── dependencies.py     # Shared FastAPI dependencies (get_db_session, get_narrator, get_session_factory)
@@ -109,7 +110,7 @@ Infrastructure/
 ## Dependency Graph
 
 ```
-api/     ──→ core/
+api/     ──→ core/   (including core/action_analyzer.py, core/spells.py, core/combat.py)
 api/     ──→ dm/
 api/     ──→ models/
 api/     ──→ srd_db
