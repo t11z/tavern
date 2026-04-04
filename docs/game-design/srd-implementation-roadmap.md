@@ -1,165 +1,133 @@
 # SRD Implementation Roadmap
 
 - **Status**: Accepted
-- **Date**: 2026-04-03
+- **Date**: 2026-04-04
 - **Author**: [@t11z](https://github.com/t11z)
-- **Scope**: `backend/tavern/core/` (Rules Engine), `backend/tavern/dm/` (DM Layer), `backend/tavern/api/` (Turn Lifecycle), `scripts/srd_import/` (Import Pipeline), `scripts/schemas/` (Data Schemas)
-- **References**: ADR-0001 (SRD Rules Engine), ADR-0002 (Claude as Narrator), ADR-0004 (Campaign and Session Lifecycle), ADR-0009 (Interactive Dice Rolling)
+- **Scope**: `backend/tavern/core/` (Rules Engine), `backend/tavern/dm/` (DM Layer), `backend/tavern/api/` (Turn Lifecycle), `frontend/` (Web Client), `backend/tavern/discord_bot/` (Discord Bot)
+- **References**: ADR-0001 (SRD Rules Engine), ADR-0002 (Claude as Narrator), ADR-0004 (Campaign and Session Lifecycle), ADR-0005 (Client Architecture), ADR-0007 (Multiplayer), ADR-0009 (Interactive Dice Rolling)
 
 ## Purpose
 
-This document defines the implementation plan for making Tavern playable and progressively complete. It tracks four parallel workstreams — Rules Engine completion, SRD data import, DM layer integration, and the turn lifecycle — and defines three milestones that represent player-facing capability.
+This document defines the implementation plan for making Tavern playable and progressively complete. It tracks the critical path from the current codebase to a working game — first for a solo player, then for a group.
 
-## Current State (as of 2026-04-03)
-
-The Rules Engine (`core/`) is significantly further along than the rest of the system. An honest assessment of where each layer stands:
+## Current State (as of 2026-04-04)
 
 ### Rules Engine — ~65% of full SRD coverage
-
-**Complete or near-complete:**
 
 | Module | Status | Coverage |
 |---|---|---|
 | `core/dice.py` | Complete | All dice notation, advantage/disadvantage, ability score generation |
-| `core/conditions.py` | Complete | All 14 SRD conditions, Exhaustion (6 levels), condition interactions (Paralyzed→Incapacitated, etc.), speed effects, attack/save/check modifiers, `can_act()`, `concentration_is_broken()` |
+| `core/conditions.py` | Complete | All 14 SRD conditions, Exhaustion (6 levels), condition interactions, speed effects, attack/save/check modifiers, `can_act()`, `concentration_is_broken()` |
 | `core/combat.py` | ~90% | Attack resolution (melee/ranged/spell), cover, resistance/vulnerability/immunity, critical hits, two-weapon fighting, temp HP, instant death, Death Saving Throws, initiative, grapple, shove, opportunity attack triggers, concentration saves |
-| `core/characters.py` | ~85% | Ability scores (all methods), proficiency bonus, HP (L1 + level-up), spell slots (all progressions incl. multiclass), cantrips known, spells prepared, class features (all 20 levels), class proficiencies, multiclass prerequisites + proficiency gains, starting equipment, species traits, background data, feat data, XP-to-level |
+| `core/characters.py` | ~85% | Ability scores (all methods), proficiency bonus, HP (L1 + level-up), spell slots (all progressions incl. multiclass), cantrips known, spells prepared, class features (all 20 levels), class proficiencies, multiclass prerequisites, starting equipment, species traits, background data, feat data, XP-to-level |
+| `core/srd_data.py` | Functional | Three-tier lookup (Campaign Override → Instance Library → SRD Baseline) against MongoDB |
 
-**Not yet implemented in the engine:**
+### SRD Data — Available, not yet consumed
 
-| Feature | Milestone | Complexity | Notes |
-|---|---|---|---|
-| Spell resolution flow | M1 | Medium | Individual components exist (spell attack rolls, spell save DCs via combat.py), but no `resolve_spell()` that consumes a slot, checks range, applies effects, and returns a result for the narrator |
-| Character creation orchestrator | M1 | Medium | All validation functions exist, but no `create_character()` that sequences the full 10-step flow and produces a Character record |
-| Concentration state machine | M2 | Low | `concentration_save_dc()` and `roll_concentration_save()` exist; missing: tracking which spell is concentrated on, auto-breaking on new concentration spell, integration with condition engine |
-| Upcasting | M2 | Low | Schema field needed; engine applies scaled effect from spell data |
-| Reaction spells (Shield, Counterspell) | M2 | Medium | Requires integration with ADR-0009 reaction window |
-| Area of Effect geometry | M2 | High | Target resolution for sphere, cone, cube, line, cylinder — the most complex remaining engine feature |
-| Ritual casting | M2 | Low | Flag check + bypass slot consumption |
-| Spell component enforcement | M2 | Low | V/S/M checks against character state |
-| Monster abilities | M2 | Medium | Multiattack, breath weapons (recharge), legendary actions, lair actions |
-| Rest mechanics (full) | M2 | Low | Long/short rest as flows that reset HP, slots, features, hit dice |
-| Wildshape | M3 | High | Full stat block replacement with carry-over rules |
-| Encounter building | M3 | Low | CR/XP budget calculator — primarily a tool for Claude |
-| Mounted/underwater combat | M3 | Medium | Situational rule overlays |
-
-### SRD Data — Not yet imported
-
-The `scripts/schemas/` directory and `scripts/srd_import/` pipeline exist as architecture (ADR-0001) but no SRD data has been extracted, validated, or seeded into the database. The Rules Engine currently uses hardcoded reference data (class tables, proficiency bonuses, etc.) embedded in the Python code.
-
-This is the single largest gap. The engine can resolve an attack — but there are no spell definitions to cast, no monster stat blocks to fight, and no equipment definitions beyond what is hardcoded for character creation.
+The 5e-database MongoDB container is running and populated. The SRD Data Access Layer (`core/srd_data.py`) exists and implements three-tier resolution. The engine modules (`characters.py`, `combat.py`) still read from hardcoded Python dicts, not from MongoDB.
 
 ### DM Layer — Structure exists, not yet functional
 
-`dm/context_builder.py` and `dm/narrator.py` exist as files. The architecture is defined in ADR-0002. The actual implementation — snapshot assembly, model routing, rolling summary compression, system prompt — is not yet built.
+`dm/narrator.py` and `dm/context_builder.py` exist as files. Model routing (Sonnet/Haiku) is implemented in the Narrator. The actual integration — snapshot assembly from live game state, system prompt, rolling summary compression — is not yet wired to produce working narration.
 
 ### Turn Lifecycle — API surface exists, game loop does not
 
-The API has endpoints for campaigns, characters, turns, and WebSocket connections. The gameplay loop — player action → engine analysis → (optional rolls) → narrative response → state persistence — is not yet wired together.
+REST endpoints for campaigns, characters, turns, and sessions exist. The WebSocket handler (`api/ws.py`) with `ConnectionManager` exists. The gameplay loop — player action → engine → narrator → persistence → client — is not yet connected end-to-end.
+
+### Web Client — Skeleton exists
+
+React/Vite app with TypeScript types, WebSocket hook, campaign header, character panel, chat log, and chat input components. Not yet functional as a game interface.
+
+### Discord Bot — Cog structure exists
+
+`discord.py` bot with WebSocket cog that handles session state, narrative streaming, and is pre-wired for reaction window events. Gameplay cog exists but the actual command handlers need the turn lifecycle to be functional on the server side.
+
+---
+
+## What Separates Us From a Playable Game
+
+Five systems must work together before a player can sit down and play:
+
+1. **Engine reads SRD data from MongoDB** instead of hardcoded Python (migration)
+2. **`create_character()` and `resolve_spell()`** orchestrators that compose existing engine primitives
+3. **DM Layer** (Context Builder + Narrator + Rolling Summary) produces actual narration from Claude
+4. **Turn lifecycle** wires the full loop: action → engine → narrator → persistence → broadcast
+5. **At least one client** renders the game and accepts player input
+
+Items 1–4 are shared infrastructure. Item 5 diverges into two parallel client tracks.
 
 ---
 
 ## Milestones
 
-The old phase structure assumed sequential engine development. The engine is mostly built. The new structure reflects the actual critical path: integration, data, and the DM layer.
-
 ### Milestone 1: First Playable — "A solo character can have an adventure"
 
 **Player experience**: Create a character, start a campaign, explore narratively, fight simple enemies, take and deal damage, cast basic spells, level up, save and resume.
 
-**What makes this the minimum**: A player can sit down, `docker compose up`, and play. The mechanics are correct for the situations that arise. Claude narrates. The experience is recognizably D&D.
+**What makes this the minimum**: A player can `docker compose up` and play. The mechanics are correct for the situations that arise. Claude narrates. The experience is recognizably D&D.
 
 **Level cap**: 5 (Extra Attack, Level 3 spells, subclass at 3, first ASI at 4).
 
 **Roll mode**: `automatic` only (ADR-0009 interactive rolling deferred to M2).
 
-#### Workstream A: SRD Data Import — Phase 1 Batch
+#### Workstream A: Engine Hardcoded-to-MongoDB Migration
 
-Schemas must be defined and data imported for:
+The engine currently embeds SRD reference data in Python dicts. Each module must be refactored to query `core/srd_data.py` instead. The hardcoded data becomes the test fixture baseline — imported MongoDB data must produce identical results.
 
-| Block | Scope | Est. Records | Schema File(s) | Priority |
-|---|---|---|---|---|
-| `rules_tables` | Proficiency bonus, XP thresholds (L1-20), spell slot tables (all classes, all levels), ability score point buy costs, starting wealth | ~10 tables | `rules_table.json` | P0 — no deps |
-| `conditions` | All 14 conditions — mechanical effect definitions (engine already implements them; this is the data layer for narrator context) | 14 | `condition.json` | P0 — no deps |
-| `species` | All SRD species + subspecies: Human, Elf (High/Wood), Dwarf (Hill/Mountain), Halfling (Lightfoot/Stout), Dragonborn, Gnome (Forest/Rock), Half-Elf, Half-Orc, Tiefling | ~15 | `species.json` | P1 |
-| `backgrounds` | All SRD backgrounds with ability bonuses, proficiencies, Origin feat references | ~16 | `background.json` | P1 |
-| `equipment` | Simple + martial weapons, light/medium/heavy armor, shields, adventuring packs, starting equipment packages | ~80 | `weapon.json`, `armor.json`, `equipment.json` | P1 |
-| `feats` | Origin feats (background-selectable) | ~12 | `feat.json` | P1 |
-| `classes` | All 12 classes, Levels 1-5: class table, hit dice, proficiencies, features. One subclass per class at Level 3 | 12 classes, ~60 features | `class.json`, `class_feature.json`, `subclass.json` | P2 |
-| `spells` | Cantrips + Level 1-3 spells for all classes | ~120 spells | `spell.json` | P2 |
-| `monsters` | Starter set: CR 0-3. Goblin, Skeleton, Zombie, Wolf, Giant Rat, Bandit, Kobold, Orc, Ogre, Owlbear, Giant Spider, Bugbear, Gnoll, Gelatinous Cube, Mimic | ~30 | `monster.json`, `monster_action.json`, `monster_trait.json` | P3 |
+| Module | Data to migrate | Validation approach |
+|---|---|---|
+| `characters.py` | Class tables, spell slot progressions, species traits, background data, feat data, proficiency bonus table, starting equipment | Compare `srd_data.get_class()` output against hardcoded class dicts for all 12 classes at all 20 levels |
+| `combat.py` | Weapon properties (finesse, heavy, light, etc.) | Compare weapon lookups against hardcoded weapon data |
+| `conditions.py` | None — conditions are fully engine-implemented, not data-driven | N/A (condition definitions in 5e-database serve narrator context, not engine logic) |
 
-**Import order** (topological): `rules_tables` → `conditions` → `species` → `equipment` → `backgrounds` → `feats` → `classes` → `spells` → `monsters`.
+**Scope constraint**: Only migrate data that the engine currently reads. Do not refactor modules to consume *new* data types from MongoDB in this workstream — that is engine feature work (Workstream B).
 
-**Critical schema design rule**: All schemas include fields for mechanics not yet enforced by the engine. A spell schema has `requires_concentration`, `ritual`, `components`, `area_of_effect` from day one. The data is correct at import time; the engine catches up in M2. This prevents re-importing when the engine adds features.
-
-**Migration from hardcoded data**: The engine currently embeds class tables, proficiency bonuses, spell slot tables, and species/background data directly in Python. Once the database is seeded, the engine must be refactored to read from the database instead. This is a separate task per data block — not a big-bang migration. The hardcoded data serves as the validation baseline: imported data must match the hardcoded values exactly, or the discrepancy is an extraction error.
+**Migration order**: `characters.py` first (most hardcoded data, most user-facing impact), then `combat.py`.
 
 #### Workstream B: Engine Completion — M1 Features
 
-Two new orchestration functions that compose existing primitives:
+Three orchestrator functions that compose existing primitives:
 
 **B1. `create_character()` orchestrator**
 
-Sequences the full character creation flow:
-1. Validate ability scores (method-dependent)
-2. Apply species traits
-3. Apply class at Level 1 (HP, proficiencies, features, spell slots)
-4. Apply background (ability bonuses, skills, tools, Origin feat)
-5. Assign starting equipment
-6. Initialize spellcasting (if applicable)
-7. Produce a complete Character record (per ADR-0004 data model)
+Sequences the full character creation flow: validate ability scores → apply species traits (from MongoDB) → apply class at Level 1 → apply background → assign starting equipment → initialize spellcasting → produce a complete Character record per ADR-0004.
 
-All validation functions exist. This is assembly, not new mechanics.
+All validation functions exist in `characters.py`. This is assembly, not new mechanics.
 
 **B2. `resolve_spell()` flow**
 
-Takes a spell definition + caster state + target(s) and produces a mechanical result:
-1. Check spell slot availability and consume slot (or cantrip: skip)
-2. Determine hit/save: spell attack roll (reuse `combat.resolve_attack()`) or saving throw
-3. Calculate damage or healing from spell data
-4. Apply conditions specified in spell effects
-5. Return a structured result for the Context Builder
+Takes a spell definition (from MongoDB) + caster state + target(s) and produces a mechanical result: check spell slot availability → determine hit/save → calculate damage or healing → apply conditions → return structured result for the Context Builder.
 
-This reuses `combat.py` for attack/damage and `conditions.py` for effect application. The new code is the glue.
+This reuses `combat.py` for attack/damage and `conditions.py` for effect application. The new code is the integration glue.
 
 **B3. Rest mechanics**
 
-Two functions: `apply_short_rest()` and `apply_long_rest()` that take a character state and return the updated state. Long rest: full HP, all spell slots, reset death saves. Short rest: spend hit dice to heal. Both exist conceptually in `characters.py` but are not yet assembled as state transitions.
+`apply_short_rest()` and `apply_long_rest()` as state transitions. Long rest: full HP, all spell slots, reset death saves. Short rest: spend hit dice to heal. Conceptually present in `characters.py` but not yet assembled.
 
 #### Workstream C: DM Layer
 
 **C1. System prompt** (`dm/prompts/`)
 
-The static prompt that defines Claude's DM persona, output format constraints, and narrative rules. Per ADR-0002, this is ~800 tokens, fully cacheable. Includes campaign tone, world rules, and behavioral constraints (no blocking player actions, no inventing mechanical outcomes, etc.).
+The static prompt defining Claude's Game Master persona, output format constraints, and narrative rules. Per ADR-0002: ~800 tokens, fully cacheable. Includes campaign tone from `world_seed`, behavioral constraints (no blocking player actions, no inventing mechanical outcomes), and a dynamic section listing which mechanics the engine handles vs. which Claude adjudicates narratively.
 
 **C2. Context Builder** (`dm/context_builder.py`)
 
-Assembles the state snapshot from:
-- Character snapshot (from Character model): name, class, level, HP, conditions, key inventory, spell slots remaining
-- Scene context (from CampaignState): location, NPCs present, environmental conditions, time of day
-- Rolling summary (from CampaignState): compressed narrative of recent turns
-- Current turn: player's action (verbatim) + Rules Engine result (human-readable)
+Assembles the state snapshot from: Character snapshot (from Character model) + Scene context (from CampaignState) + Rolling summary + Current turn (player action + engine result). Enforces token budgets per ADR-0002 (~2,400 tokens total, ~50% cacheable).
 
-Enforces token budgets per ADR-0002 (~2,400 tokens total, ~50% cacheable).
+**C3. Narrator integration** (`dm/narrator.py`)
 
-**C3. Narrator** (`dm/narrator.py`)
-
-The Claude API integration:
-- Sends assembled snapshot to Claude
-- Handles streaming response
-- Model routing: Sonnet for narrative, Haiku for acknowledgments and summary compression (per ADR-0002 §4)
-- Error handling: retry logic, fallback on API failure
+Wire the existing Narrator class to actually call the Claude API with assembled snapshots. Streaming response handling. Model routing: Sonnet for narrative, Haiku for acknowledgments and summary compression.
 
 **C4. Rolling Summary** (`dm/summary.py`)
 
-After each turn, compress the turn's events into the rolling summary. Haiku task. Maintains a fixed token budget (~500 tokens). Drops oldest entries when budget is exceeded.
+After each turn, compress the turn's events into the rolling summary via Haiku. Fixed token budget (~500 tokens). Drop oldest entries when budget exceeded.
 
 #### Workstream D: Turn Lifecycle
 
 **D1. Game loop integration** (`api/turns.py` + `api/ws.py`)
 
 Wire the full turn cycle:
+
 ```
 Player submits action (REST or WebSocket)
   → Engine analyzes action (what kind of check/attack/spell?)
@@ -179,71 +147,141 @@ Start session (create Session record, load CampaignState), end session (persist 
 
 Player provides startup parameters (tone, length, optional setting/focus/difficulty) → Claude generates Campaign Brief → stored as `world_seed` → first scene narrated.
 
+#### Workstream E: Client — Web (React)
+
+Per ADR-0005, the web client is a client-side SPA consuming the headless API. M1 scope:
+
+**E1. Campaign management UI**
+
+Create campaign (with startup parameter form), list campaigns, resume campaign. REST calls to existing endpoints.
+
+**E2. Character creation flow**
+
+Guided character creation through the web UI. Calls `create_character()` via REST. Renders class/species/background selection, ability score assignment, equipment choices.
+
+**E3. Game session UI**
+
+The core play interface: chat log showing narrative + mechanical results, action input, character sheet sidebar (HP, conditions, spell slots, inventory). WebSocket connection for streaming narrative.
+
+**E4. Session lifecycle controls**
+
+Start session, end session, resume session buttons. Session state indicator.
+
+#### Workstream F: Client — Discord Bot
+
+Per ADR-0005, the Discord bot is a first-class client. It consumes the same API as the web client. M1 scope:
+
+**F1. Campaign slash commands**
+
+`/tavern create`, `/tavern launch`, `/tavern stop`, `/tavern resume`, `/tavern end`, `/tavern status`. Bot-managed channel creation (category + text + voice). Permission scoping.
+
+**F2. Character creation in threads**
+
+`/character create` opens a thread per player. Claude walks each player through creation via a guided conversation (Path 1 from discord-bot.md). Character sheet embeds on completion.
+
+**F3. Gameplay loop**
+
+Message interception in bound channels (game mode). `/action` command. Turn submission via REST. Narrative response posting from WebSocket events. Mechanical results as embeds. OOC filtering via configurable prefix.
+
+**F4. LFG and group formation**
+
+`/lfg` command with join buttons. Player gathering before campaign launch. Embed updates as players join.
+
 #### M1 Definition of Done
 
-- [ ] All P0-P3 SRD data imported and validated
-- [ ] `create_character()` produces valid Level 1 characters for all 12 classes
-- [ ] `resolve_spell()` handles cantrips and Level 1-3 spells (damage, healing, conditions)
-- [ ] System prompt, Context Builder, Narrator, and Rolling Summary functional
-- [ ] Turn lifecycle: action → engine → narrator → persistence → client
+- [ ] Engine reads all SRD reference data from MongoDB via `srd_data.py` — no hardcoded Python dicts remain for class tables, spell slots, species, backgrounds, equipment
+- [ ] `create_character()` produces valid Level 1 characters for all 12 SRD classes
+- [ ] `resolve_spell()` handles cantrips and Level 1–3 spells (damage, healing, conditions)
+- [ ] Rest mechanics (`apply_short_rest()`, `apply_long_rest()`) function as state transitions
+- [ ] System prompt, Context Builder, Narrator, and Rolling Summary produce coherent Claude narration
+- [ ] Turn lifecycle: action → engine → narrator → persistence → client works end-to-end
 - [ ] Session start/end/resume works
 - [ ] Campaign creation with Claude-generated brief works
 - [ ] Level-up to Level 5 works (HP, features, subclass at 3, ASI at 4)
-- [ ] At least one client (Discord bot or web) can play through the full loop
-- [ ] `docker compose up` → playable within 5 minutes
+- [ ] **Web client**: campaign creation → character creation → gameplay → session resume — all functional
+- [ ] **Discord bot**: `/tavern create` → `/character create` → gameplay in channel → `/tavern stop` and resume — all functional
+- [ ] `docker compose up` → playable within 5 minutes on either client
+
+**Workstream dependency graph:**
+
+```
+A (MongoDB migration) ──→ B (Engine orchestrators) ──→ D (Turn lifecycle)
+                                                          ↑
+                          C (DM Layer) ───────────────────┘
+                                                          │
+                          E (Web Client) ←────────────────┤
+                          F (Discord Bot) ←───────────────┘
+```
+
+A and C are independent of each other and can run in parallel. B depends on A. D depends on B and C. E and F depend on D but can begin UI scaffolding in parallel.
 
 ---
 
 ### Milestone 2: Tactical Depth — "Experienced players recognize the game"
 
-**Player experience**: Full combat tactical depth. Interactive dice rolling. Concentration matters. Counterspell creates drama. AoE spells hit the right targets. Level 1-20 progression. Multiplayer with real-time turn coordination. Magic items.
+**Player experience**: Full combat tactical depth. Interactive dice rolling. Concentration matters. Counterspell creates drama. AoE spells hit the right targets. Level 1–20 progression. Multiplayer with real-time turn coordination. Magic items.
 
 **What this adds over M1**: Everything that makes D&D tactically interesting rather than just narratively interesting.
 
-#### Workstream A: SRD Data Import — Full Catalog
+#### Engine Features
 
-| Block | Scope | Est. Records |
+| Feature | Complexity | Notes |
 |---|---|---|
-| `classes` | Full Level 1-20 progression, all features, all 12 subclasses | ~200 features, ~48 subclass features |
-| `spells` | All remaining SRD spells (Levels 4-9 + any L1-3 not in M1) | ~280 spells |
-| `monsters` | Full SRD bestiary with complete stat blocks | ~300 monsters |
-| `feats` | All non-Origin SRD feats | ~30 feats |
-| `magic_items` | SRD magic items: armor, weapons, potions, rings, wondrous items | ~50-80 items |
-| `rules_tables` | Full L1-20 tables, multiclass spell slot table, CR/XP table | remaining tables |
+| Interactive dice rolling (ADR-0009) | High | Player-triggered rolls, pre-roll options, self-reaction window, cross-player reaction window with timer, NPC reaction decisions via Claude |
+| Concentration state machine | Low | Track concentrated spell, auto-break on new concentration, integrate with condition engine |
+| Reaction spells (Shield, Counterspell) | Medium | Requires ADR-0009 reaction window system |
+| AoE geometry | High | Target resolution for sphere, cone, cube, line, cylinder — the most complex remaining engine feature |
+| Upcasting | Low | Apply scaled effect from spell data in MongoDB |
+| Ritual casting | Low | Flag check + bypass slot consumption |
+| Spell component enforcement | Low | V/S/M checks against character state |
+| Monster abilities | Medium | Multiattack, breath weapons (recharge 5–6), legendary actions, lair actions, innate spellcasting |
+| Level 6–20 progression | Medium | All class features, all subclass features, additional ASIs |
+| Magic items with attunement | Medium | Attunement slots, item properties from MongoDB |
+| Rest mechanics (full) | Low | Hit dice tracking, per-rest feature resets, class-specific rest features |
 
-#### Workstream B: Engine Completion — M2 Features
+#### Multiplayer (ADR-0007)
 
-| Feature | Complexity | Dependencies |
+| Feature | Complexity | Notes |
 |---|---|---|
-| Concentration state machine | Low | `combat.py` (save exists), `conditions.py` (broken check exists) — needs tracking of active concentration spell and auto-break on new cast |
-| Upcasting | Low | Spell schema `higher_levels` field + slot consumption at higher level |
-| Ritual casting | Low | Schema flag + bypass slot consumption |
-| Spell component enforcement | Low | V/S/M checks against character conditions (Silenced→no V, no free hand→no S) and inventory (material components) |
-| Reaction spells | Medium | Integrates with ADR-0009 reaction window — Shield, Counterspell, Absorb Elements, Hellish Rebuke as spell resolutions triggered during reaction phase |
-| Area of Effect geometry | High | Sphere, cone, cube, line, cylinder — given origin point and dimensions, determine which grid positions (and therefore which creatures) are affected. This is the most complex remaining engine feature |
-| Monster abilities | Medium | Multiattack (sequence of attacks per stat block), breath weapons (recharge on 5-6 each round), legendary actions (pool per round, end-of-other-turns), lair actions (initiative 20), innate spellcasting (per-day spell uses without slots) |
-| Interactive dice rolling (ADR-0009) | High | Player-triggered rolls, pre-roll options, self-reaction window, cross-player reaction window with timer, NPC reaction decisions via Claude, all three roll modes |
 | Authentication (ADR-0006) | Medium | Anonymous, Local, Discord OAuth providers — required for multiplayer identity |
-| Multiplayer turn coordination (ADR-0007) | High | Initiative-ordered turns, real-time state sync, concurrent player connections, conflict resolution |
+| Initiative-ordered combat turns | Medium | Turn prompts, timeout with Dodge default, NPC turns via Claude |
+| Exploration mode (FIFO) | Low | Sequential processing of concurrent player actions |
+| Real-time state sync | Medium | WebSocket broadcast of all state changes to all connected clients |
+| Player presence | Low | Join/leave notifications, disconnect handling |
 
-#### Workstream C: DM Layer Enhancements
+#### Web Client — M2 Features
 
-- Model routing refinement: classify response types (narrative, acknowledgment, summary, NPC reaction decision) and route to Sonnet/Haiku
-- Prompt caching: leverage Anthropic API cache for static system prompt and character snapshot
-- NPC reaction decisions: tightly-scoped prompts for combat reactions (Counterspell yes/no, Legendary Resistance yes/no) with 3-second timeout
+| Feature | Notes |
+|---|---|
+| Interactive dice rolling UI | Roll button, pre-roll option checkboxes, reaction window with countdown timer |
+| Multiplayer lobby | Campaign join flow, player list, initiative tracker |
+| Authentication | Login/register, Discord OAuth, anonymous mode |
+| Character sheet (expanded) | Level-up flow, spell management, inventory management |
+| Shared display mode | Party overview, narration display, battle status — read-only, optimized for TV/laptop at table |
+
+#### Discord Bot — M2 Features
+
+| Feature | Notes |
+|---|---|
+| Interactive dice rolling | 🎲 button on roll prompts, pre-roll option buttons, reaction window embeds with countdown |
+| Multiplayer turn coordination | Turn prompt embeds, initiative order display, timeout handling |
+| Authentication binding | Discord OAuth identity → Tavern character mapping |
+| `/tavern invite` / `/tavern kick` | Mid-campaign player management |
+| Configurable rolling mode | `/tavern config rolling_mode interactive\|automatic\|hybrid` |
 
 #### M2 Definition of Done
 
-- [ ] Full SRD bestiary imported
-- [ ] All SRD spells imported (Levels 0-9)
-- [ ] Concentration tracking enforced
-- [ ] AoE spells resolve targets from geometry
-- [ ] Reaction spells work in combat (Shield, Counterspell)
-- [ ] Interactive dice rolling functional in at least one roll mode
-- [ ] Level 1-20 progression complete (all features, all subclasses)
+- [ ] Full SRD spell catalog (Levels 0–9) accessible from MongoDB and resolvable by engine
+- [ ] Concentration tracking enforced across turns
+- [ ] AoE spells resolve targets (geometry or simplified zone model — see review triggers)
+- [ ] Reaction spells (Shield, Counterspell, Silvery Barbs) functional with reaction windows
+- [ ] Interactive dice rolling functional in all three roll modes on both clients
+- [ ] Level 1–20 progression complete for all 12 SRD classes and their SRD subclasses
 - [ ] Magic items with attunement
-- [ ] Multiplayer: 2-5 players in real-time with turn coordination
-- [ ] Authentication: at least Anonymous + Local providers
+- [ ] Monster abilities: multiattack, breath weapons, legendary actions
+- [ ] Multiplayer: 2–5 players in real-time with initiative-based turn coordination
+- [ ] Authentication: at least Anonymous + Discord OAuth providers
+- [ ] Both clients support the full M2 feature set
 
 ---
 
@@ -270,113 +308,71 @@ Player provides startup parameters (tone, length, optional setting/focus/difficu
 | Multiclass edge cases (3+ class spell slots, feature stacking) | Medium |
 | Vehicle rules | Low |
 
-#### Remaining SRD Data
+#### Client Features
 
-| Block | Scope | Est. Records |
+| Feature | Web | Discord |
 |---|---|---|
-| `monsters` | Any remaining monsters not in M2 | ~50 |
-| `magic_items` | Complete catalog | remaining items |
-| `rules_tables` | Trap DCs, disease tables, lifestyle costs, crafting costs | ~15 tables |
-| `equipment` | Vehicles, siege equipment, detailed mount stats | ~30 |
+| Voice input (STT) | Browser Web Speech API or Whisper | discord.py voice receive + STT provider (ADR-0008) |
+| Voice output (TTS) | Browser SpeechSynthesis or ElevenLabs | TTS provider → Discord voice channel (ADR-0008) |
+| Streaming narrative | Progressive text display (already in M1) | Progressive message editing (deferred from Discord V1) |
+| Battle map / scene visualization | Canvas-based token display (future) | Text-based scene descriptions |
 
 #### M3 Definition of Done
 
 - [ ] Every mechanical rule in the SRD 5.2.1 has either an engine implementation or an explicit exclusion with rationale
-- [ ] All SRD data imported with no known extraction errors
 - [ ] Test coverage for `core/` exceeds 90% of public functions
-- [ ] A complete playthrough from Level 1-20 has been tested against expected mechanical outcomes
-
----
-
-## SRD Document Segmentation
-
-The SRD 5.2.1 PDF (~361 pages) is segmented into import blocks. Each block gets its own JSON Schema in `scripts/schemas/`.
-
-| Block ID | SRD Section | Content | Approx. Pages | Schema File(s) |
-|---|---|---|---|---|
-| `species` | Chapter 2 | Species/subspecies traits, sizes, speeds, special abilities | ~15 | `species.json` |
-| `classes` | Chapter 3 | Class tables, hit dice, proficiencies, features by level, subclasses | ~80 | `class.json`, `class_feature.json`, `subclass.json` |
-| `backgrounds` | Chapter 4 | Background ability bonuses, skill/tool proficiencies, Origin feats | ~10 | `background.json` |
-| `feats` | Chapter 5 | Feat prerequisites, effects, choices | ~15 | `feat.json` |
-| `equipment` | Chapter 6 | Weapons, armor, adventuring gear, tools, mounts, trade goods | ~20 | `weapon.json`, `armor.json`, `equipment.json` |
-| `spells` | Chapter 7 | Spell definitions — all levels, all classes | ~100 | `spell.json` |
-| `monsters` | Appendix | Monster stat blocks, actions, traits, legendary actions, CR | ~80 | `monster.json`, `monster_action.json`, `monster_trait.json` |
-| `conditions` | Rules Glossary | Condition definitions and mechanical effects | ~5 | `condition.json` |
-| `magic_items` | Chapter 8 | Magic item properties, attunement, rarity | ~20 | `magic_item.json` |
-| `rules_tables` | Various | XP, proficiency, spell slots, multiclass, starting wealth | ~5 | `rules_table.json` |
-
-### Import Pipeline Workflow
-
-Per ADR-0001, each block follows:
-
-```
-1. Define schema          →  scripts/schemas/{block}.json
-2. Segment SRD PDF        →  scripts/srd_import/extract.py --section {block}
-3. Claude extraction      →  scripts/srd_import/claude_parse.py --schema {block}
-4. Schema validation      →  scripts/srd_import/validate.py
-5. Baseline comparison    →  Compare against hardcoded engine data (where exists)
-6. Human review           →  Reviewer checks against SRD source
-7. Database seed          →  Alembic migration or management command
-8. Engine refactor        →  Replace hardcoded data with DB reads
-9. Integration test       →  Verify engine produces identical results with DB data
-```
-
-### Batch Sizing for Claude Extraction
-
-- **Spells**: by level (cantrips, then L1, then L2, ...) — ~10-20 per batch
-- **Monsters**: by CR range (CR 0-1, 2-3, 4-6, 7-10, 11-15, 16-20, 21+) — ~20-40 per batch
-- **Classes**: one class per batch — ~5-8 pages each
-- **Equipment**: weapons in one batch, armor in one batch, gear in one batch
-- **Everything else**: single batch per block
-
-### Validation Beyond Schema
-
-- **Cross-reference integrity**: spell referencing "Poisoned" condition → condition must exist
-- **Numerical plausibility**: CR 1 monster with 300 HP → likely extraction error
-- **Completeness**: all 12 classes must have features at every level
-- **Duplicate detection**: two spells with same name but different stats → extraction error
-- **Baseline match**: imported proficiency bonus table must match `characters.proficiency_bonus()` output for all 20 levels
+- [ ] Voice pipeline functional on both clients (STT + TTS)
+- [ ] A complete playthrough from Level 1–20 has been tested against expected mechanical outcomes
 
 ---
 
 ## Cross-Cutting Concerns
 
-### Hardcoded-to-Database Migration
+### Claude as Game Master for Unimplemented Mechanics
 
-The engine currently embeds substantial SRD data directly in Python (class tables, spell slot progressions, species traits, background data, feat data, equipment). This was the right bootstrapping strategy — it let the engine be developed and tested without waiting for the import pipeline.
-
-The migration happens per block:
-1. Import block into database via pipeline
-2. Verify imported data matches hardcoded data exactly
-3. Refactor engine functions to query database instead of internal dicts
-4. Remove hardcoded data
-5. Verify all tests still pass with database-backed data
-
-This is incremental. Each block migrates independently. At no point is the engine in a broken state.
-
-### Test Strategy
-
-Engine tests currently use the hardcoded data. After migration:
-- Unit tests use a test database seeded with known fixture data
-- The fixture data is a subset of the full import — enough for test coverage, small enough for fast CI
-- Full-data integration tests run nightly, not on every PR
-
-### Claude as DM for Unimplemented Mechanics
-
-Between milestones, some mechanics will be specced but not yet implemented. The DM layer handles this gracefully:
+Between milestones, some mechanics will be specced in the SRD but not yet implemented in the engine. The DM layer handles this gracefully:
 
 - The system prompt tells Claude which mechanics the engine handles and which it should adjudicate narratively
 - Example: In M1, AoE spells have no geometry engine. Claude decides who is hit based on the scene description. In M2, the engine calculates it
-- This is the "hybrid approach" from ADR-0001 Alternatives, applied as a transitional strategy rather than a permanent architecture
+- This is the hybrid approach from ADR-0001 Alternatives, applied as a transitional strategy — not a permanent architecture
 
-The key constraint: Claude's narrative adjudication must never contradict an engine result. If the engine says "attack hits, 8 damage," Claude narrates the hit — it does not decide the attack missed. Claude only adjudicates mechanics the engine does not cover.
+**Hard constraint**: Claude's narrative adjudication must never contradict an engine result. If the engine says "attack hits, 8 damage," Claude narrates the hit. Claude only adjudicates mechanics the engine does not cover.
+
+### Hardcoded-to-MongoDB Migration Strategy
+
+The engine currently embeds SRD data directly in Python. The migration happens per module:
+
+1. Identify hardcoded data in the module
+2. Write a thin adapter function in `srd_data.py` that queries the equivalent MongoDB collection
+3. Verify imported data matches hardcoded data exactly — discrepancies are bugs (either in the hardcoded data or in 5e-database)
+4. Refactor engine functions to call `srd_data` instead of internal dicts
+5. Move hardcoded data to `tests/fixtures/` as test baselines
+6. Verify all existing tests pass with MongoDB-backed data
+
+This is incremental. Each module migrates independently. At no point is the engine in a broken state.
+
+### Test Strategy
+
+Engine tests currently use hardcoded data (moved to `tests/fixtures/srd_fixtures.py`). After migration:
+
+- Unit tests use a test MongoDB instance seeded from 5e-database
+- The fixture data serves as the expected-value baseline: if MongoDB returns different data, the test fails and the discrepancy must be investigated
+- Full integration tests (engine + MongoDB + DM layer) run in CI on every PR
+
+### Client Parity Principle
+
+Per ADR-0005, both clients are first-class. Neither client gets a feature the API doesn't support. The API is the bottleneck — once the API supports a feature, both clients can implement it independently.
+
+In practice, this means: don't wait for both clients to be ready before shipping server-side features. The first client to implement a feature becomes the testbed. The second client follows.
 
 ---
 
 ## Review Triggers
 
-- If M1 takes longer than 6 weeks of active development, evaluate whether the SRD data import should use a third-party database (e.g., 5e-database on GitHub) as seed data instead of Claude extraction from PDF.
-- If Claude extraction accuracy falls below 90% for any block (measured by human review rejection rate), switch that block to manual transcription or third-party data.
-- If the hardcoded-to-database migration reveals discrepancies between engine behavior and SRD rules, file these as bugs — the engine's hardcoded data may itself contain errors that were never caught because no external validation existed.
+- If the 5e-database data for any collection (spells, monsters, classes) has errors or gaps that affect gameplay, evaluate contributing fixes upstream vs. using Campaign Overrides as a workaround. File upstream issues regardless.
+- If the hardcoded-to-MongoDB migration reveals that engine behavior depends on assumptions not present in the 5e-database schema (e.g., the engine expects a field that doesn't exist in the MongoDB documents), this is an engine refactoring task — not a data problem.
 - If AoE geometry implementation in M2 exceeds 3 sessions of effort, evaluate a simplified model (discrete zones instead of continuous geometry) as an intermediate step.
 - If the turn lifecycle latency (action → narrative response) exceeds 8 seconds excluding Claude API time, profile and optimize the engine/context builder path before adding more features.
+- If either client falls more than one milestone behind the other, evaluate whether to pause new server features and focus on client parity.
+- If the 5e-bits/5e-database project is abandoned or significantly diverges from SRD 5.2.1, fork the MongoDB image and maintain independently — the dataset is MIT-licensed and the fork is trivial.
+- If M1 takes longer than 6 weeks of active development, evaluate whether the scope should be reduced (e.g., fewer classes at launch, delayed level-up, single client only for M1).
