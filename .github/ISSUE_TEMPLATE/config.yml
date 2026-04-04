@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 💬 Questions & Ideas
+    url: https://github.com/t11z/tavern/discussions
+    about: Use Discussions for questions, ideas, and campaign stories — not Issues.
+  - name: 📖 Documentation
+    url: https://github.com/t11z/tavern/tree/main/docs
+    about: Architecture decisions, game design specs, and contributing guidelines.

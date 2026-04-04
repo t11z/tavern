@@ -1,0 +1,42 @@
+/* Tavern design tokens */
+:root {
+  --color-bg: #090502;
+  --color-bg-panel: #110c07;
+  --color-bg-input: #1a1208;
+  --color-border: #2e2010;
+  --color-gold: #d4a24e;
+  --color-gold-dim: #8a6830;
+  --color-parchment: #e4d5be;
+  --color-parchment-dim: #9a8a74;
+  --color-danger: #c0392b;
+  --color-success: #27ae60;
+  --font-serif: 'Lora', Georgia, serif;
+  --font-mono: 'Courier New', monospace;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  background-color: var(--color-bg);
+  color: var(--color-parchment);
+  font-family: var(--font-serif);
+  font-size: 16px;
+  line-height: 1.6;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+input, textarea {
+  font-family: inherit;
+}

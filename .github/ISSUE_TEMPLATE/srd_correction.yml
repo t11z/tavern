@@ -1,0 +1,49 @@
+name: 📊 SRD Data Correction
+description: Report an error in spell data, monster stats, class features, or other SRD game data.
+labels: ["srd-data"]
+body:
+  - type: dropdown
+    id: data-type
+    attributes:
+      label: Data type
+      description: What kind of SRD data is incorrect?
+      options:
+        - Spell (damage, range, duration, components, etc.)
+        - Monster / Creature (stats, attacks, abilities)
+        - Class Feature (level, description, mechanics)
+        - Species Trait
+        - Background
+        - Equipment / Weapon / Armor
+        - Condition
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: entity-name
+    attributes:
+      label: Name of the affected entry
+      description: The exact name as it appears in Tavern.
+      placeholder: "e.g., Fireball, Goblin, Extra Attack"
+    validations:
+      required: true
+
+  - type: textarea
+    id: error-description
+    attributes:
+      label: What's wrong?
+      description: Describe the error. Include the correct value from the SRD 5.2.1.
+      placeholder: |
+        Tavern says: Fireball deals 6d6 fire damage.
+        SRD 5.2.1 says: Fireball deals 8d6 fire damage (p. 258).
+    validations:
+      required: true
+
+  - type: input
+    id: srd-reference
+    attributes:
+      label: SRD page reference
+      description: Page number in the SRD 5.2.1 PDF where the correct value can be found.
+      placeholder: "e.g., p. 258"
+    validations:
+      required: false

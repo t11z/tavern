@@ -1,0 +1,70 @@
+site_name: Tavern
+site_description: An AI Game Master for tabletop RPG campaigns — open source, self-hosted, and cheaper than a coffee.
+site_url: https://t11z.github.io/tavern
+repo_url: https://github.com/t11z/tavern
+repo_name: t11z/tavern
+
+theme:
+  name: material
+  custom_dir: docs/overrides
+  favicon: assets/favicon.png
+  logo: assets/logo.png
+  palette:
+    scheme: slate
+  font:
+    text: Lora
+    code: JetBrains Mono
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - toc.follow
+  icon:
+    repo: fontawesome/brands/github
+
+extra_css:
+  - assets/extra.css
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - tables
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - Getting Started:
+    - Quickstart: quickstart.md
+    - How to Play: how-to-play.md
+  - Game Design:
+    - Campaign Design: game-design/campaign-design.md
+    - Character Creation: game-design/character-creation.md
+    - Worlds:
+      - The Shattered Coast: game-design/worlds/shattered-coast.md
+  - Architecture:
+    - ADR-0000 — ADR Process: adr/ADR-0000-adr-process-and-template.md
+    - ADR-0001 — Rules Engine: adr/ADR-0001-srd-rules-engine.md
+    - ADR-0002 — Claude as Narrator: adr/ADR-0002-claude-as-narrator.md
+    - ADR-0003 — Tech Stack: adr/ADR-0003-tech-stack.md
+    - ADR-0004 — Campaign Lifecycle: adr/ADR-0004-campaign-and-session-lifecycle.md
+    - ADR-0005 — Client Architecture: adr/ADR-0005-client-architecture.md
+    - ADR-0006 — Authentication: adr/ADR-0006-authentication-and-authorization.md
+    - ADR-0007 — Multiplayer: adr/ADR-0007-multiplayer-and-realtime-communication.md
+  - Architecture Snapshot: architecture-snapshot.md
+  - Contributing: contributing.md
