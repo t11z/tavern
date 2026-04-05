@@ -26,6 +26,7 @@ from tavern.dm.narrator import (
     LLMProvider,
     Narrator,
     _is_simple_action,
+    _validate_structured_output,
 )
 
 # ---------------------------------------------------------------------------
@@ -345,6 +346,133 @@ class TestAnthropicProviderCompressSummary:
         with pytest.raises(ValueError):
             await provider.compress_summary(["Turn 1."], "")
 
+    async def test_both_empty_returns_empty_without_api_call(
+        self, provider: AnthropicProvider
+    ) -> None:
+        """When both turns and current_summary are empty, skip the API call entirely."""
+        mock_create = AsyncMock()
+        provider._client.messages.create = mock_create
+
+        result = await provider.compress_summary([], "")
+
+        assert result == ""
+        mock_create.assert_not_called()
+
+    async def test_whitespace_only_inputs_return_empty_without_api_call(
+        self, provider: AnthropicProvider
+    ) -> None:
+        mock_create = AsyncMock()
+        provider._client.messages.create = mock_create
+
+        result = await provider.compress_summary([], "   ")
+
+        assert result == ""
+        mock_create.assert_not_called()
+
+    async def test_has_system_prompt(self, provider: AnthropicProvider) -> None:
+        """compress_summary must send a system prompt to lock Claude into compressor role."""
+        mock_create = AsyncMock(return_value=_make_response("Compressed."))
+        provider._client.messages.create = mock_create
+
+        await provider.compress_summary(["Turn 1."], "")
+
+        kwargs = mock_create.call_args.kwargs
+        assert "system" in kwargs
+        system = kwargs["system"]
+        assert isinstance(system, list)
+        assert system[0]["type"] == "text"
+        assert "compressor" in system[0]["text"].lower()
+
+    async def test_prompt_uses_section_headers(self, provider: AnthropicProvider) -> None:
+        """User message must use EXISTING SUMMARY / NEW TURNS headers."""
+        mock_create = AsyncMock(return_value=_make_response("Compressed."))
+        provider._client.messages.create = mock_create
+
+        await provider.compress_summary(["Turn 1: party moved north."], "Prior events.")
+
+        prompt = mock_create.call_args.kwargs["messages"][0]["content"]
+        assert "EXISTING SUMMARY:" in prompt
+        assert "NEW TURNS:" in prompt
+
+    async def test_bleed_through_falls_back_to_current_summary(
+        self, provider: AnthropicProvider
+    ) -> None:
+        """If the API returns conversational text, compress_summary returns current_summary."""
+        bleed = "I'd be happy to help compress your session notes!"
+        mock_create = AsyncMock(return_value=_make_response(bleed))
+        provider._client.messages.create = mock_create
+
+        prior = "Party entered the dungeon and defeated two goblins."
+        result = await provider.compress_summary(["Turn 7: Kael searched the room."], prior)
+
+        assert result == prior
+
+    async def test_bleed_through_logs_error(
+        self, provider: AnthropicProvider, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        bleed = "I'd be happy to help compress your session notes!"
+        mock_create = AsyncMock(return_value=_make_response(bleed))
+        provider._client.messages.create = mock_create
+
+        with caplog.at_level(logging.ERROR, logger="tavern.dm.narrator"):
+            await provider.compress_summary(["Turn 1."], "Prior summary.")
+
+        assert any("invalid output" in r.message for r in caplog.records)
+
+    async def test_question_mark_in_output_falls_back(self, provider: AnthropicProvider) -> None:
+        """A question mark in summary output is a bleed-through signal."""
+        mock_create = AsyncMock(return_value=_make_response("Could you clarify what happened?"))
+        provider._client.messages.create = mock_create
+
+        prior = "Prior summary."
+        result = await provider.compress_summary(["Turn 1."], prior)
+
+        assert result == prior
+
+    async def test_valid_summary_is_returned_unchanged(self, provider: AnthropicProvider) -> None:
+        """Clean summary text passes validation and is returned as-is."""
+        summary = (
+            "Turn 1-3: Party entered dungeon, fought goblins (12 slashing damage), found key."
+        )
+        mock_create = AsyncMock(return_value=_make_response(summary))
+        provider._client.messages.create = mock_create
+
+        result = await provider.compress_summary(["Turn 3: party found key."], "Prior.")
+
+        assert result == summary
+
+
+# ---------------------------------------------------------------------------
+# _validate_structured_output
+# ---------------------------------------------------------------------------
+
+
+class TestValidateStructuredOutput:
+    def test_clean_text_passes(self) -> None:
+        assert (
+            _validate_structured_output("Party fought three goblins and retreated north.", "Test")
+            is True
+        )
+
+    def test_question_mark_fails(self) -> None:
+        assert _validate_structured_output("What would you like me to compress?", "Test") is False
+
+    def test_assistant_phrase_fails(self) -> None:
+        assert _validate_structured_output("I'd be happy to help with that.", "Test") is False
+
+    def test_phrase_check_is_case_insensitive(self) -> None:
+        assert _validate_structured_output("HERE'S a summary for you.", "Test") is False
+
+    def test_mechanical_content_passes(self) -> None:
+        text = "Kira cast Fireball. Three orcs took 28 fire damage. Session ended at the inn."
+        assert _validate_structured_output(text, "Test") is True
+
+    def test_logs_warning_on_failure(self, caplog: pytest.LogCaptureFixture) -> None:
+        with caplog.at_level(logging.WARNING, logger="tavern.dm.narrator"):
+            _validate_structured_output("Let me know if you need anything!", "Summary compression")
+
+        assert any("bleed-through" in r.message for r in caplog.records)
+
 
 # ---------------------------------------------------------------------------
 # Routing logic (_is_simple_action)
@@ -567,3 +695,31 @@ class TestResponseValidation:
             result = await narrator.narrate_turn(_make_snapshot())
 
         assert result == bad_text
+
+
+# ---------------------------------------------------------------------------
+# AnthropicProvider.generate_campaign_brief — bleed-through validation
+# ---------------------------------------------------------------------------
+
+
+class TestGenerateCampaignBriefValidation:
+    async def test_bleed_through_raises_value_error(self, provider: AnthropicProvider) -> None:
+        """If the raw response is conversational instead of JSON, raise ValueError."""
+        bleed = "I'd be happy to help you set up your campaign! What tone do you prefer?"
+        mock_create = AsyncMock(return_value=_make_response(bleed))
+        provider._client.messages.create = mock_create
+
+        with pytest.raises(ValueError, match="conversational"):
+            await provider.generate_campaign_brief("Lost Throne", "classic_fantasy")
+
+    async def test_valid_json_response_succeeds(self, provider: AnthropicProvider) -> None:
+        valid_json = (
+            '{"campaign_brief": "A perilous quest.", "opening_scene": "The inn is quiet.", '
+            '"location": "Silverveil", "environment": "foggy village", "time_of_day": "evening"}'
+        )
+        mock_create = AsyncMock(return_value=_make_response(valid_json))
+        provider._client.messages.create = mock_create
+
+        result = await provider.generate_campaign_brief("Lost Throne", "classic_fantasy")
+
+        assert result["location"] == "Silverveil"

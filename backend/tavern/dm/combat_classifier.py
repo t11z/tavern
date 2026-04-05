@@ -190,8 +190,21 @@ def _build_user_message(action_text: str, snapshot: StateSnapshot) -> str:
 def _parse_classification(raw: str) -> CombatClassification:
     """Parse and validate the classifier JSON response.
 
+    Checks for conversational bleed-through before attempting JSON parse.
     On any parse or validation error: log and return safe fallback.
     """
+    # Audit finding: system prompt uses JSON-only constraint and safe fallback
+    # is already in place — adding bleed-through check for an earlier, more
+    # descriptive log before the JSONDecodeError path.
+    _BLEED_SIGNALS = ("?", "I'm ready", "I'd be happy", "Here's", "Let me know", "I can help")
+    raw_lower = raw.lower()
+    if any(sig.lower() in raw_lower for sig in _BLEED_SIGNALS):
+        logger.warning(
+            "CombatClassifier response appears conversational (returning safe fallback): %r",
+            raw[:200],
+        )
+        return _SAFE_FALLBACK
+
     try:
         data = json.loads(raw.strip())
     except json.JSONDecodeError:
