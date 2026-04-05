@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from tavern.api import campaigns, characters, health, turns, ws
+from tavern.api import campaigns, characters, health, npcs, turns, ws
 from tavern.api.errors import APIError, api_error_handler
 from tavern.api.srd import overrides_router, srd_router
 from tavern.srd_db import close_srd_db, connect_srd_db
@@ -29,6 +29,7 @@ app.include_router(health.router)
 # REST API routes under /api
 app.include_router(campaigns.router, prefix="/api")
 app.include_router(characters.router, prefix="/api")
+app.include_router(npcs.router, prefix="/api")
 app.include_router(turns.router, prefix="/api")
 app.include_router(ws.router, prefix="/api")
 app.include_router(srd_router, prefix="/api")

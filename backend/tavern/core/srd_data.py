@@ -25,9 +25,13 @@ Schema notes (t11z/5e-database, 2024 dataset per ADR-0010):
   db["2024-levels"] (bracket notation).
 """
 
+import logging
+import uuid
 from typing import Any, Final
 
 from tavern.srd_db import get_srd_db
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # MongoDB collection names (2024 dataset, per ADR-0010)
@@ -853,3 +857,35 @@ async def _build_warlock_pact_magic() -> list[tuple[int, int]]:
     for level in range(1, 21):
         pact.append(await get_warlock_pact_magic(level))
     return pact
+
+
+# ---------------------------------------------------------------------------
+# NPC stat block resolution (ADR-0013)
+# ---------------------------------------------------------------------------
+
+
+async def resolve_npc_stat_block(
+    stat_block_ref: str,
+    campaign_id: uuid.UUID,
+) -> dict[str, Any] | None:
+    """Resolve a stat block reference via the three-tier lookup (ADR-0001 §3).
+
+    Uses existing get_monster() with campaign_id for Campaign Override →
+    Instance Library → SRD Baseline. Returns the stat block dict or None
+    if not found. Logs a warning (not an error) if not found.
+
+    Args:
+        stat_block_ref: The monster index slug (e.g. "goblin", "bandit").
+        campaign_id: Campaign UUID used for the Campaign Override tier lookup.
+
+    Returns:
+        The stat block dict stripped of MongoDB _id, or None if not found.
+    """
+    result = await get_monster(stat_block_ref, str(campaign_id))
+    if result is None:
+        logger.warning(
+            "NPC stat block not found: %r (campaign_id=%s)",
+            stat_block_ref,
+            campaign_id,
+        )
+    return result
