@@ -10,6 +10,8 @@ Module organisation:
 - Attack pipeline      (resolve_attack)
 - Damage application   (apply_damage, apply_healing)
 - Initiative           (roll_initiative, sort_initiative_order)
+- Surprise mechanics   (CombatParticipant, CombatSnapshot, determine_surprise,
+                        roll_initiative_order) — ADR-0014
 - Death saving throws  (roll_death_save)
 - Grapple / Shove      (attempt_grapple, attempt_shove)
 - Opportunity attacks  (triggers_opportunity_attack)
@@ -19,10 +21,14 @@ Module organisation:
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from enum import Enum, StrEnum
+from typing import Literal
 
 from tavern.core.dice import D20Result, DiceResult, roll, roll_d20
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Damage types — SRD 5.2.1 Rules Glossary p.180
@@ -720,6 +726,232 @@ def sort_initiative_order(entries: list[InitiativeEntry]) -> list[InitiativeEntr
         key=lambda e: (e.initiative, e.dex_modifier),
         reverse=True,
     )
+
+
+# ---------------------------------------------------------------------------
+# Surprise mechanics — SRD 5.2.1 p.13 (ADR-0014)
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class CombatSnapshotCharacter:
+    """Minimal per-character data required for Surprise determination.
+
+    Callers (api/ or dm/ layer) are responsible for populating this from
+    the full character record before calling determine_surprise.  core/
+    does not import from dm/ or api/.
+
+    SRD 5.2.1 p.13: passive Perception = 10 + WIS modifier + proficiency
+    bonus if the character is proficient in Perception.
+    """
+
+    wis_modifier: int
+    """Wisdom ability modifier (floor((WIS - 10) / 2))."""
+
+    perception_proficient: bool = False
+    """True if the character has Perception proficiency."""
+
+    proficiency_bonus: int = 0
+    """Character's proficiency bonus (used when perception_proficient is True)."""
+
+    feats: list[str] = field(default_factory=list)
+    """List of feat names the character possesses (e.g. ['Alert'])."""
+
+
+@dataclass
+class CombatSnapshot:
+    """Minimal game-state snapshot required by surprise and initiative mechanics.
+
+    Keys in ``characters`` are character_id strings (PC UUID or NPC UUID).
+    Callers construct this from their full state representation before calling
+    core/ surprise functions.  This keeps core/ free of dm/ and api/ imports.
+    """
+
+    characters: dict[str, CombatSnapshotCharacter] = field(default_factory=dict)
+    """character_id → CombatSnapshotCharacter."""
+
+
+@dataclass
+class CombatParticipant:
+    """One combatant's full initiative and surprise state.
+
+    SRD 5.2.1 p.13 (ADR-0014):
+    ``surprised`` is set once during combat initialisation (from
+    determine_surprise), used exactly once in roll_initiative_order to apply
+    Disadvantage, and never consulted again.  The flag is retained on the
+    record for logging and audit purposes only.
+
+    ``acted_this_round`` is reset at the start of each new round by the turn
+    lifecycle (api/turns.py).  core/ sets it to False at initialisation.
+    """
+
+    character_id: str
+    participant_type: Literal["pc", "npc"]
+    initiative_roll: int
+    """Raw d20 result (the lower of two if Disadvantage was applied)."""
+
+    initiative_result: int
+    """Final initiative value: initiative_roll + DEX modifier."""
+
+    surprised: bool
+    """Set once at combat init, read once in roll_initiative_order, ignored thereafter."""
+
+    acted_this_round: bool = False
+
+
+def _has_surprise_immunity(character_id: str, snapshot: CombatSnapshot) -> bool:
+    """Return True if *character_id* is immune to Surprise (e.g. Alert feat).
+
+    SRD 5.2.1 (ADR-0014 §6): Characters with the Alert feat cannot be
+    surprised.  This pre-filter is the caller's responsibility — callers must
+    remove immune characters from ``potential_surprised`` before passing the
+    list to determine_surprise.  determine_surprise does not call this helper
+    internally.
+
+    Logs at INFO level when immunity is applied.
+    """
+    char = snapshot.characters.get(character_id)
+    if char is None:
+        return False
+    # Alert feat grants immunity to Surprise (SRD 5.2.1)
+    if "Alert" in char.feats:
+        logger.info(
+            "Character %s has Alert feat — immune to Surprise",
+            character_id,
+        )
+        return True
+    return False
+
+
+def determine_surprise(
+    potential_surprised: list[str],
+    stealth_results: dict[str, int],
+    snapshot: CombatSnapshot,
+) -> dict[str, bool]:
+    """Determine which characters in *potential_surprised* are actually surprised.
+
+    SRD 5.2.1 p.13 (ADR-0014 §2):
+    A target is surprised if ALL concealing characters beat (strictly greater
+    than) that target's passive Perception.  If any single concealer fails to
+    beat a target's passive Perception, that target is NOT surprised — one
+    detected member ruins the ambush for everyone.
+
+    Passive Perception = 10 + WIS modifier + proficiency bonus (if proficient).
+
+    Pre-conditions (caller's responsibility, per ADR-0014 §6):
+    - Characters with the Alert feat must be removed from *potential_surprised*
+      before calling this function.  Use _has_surprise_immunity() as the
+      pre-filter.
+
+    Args:
+        potential_surprised: character_ids of potentially surprised targets.
+        stealth_results: concealing character_id → stealth total (roll + mod).
+        snapshot: Minimal snapshot providing passive Perception data.
+
+    Returns:
+        dict mapping each character_id in potential_surprised to a bool.
+        True = surprised (Disadvantage on initiative roll).
+    """
+    if not potential_surprised:
+        return {}
+
+    # No concealers → no one can be surprised
+    if not stealth_results:
+        return {cid: False for cid in potential_surprised}
+
+    concealer_rolls = list(stealth_results.values())
+
+    result: dict[str, bool] = {}
+    for target_id in potential_surprised:
+        char = snapshot.characters.get(target_id)
+        if char is None:
+            # Unknown character: cannot compute passive Perception → not surprised
+            result[target_id] = False
+            continue
+
+        # Passive Perception = 10 + WIS modifier [+ proficiency bonus if proficient]
+        passive_perception = 10 + char.wis_modifier
+        if char.perception_proficient:
+            passive_perception += char.proficiency_bonus
+
+        # All concealers must strictly beat the target's passive Perception
+        # for that target to be surprised.  One failure = not surprised.
+        all_beat = all(stealth > passive_perception for stealth in concealer_rolls)
+        result[target_id] = all_beat
+
+    return result
+
+
+def roll_initiative_order(
+    participants: list[CombatParticipant],
+    *,
+    surprised_map: dict[str, bool] | None = None,
+    dex_modifiers: dict[str, int] | None = None,
+    seeds: dict[str, int] | None = None,
+) -> list[CombatParticipant]:
+    """Roll initiative for all participants, applying Disadvantage to surprised ones.
+
+    SRD 5.2.1 p.13 (ADR-0014 §4):
+    Surprised participants roll initiative with Disadvantage (two d20s, take
+    the lower result).  Both d20 values are logged.  Non-surprised participants
+    roll one d20 normally.
+
+    Args:
+        participants: List of CombatParticipant records (surprised flag is read
+            from each participant and/or from surprised_map if provided).
+        surprised_map: Optional override map of character_id → surprised bool.
+            If provided, values here take precedence over participant.surprised.
+        dex_modifiers: character_id → DEX modifier.  Defaults to 0 for any
+            participant not present in the map.
+        seeds: character_id → seed for reproducible rolls.
+
+    Returns:
+        A new list of CombatParticipant records sorted by initiative_result
+        descending (highest first).  Input records are NOT mutated.
+    """
+    if surprised_map is None:
+        surprised_map = {}
+    if dex_modifiers is None:
+        dex_modifiers = {}
+    if seeds is None:
+        seeds = {}
+
+    updated: list[CombatParticipant] = []
+    for p in participants:
+        is_surprised = surprised_map.get(p.character_id, p.surprised)
+        dex_mod = dex_modifiers.get(p.character_id, 0)
+        seed = seeds.get(p.character_id, None)
+
+        if is_surprised:
+            d20_result = roll_d20(modifier=dex_mod, disadvantage=True, seed=seed)
+            logger.debug(
+                "Initiative (Disadvantage — Surprised): %s rolled %s, took %d; result %d",
+                p.character_id,
+                d20_result.all_rolls,
+                d20_result.natural,
+                d20_result.total,
+            )
+        else:
+            d20_result = roll_d20(modifier=dex_mod, seed=seed)
+            logger.debug(
+                "Initiative: %s rolled %d; result %d",
+                p.character_id,
+                d20_result.natural,
+                d20_result.total,
+            )
+
+        updated.append(
+            CombatParticipant(
+                character_id=p.character_id,
+                participant_type=p.participant_type,
+                initiative_roll=d20_result.natural,
+                initiative_result=d20_result.total,
+                surprised=is_surprised,
+                acted_this_round=p.acted_this_round,
+            )
+        )
+
+    return sorted(updated, key=lambda p: p.initiative_result, reverse=True)
 
 
 # ---------------------------------------------------------------------------
