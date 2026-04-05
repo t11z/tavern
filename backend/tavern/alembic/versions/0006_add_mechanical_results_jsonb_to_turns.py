@@ -10,7 +10,7 @@ from collections.abc import Sequence
 
 import sqlalchemy as sa
 from alembic import op
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import JSONB  # migrations run on PostgreSQL only
 
 revision: str = "0006"
 down_revision: str | None = "0005"

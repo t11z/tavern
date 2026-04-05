@@ -3,10 +3,9 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 
 from sqlalchemy import DateTime, ForeignKey, Integer, Text, func
-from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from tavern.models.base import Base
+from tavern.models.base import JSONB, Base
 
 if TYPE_CHECKING:
     from tavern.models.character import Character
