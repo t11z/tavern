@@ -1,6 +1,6 @@
 # Architecture Snapshot
 
-> Last updated: 2026-04-04 — Added dm/summary.py rolling summary module
+> Last updated: 2026-04-05 — Wave 1+2: NPC lifecycle (ADR-0013), CombatClassifier (ADR-0011), GMSignals envelope (ADR-0012), Surprise mechanics (ADR-0014)
 >
 > This document is maintained by Claude Code per the rules in CLAUDE.md.
 > It is consumed by the architecture consultant to inform decisions without
@@ -17,19 +17,22 @@ backend/tavern/
 ├── core/               # Rules Engine — SRD 5.2.1 mechanics, no LLM dependency
 │   ├── dice.py             # Dice rolling, advantage/disadvantage, NdX notation parser, deterministic seeds
 │   ├── characters.py       # Ability modifiers, HP, spell slots, proficiency bonus, standard array validation (async)
-│   ├── combat.py           # Attack resolution, damage application, initiative, grapple/shove, death saves
+│   ├── combat.py           # Attack resolution, damage application, initiative, grapple/shove, death saves; CombatParticipant dataclass (one combatant's initiative state; surprised flag set once, read once); CombatSnapshotCharacter dataclass (minimal per-character data for Surprise: WIS mod, Perception proficiency, feats); CombatSnapshot dataclass ({character_id: CombatSnapshotCharacter}, used instead of StateSnapshot to preserve core/→dm/ direction); determine_surprise(potential_surprised, stealth_results, snapshot: CombatSnapshot) → dict[str, bool] (all-concealers-must-succeed rule, SRD 5.2.1 RAW); _has_surprise_immunity(character_id, snapshot: CombatSnapshot) → bool (Alert feat pre-filter); roll_initiative_order(participants, *, surprised_map, dex_modifiers, seeds) → list[CombatParticipant] (Disadvantage for surprised participants)
 │   ├── conditions.py       # 15 SRD conditions, attack/save modifiers, speed, incapacitation logic
 │   ├── action_analyzer.py  # Keyword-based action classification (no LLM): ActionCategory enum, ActionAnalysis dataclass, analyze_action()
 │   ├── spells.py           # Spell resolution orchestrator: slot validation, attack/save/auto-hit routing, damage/healing calculation, condition application
-│   ├── srd_data.py         # SRD Data Access Layer: three-tier lookup (Campaign Override → Instance Library → SRD Baseline)
+│   ├── srd_data.py         # SRD Data Access Layer: three-tier lookup (Campaign Override → Instance Library → SRD Baseline); resolve_npc_stat_block(stat_block_ref: str, campaign_id: UUID) → dict | None (three-tier monster lookup for NPC stat block population; logs warning not error on miss)
 ├── dm/                 # DM layer — Narrator, Context Builder, LLM provider abstraction
-│   ├── narrator.py         # Narrator class; model routing (Sonnet/Haiku); streaming narration and summary compression
-│   ├── context_builder.py  # StateSnapshot, TurnContext; builds and serializes game state for the Narrator
-│   └── summary.py          # Rolling summary helpers: build_turn_summary_input(), trim_summary(); enforces 500-token budget
+│   ├── narrator.py         # Narrator class; model routing (Sonnet/Haiku); streaming narration and summary compression; GMSignals delimiter buffering (stops forwarding to clients after ---GM_SIGNALS---); parse_gm_signals() integration; narrate_stream() returns tuple[str, GMSignals]
+│   ├── context_builder.py  # StateSnapshot, TurnContext; builds and serializes game state for the Narrator; TurnContext.stealth_rolls: dict[str, int] (Path B Surprise, ADR-0014); StateSnapshot.session_mode: str (guards CombatClassifier, ADR-0011); StateSnapshot.npcs: list[dict] (compact NPC records, ADR-0013, scene-scoped and recency-filtered last 10 turns, excludes dead/fled unless plot_significant)
+│   ├── summary.py          # Rolling summary helpers: build_turn_summary_input(), trim_summary(); enforces 500-token budget
+│   ├── combat_classifier.py # CombatClassifier — Haiku-based binary LLM classifier for combat initiation detection; classify(action_text: str, snapshot: StateSnapshot) → CombatClassification; called pre-narration in exploration mode only; raises RuntimeError in combat mode (ADR-0011); no dependency on core/
+│   └── gm_signals.py       # GMSignals, SceneTransition, NPCUpdate dataclasses; GM_SIGNALS_DELIMITER = "---GM_SIGNALS---" constant; parse_gm_signals(raw: str) → GMSignals — safe-default on any parse failure; safe_default() → GMSignals  [Wave 2 — may not exist yet]
 ├── api/                # FastAPI REST endpoints and WebSocket handler
 │   ├── campaigns.py        # Campaign CRUD + session lifecycle; calls Narrator for Claude-generated opening scene on create
 │   ├── characters.py       # Character creation and retrieval
-│   ├── turns.py            # Turn submission (202) and retrieval; wires action_analyzer + Rules Engine; broadcasts character.updated
+│   ├── turns.py            # Turn submission (202) and retrieval; wires action_analyzer + Rules Engine; broadcasts character.updated; full combat lifecycle: CombatClassifier invoked pre-narration (exploration mode only); GMSignals processed post-narration (npc_updates before scene_transition, mandatory ordering per ADR-0012); engine combat_end takes precedence over Narrator combat_end signal when both fire on same turn; player-initiated (Flow B) and NPC-initiated (Flow A) combat paths both produce identical combat.started WebSocket event
+│   ├── npcs.py             # NPC roster CRUD for campaign: POST (201), GET list, GET single, PATCH; PATCH enforces immutability — returns 422 if name, species, or appearance in request body; scoped to /api/campaigns/{campaign_id}/npcs
 │   ├── ws.py               # WebSocket endpoint + ConnectionManager
 │   ├── srd.py              # Custom SRD content: Instance Library CRUD + Campaign Override CRUD
 │   ├── dependencies.py     # Shared FastAPI dependencies (get_db_session, get_narrator, get_session_factory)
@@ -66,6 +69,7 @@ backend/tavern/
 │   ├── character.py        # Character, InventoryItem, CharacterCondition
 │   ├── session.py          # Session
 │   ├── turn.py             # Turn
+│   ├── npc.py              # NPC — campaign-scoped (campaign_id FK with CASCADE); immutable fields (name, species, appearance) enforced at model layer; mutable state (hp_current, hp_max, ac, disposition, status, scene_location); origin: "predefined"|"narrator_spawned"; plot_significant: bool (persists in snapshot after death/flight when True); validate_immutable_update(updates: dict) classmethod — raises ValueError on immutable field update
 ├── alembic/            # Database migrations
 │   ├── env.py              # Async migration runner (asyncpg)
 │   ├── script.py.mako      # Migration file template
@@ -183,6 +187,10 @@ models/  ──→ (no internal dependencies)
 | POST | /api/campaigns/{id}/turns | Submit player action | 202 |
 | GET | /api/campaigns/{id}/turns | List turns (paginated) | 200 |
 | GET | /api/campaigns/{id}/turns/{turn_id} | Get single turn | 200 |
+| POST | /api/campaigns/{id}/npcs | Create NPC | 201 |
+| GET | /api/campaigns/{id}/npcs | List NPCs for campaign | 200 |
+| GET | /api/campaigns/{id}/npcs/{npc_id} | Get single NPC | 200 |
+| PATCH | /api/campaigns/{id}/npcs/{npc_id} | Update NPC mutable state (422 if immutable fields present) | 200 |
 | GET | /api/srd/{collection} | List custom documents (Instance Library) | 200 |
 | POST | /api/srd/{collection} | Create custom document | 201 |
 | GET | /api/srd/{collection}/{index} | Get custom document | 200 |
@@ -211,6 +219,10 @@ Events currently emitted by the API server:
 | turn.narrative_chunk | server → client | turn_id, chunk, sequence (token-by-token) |
 | turn.narrative_end | server → client | turn_id, full narrative, mechanical_results, character_updates |
 | system.error | server → client | message (narrator or system error) |
+| combat.started | server → client | initiative_order: list[dict], surprised: list[str] |
+| combat.ended | server → client | {} |
+| npc.spawned | server → client | npc_id: str, name: str, role: str \| None |
+| npc.updated | server → client | npc_id: str, changes: dict |
 
 Events the discord_bot `gameplay.py` cog is ready to handle (not yet emitted by server):
 
@@ -235,6 +247,7 @@ Events the discord_bot `gameplay.py` cog is ready to handle (not yet emitted by 
 | InventoryItem | inventory_items | belongs to Character |
 | CharacterCondition | character_conditions | belongs to Character |
 | Turn | turns | belongs to Session, belongs to Character |
+| NPC | npcs | belongs to Campaign (cascade delete); immutable identity fields (name, species, appearance); mutable state fields (hp_current, hp_max, ac, disposition, status, scene_location); origin and plot_significant flags |
 
 SRD reference data is no longer stored in PostgreSQL. It is served from the
 5e-bits/5e-database MongoDB container via ``core/srd_data.py``.
@@ -280,6 +293,10 @@ Tavern's SRD data comes from `t11z/5e-database`, a fork of `5e-bits/5e-database`
 | 0008 | Discord Bot Voice Pipeline | Accepted |
 | 0009 | Interactive Dice Rolling and Reaction System | Accepted |
 | 0010 | SRD Data Source Fork and 2024 Dataset Migration | Accepted |
+| 0011 | Combat Trigger via Dedicated LLM Classifier | Accepted |
+| 0012 | NPC-Initiated Combat | Accepted |
+| 0013 | NPC Lifecycle | Accepted |
+| 0014 | Surprise Mechanics | Accepted |
 
 ## Known Deviations
 
