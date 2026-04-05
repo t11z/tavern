@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import type { CharacterState, SessionState, TurnEntry, WsEvent } from '../types'
+import type { CharacterState, InitiativeEntry, SessionState, TurnEntry, WsEvent } from '../types'
 
 // ---------------------------------------------------------------------------
 // Normalise a raw CharacterState from the server.
@@ -61,6 +61,7 @@ export function GameSession({ campaignId, onEndSession }: Props) {
   const [error, setError] = useState<string | null>(null)
   const [ending, setEnding] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
+  const [combat, setCombat] = useState<{ initiative_order: InitiativeEntry[]; surprised: string[] } | null>(null)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [characterSheetOpen, setCharacterSheetOpen] = useState(false)
   const [sheetCharacterId, setSheetCharacterId] = useState<string | null>(null)
@@ -129,6 +130,18 @@ export function GameSession({ campaignId, onEndSession }: Props) {
         }
         case 'system.error':
           showToast(event.payload.message)
+          break
+        // combat.started / combat.ended arrive as live events during a session.
+        // The switch had no cases for them, so they were silently dropped —
+        // combat UI only updated after reconnect (which delivers session.state).
+        case 'combat.started':
+          setCombat({
+            initiative_order: event.payload.initiative_order,
+            surprised: event.payload.surprised,
+          })
+          break
+        case 'combat.ended':
+          setCombat(null)
           break
       }
     },
@@ -298,6 +311,28 @@ export function GameSession({ campaignId, onEndSession }: Props) {
           </div>
         )}
 
+        {/* Combat panel */}
+        {combat && (
+          <div style={s.combatPanel}>
+            <span style={s.combatBadge}>COMBAT</span>
+            {combat.initiative_order.map((entry, i) => {
+              const char = session.characters.find((c) => c.id === entry.character_id)
+              const name = char?.name ?? entry.character_id
+              const isSurprised = combat.surprised.includes(entry.character_id)
+              return (
+                <div key={entry.character_id} style={s.initiativeEntry}>
+                  <span style={s.initiativeRank}>{i + 1}.</span>
+                  <span style={s.initiativeName}>
+                    {name}
+                    {isSurprised && <span style={s.surprisedMark}> !</span>}
+                  </span>
+                  <span style={s.initiativeRoll}>{entry.initiative_result}</span>
+                </div>
+              )
+            })}
+          </div>
+        )}
+
         {/* Active character info */}
         {activeChar && (
           <div style={s.activeCharInfo}>
@@ -403,6 +438,49 @@ const s: Record<string, React.CSSProperties> = {
     fontSize: '0.75rem',
     color: 'var(--color-parchment-dim)',
     lineHeight: 1.5,
+  },
+  combatPanel: {
+    marginTop: '0.5rem',
+    paddingTop: '0.75rem',
+    borderTop: '1px solid var(--color-border)',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '0.25rem',
+  },
+  combatBadge: {
+    fontSize: '0.65rem',
+    letterSpacing: '0.14em',
+    textTransform: 'uppercase' as const,
+    color: 'var(--color-danger)',
+    fontWeight: 700,
+    marginBottom: '0.25rem',
+  },
+  initiativeEntry: {
+    display: 'flex',
+    alignItems: 'baseline',
+    gap: '0.3rem',
+    fontSize: '0.75rem',
+    color: 'var(--color-parchment-dim)',
+  },
+  initiativeRank: {
+    color: 'var(--color-gold-dim)',
+    minWidth: '1rem',
+  },
+  initiativeName: {
+    flex: 1,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap' as const,
+  },
+  initiativeRoll: {
+    color: 'var(--color-gold)',
+    fontWeight: 600,
+    minWidth: '1.5rem',
+    textAlign: 'right' as const,
+  },
+  surprisedMark: {
+    color: 'var(--color-danger)',
+    fontWeight: 700,
   },
   activeCharInfo: {
     marginTop: 'auto',
