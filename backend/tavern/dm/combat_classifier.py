@@ -155,7 +155,14 @@ class CombatClassifier:
             return _SAFE_FALLBACK
 
         raw = response.content[0].text  # type: ignore[union-attr]
-        return _parse_classification(raw)
+        result = _parse_classification(raw)
+        logger.debug(
+            "CombatClassification: combat_starts=%s confidence=%s reason=%r",
+            result.combat_starts,
+            result.confidence,
+            result.reason,
+        )
+        return result
 
 
 # ---------------------------------------------------------------------------
