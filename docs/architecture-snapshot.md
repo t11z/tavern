@@ -1,6 +1,6 @@
 # Architecture Snapshot
 
-> Last updated: 2026-04-05 — Wave 1 audit corrections: added migrations 0005/0006 to list; added mechanical_results pipeline gap to Known Deviations; noted ADR-0015 suggested_actions not yet in gm_signals.py; noted ADR-0017 core/scene.py not yet created
+> Last updated: 2026-04-05 — Wave 2: ADR-0015 (suggested actions), ADR-0017 (scene IDs), mechanical_results pipeline
 >
 > This document is maintained by Claude Code per the rules in CLAUDE.md.
 > It is consumed by the architecture consultant to inform decisions without
@@ -22,19 +22,19 @@ backend/tavern/
 │   ├── action_analyzer.py  # Keyword-based action classification (no LLM): ActionCategory enum, ActionAnalysis dataclass, analyze_action()
 │   ├── spells.py           # Spell resolution orchestrator: slot validation, attack/save/auto-hit routing, damage/healing calculation, condition application
 │   ├── srd_data.py         # SRD Data Access Layer: three-tier lookup (Campaign Override → Instance Library → SRD Baseline); resolve_npc_stat_block(stat_block_ref: str, campaign_id: UUID) → dict | None (three-tier monster lookup for NPC stat block population; logs warning not error on miss)
-│   └── scene.py            # NOT YET CREATED — ADR-0017 (Scene Identifier Convention) not yet implemented
+│   └── scene.py            # Scene identifier utilities (ADR-0017): normalise_scene_id(raw: str) -> str (strip/lowercase/replace spaces+hyphens with underscore/strip non-conforming chars/collapse underscores; raises ValueError on empty result or >64 chars); validate_scene_id(scene_id: str) -> bool (returns True if already canonical; does not raise)
 ├── dm/                 # DM layer — Narrator, Context Builder, LLM provider abstraction
 │   ├── narrator.py         # Narrator class; model routing (Sonnet/Haiku); streaming narration and summary compression; GMSignals delimiter buffering (stops forwarding to clients after ---GM_SIGNALS---); parse_gm_signals() integration; narrate_turn_stream() returns tuple[str, GMSignals]
-│   ├── context_builder.py  # StateSnapshot, TurnContext; builds and serializes game state for the Narrator; TurnContext.stealth_rolls: dict[str, int] (Path B Surprise, ADR-0014); StateSnapshot.session_mode: str (guards CombatClassifier, ADR-0011); StateSnapshot.npcs: list[dict] (compact NPC records, ADR-0013, scene-scoped and recency-filtered last 10 turns, excludes dead/fled unless plot_significant)
+│   ├── context_builder.py  # StateSnapshot, TurnContext; builds and serializes game state for the Narrator; TurnContext.stealth_rolls: dict[str, int] (Path B Surprise, ADR-0014); StateSnapshot.session_mode: str (guards CombatClassifier, ADR-0011); StateSnapshot.npcs: list[dict] (compact NPC records, ADR-0013, scene-scoped and recency-filtered last 10 turns, excludes dead/fled unless plot_significant); build_system_prompt() includes _SUGGESTED_ACTIONS_INSTRUCTIONS block instructing the Narrator to emit 0–3 suggested_actions in the GMSignals envelope (ADR-0015)
 │   ├── summary.py          # Rolling summary helpers: build_turn_summary_input(), trim_summary(); enforces 500-token budget
 │   ├── combat_classifier.py # CombatClassifier — Haiku-based binary LLM classifier for combat initiation detection; classify(action_text: str, snapshot: StateSnapshot) → CombatClassification; called pre-narration in exploration mode only; raises RuntimeError in combat mode (ADR-0011); no dependency on core/
-│   └── gm_signals.py       # GMSignals, SceneTransition, NPCUpdate dataclasses; GM_SIGNALS_DELIMITER = "---GM_SIGNALS---" constant; parse_gm_signals(raw: str) → GMSignals — safe-default on any parse failure; safe_default() → GMSignals; NOTE: suggested_actions field not yet present — ADR-0015 (Narrator-Generated Suggested Actions) not yet implemented
+│   └── gm_signals.py       # GMSignals, SceneTransition, NPCUpdate dataclasses; GM_SIGNALS_DELIMITER = "---GM_SIGNALS---" constant; parse_gm_signals(raw: str) → GMSignals — safe-default on any parse failure; safe_default() → GMSignals; GMSignals fields: scene_transition, npc_updates, suggested_actions: list[str] (0–3 action suggestions for the active player, ADR-0015; truncated to 3 entries, each capped at 80 chars)
 ├── api/                # FastAPI REST endpoints and WebSocket handler
 │   ├── campaigns.py        # Campaign CRUD + session lifecycle; calls Narrator for Claude-generated opening scene on create
 │   ├── characters.py       # Character creation and retrieval
-│   ├── turns.py            # Turn submission (202) and retrieval; wires action_analyzer + Rules Engine; broadcasts character.updated; full combat lifecycle: CombatClassifier invoked pre-narration (exploration mode only); GMSignals processed post-narration (npc_updates before scene_transition, mandatory ordering per ADR-0012); engine combat_end takes precedence over Narrator combat_end signal when both fire on same turn; player-initiated (Flow B) and NPC-initiated (Flow A) combat paths both produce identical combat.started WebSocket event
+│   ├── turns.py            # Turn submission (202) and retrieval; wires action_analyzer + Rules Engine; broadcasts character.updated; full combat lifecycle: CombatClassifier invoked pre-narration (exploration mode only); GMSignals processed post-narration (npc_updates before scene_transition, mandatory ordering per ADR-0012); engine combat_end takes precedence over Narrator combat_end signal when both fire on same turn; player-initiated (Flow B) and NPC-initiated (Flow A) combat paths both produce identical combat.started WebSocket event; mechanical_results persisted from engine results into Turn.mechanical_results JSONB column and broadcast in turn.narrative_end payload; turn.suggested_actions event emitted (using "type" key, not "event") immediately after turn.narrative_end when GMSignals.suggested_actions is non-empty (ADR-0015)
 │   ├── npcs.py             # NPC roster CRUD for campaign: POST (201), GET list, GET single, PATCH; PATCH enforces immutability — returns 422 if name, species, or appearance in request body; scoped to /api/campaigns/{campaign_id}/npcs
-│   ├── ws.py               # WebSocket endpoint + ConnectionManager
+│   ├── ws.py               # WebSocket endpoint + ConnectionManager; session.state recent_turns payload includes mechanical_results per turn
 │   ├── srd.py              # Custom SRD content: Instance Library CRUD + Campaign Override CRUD
 │   ├── dependencies.py     # Shared FastAPI dependencies (get_db_session, get_narrator, get_session_factory)
 │   ├── schemas.py          # Pydantic request/response schemas
@@ -222,7 +222,8 @@ Events currently emitted by the API server:
 | session.state | server → client | Campaign, characters, scene, recent_turns (on connect) |
 | turn.narrative_start | server → client | turn_id (streaming begins) |
 | turn.narrative_chunk | server → client | turn_id, chunk, sequence (token-by-token) |
-| turn.narrative_end | server → client | turn_id, full narrative, mechanical_results, character_updates |
+| turn.narrative_end | server → client | turn_id, narrative, mechanical_results |
+| turn.suggested_actions | server → client | turn_id, suggestions: list[str] (emitted only when suggestions non-empty; uses "type" key instead of "event") |
 | system.error | server → client | message (narrator or system error) |
 | combat.started | server → client | initiative_order: list[dict], surprised: list[str] |
 | combat.ended | server → client | {} |
@@ -311,7 +312,6 @@ Tavern's SRD data comes from `t11z/5e-database`, a fork of `5e-bits/5e-database`
 | ADR | Deviation | Reason | Temporary? |
 |---|---|---|---|
 | 0001 | Python constants for XP thresholds in srd_data.py | Data not yet in fork's 2024-levels collection | Yes — remove when fork includes XP data |
-| 0004 | Turn.mechanical_results JSONB column not yet wired into pipeline | Column and migration created; pipeline wiring pending | Yes — Wave 2 implementation |
 | 0006 | No auth middleware on any endpoint | Auth not yet implemented | Yes — Phase 6 |
 
 ## Architecture Questions
