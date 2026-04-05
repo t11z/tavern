@@ -23,11 +23,11 @@ backend/tavern/
 │   ├── spells.py           # Spell resolution orchestrator: slot validation, attack/save/auto-hit routing, damage/healing calculation, condition application
 │   ├── srd_data.py         # SRD Data Access Layer: three-tier lookup (Campaign Override → Instance Library → SRD Baseline); resolve_npc_stat_block(stat_block_ref: str, campaign_id: UUID) → dict | None (three-tier monster lookup for NPC stat block population; logs warning not error on miss)
 ├── dm/                 # DM layer — Narrator, Context Builder, LLM provider abstraction
-│   ├── narrator.py         # Narrator class; model routing (Sonnet/Haiku); streaming narration and summary compression; GMSignals delimiter buffering (stops forwarding to clients after ---GM_SIGNALS---); parse_gm_signals() integration; narrate_stream() returns tuple[str, GMSignals]
+│   ├── narrator.py         # Narrator class; model routing (Sonnet/Haiku); streaming narration and summary compression; GMSignals delimiter buffering (stops forwarding to clients after ---GM_SIGNALS---); parse_gm_signals() integration; narrate_turn_stream() returns tuple[str, GMSignals]
 │   ├── context_builder.py  # StateSnapshot, TurnContext; builds and serializes game state for the Narrator; TurnContext.stealth_rolls: dict[str, int] (Path B Surprise, ADR-0014); StateSnapshot.session_mode: str (guards CombatClassifier, ADR-0011); StateSnapshot.npcs: list[dict] (compact NPC records, ADR-0013, scene-scoped and recency-filtered last 10 turns, excludes dead/fled unless plot_significant)
 │   ├── summary.py          # Rolling summary helpers: build_turn_summary_input(), trim_summary(); enforces 500-token budget
 │   ├── combat_classifier.py # CombatClassifier — Haiku-based binary LLM classifier for combat initiation detection; classify(action_text: str, snapshot: StateSnapshot) → CombatClassification; called pre-narration in exploration mode only; raises RuntimeError in combat mode (ADR-0011); no dependency on core/
-│   └── gm_signals.py       # GMSignals, SceneTransition, NPCUpdate dataclasses; GM_SIGNALS_DELIMITER = "---GM_SIGNALS---" constant; parse_gm_signals(raw: str) → GMSignals — safe-default on any parse failure; safe_default() → GMSignals  [Wave 2 — may not exist yet]
+│   └── gm_signals.py       # GMSignals, SceneTransition, NPCUpdate dataclasses; GM_SIGNALS_DELIMITER = "---GM_SIGNALS---" constant; parse_gm_signals(raw: str) → GMSignals — safe-default on any parse failure; safe_default() → GMSignals
 ├── api/                # FastAPI REST endpoints and WebSocket handler
 │   ├── campaigns.py        # Campaign CRUD + session lifecycle; calls Narrator for Claude-generated opening scene on create
 │   ├── characters.py       # Character creation and retrieval
@@ -69,7 +69,7 @@ backend/tavern/
 │   ├── character.py        # Character, InventoryItem, CharacterCondition
 │   ├── session.py          # Session
 │   ├── turn.py             # Turn
-│   ├── npc.py              # NPC — campaign-scoped (campaign_id FK with CASCADE); immutable fields (name, species, appearance) enforced at model layer; mutable state (hp_current, hp_max, ac, disposition, status, scene_location); origin: "predefined"|"narrator_spawned"; plot_significant: bool (persists in snapshot after death/flight when True); validate_immutable_update(updates: dict) classmethod — raises ValueError on immutable field update
+│   ├── npc.py              # NPC — campaign-scoped (campaign_id FK with CASCADE); immutable fields (name, species, appearance) enforced at model layer; mutable state (hp_current, hp_max, ac, disposition, status, scene_location, motivation, creature_type, stat_block_ref, first_appeared_turn, last_seen_turn); identity-adjacent fields: role (immutable intent, set at spawn); origin: "predefined"|"narrator_spawned"; plot_significant: bool (persists in snapshot after death/flight when True); validate_immutable_update(updates: dict) classmethod — raises ValueError on immutable field update
 ├── alembic/            # Database migrations
 │   ├── env.py              # Async migration runner (asyncpg)
 │   ├── script.py.mako      # Migration file template
@@ -247,10 +247,10 @@ Events the discord_bot `gameplay.py` cog is ready to handle (not yet emitted by 
 | InventoryItem | inventory_items | belongs to Character |
 | CharacterCondition | character_conditions | belongs to Character |
 | Turn | turns | belongs to Session, belongs to Character |
-| NPC | npcs | belongs to Campaign (cascade delete); immutable identity fields (name, species, appearance); mutable state fields (hp_current, hp_max, ac, disposition, status, scene_location); origin and plot_significant flags |
+| NPC | npcs | belongs to Campaign (cascade delete); immutable identity fields (name, species, appearance); mutable state fields (hp_current, hp_max, ac, disposition, status, scene_location, motivation, creature_type, stat_block_ref, first_appeared_turn, last_seen_turn); role set at spawn; origin and plot_significant flags |
 
 SRD reference data is no longer stored in PostgreSQL. It is served from the
-5e-bits/5e-database MongoDB container via ``core/srd_data.py``.
+t11z/5e-database MongoDB container via ``core/srd_data.py``.
 
 ### MongoDB Collections (5e-database)
 
