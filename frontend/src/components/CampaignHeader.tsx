@@ -5,7 +5,7 @@ interface CampaignInfo {
 
 interface Props {
   campaign: CampaignInfo
-  wsStatus: 'connecting' | 'open' | 'closed' | 'error'
+  wsStatus: 'connecting' | 'open' | 'closed' | 'error' | 'fatal'
 }
 
 const statusDot: Record<Props['wsStatus'], { color: string; label: string }> = {
@@ -13,6 +13,7 @@ const statusDot: Record<Props['wsStatus'], { color: string; label: string }> = {
   connecting: { color: 'var(--color-gold-dim)', label: 'Connecting…' },
   closed: { color: 'var(--color-parchment-dim)', label: 'Disconnected' },
   error: { color: 'var(--color-danger)', label: 'Error' },
+  fatal: { color: 'var(--color-danger)', label: 'Campaign not found' },
 }
 
 export function CampaignHeader({ campaign, wsStatus }: Props) {

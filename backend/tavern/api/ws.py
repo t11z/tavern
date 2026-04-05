@@ -179,6 +179,9 @@ async def campaign_ws(
     )
     campaign = result.scalar_one_or_none()
     if campaign is None:
+        # Accept before close so the browser receives the WebSocket close frame
+        # with code 4004 rather than seeing a failed HTTP upgrade (status 0).
+        await websocket.accept()
         await websocket.close(code=4004, reason="Campaign not found")
         return
 

@@ -52,13 +52,17 @@ _GM_SIGNALS_INSTRUCTION = (
     "Format (copy exactly):\n"
     f"{GM_SIGNALS_DELIMITER}\n"
     '{"scene_transition": {"type": "none", "combatants": [], '
-    '"potential_surprised_characters": [], "reason": ""}, "npc_updates": []}\n\n'
+    '"potential_surprised_characters": [], "reason": ""}, "npc_updates": [], '
+    '"suggested_actions": ["Slip through the gap before the guards arrive", '
+    '"Demand the harbormaster explain herself"]}\n\n'
     'Rules for scene_transition.type: must be exactly "none", "combat_start", or '
     '"combat_end". Use "combat_start" only when NPCs initiate an unprovoked attack. '
     'Use "combat_end" only when all hostile NPCs are defeated or fled. '
     '"npc_updates" must be a list (may be empty). Each entry needs "event" '
     '(spawn|status_change|disposition_change|location_change) and "npc_name". '
-    "Always include both top-level keys."
+    '"suggested_actions" must be a JSON array of 0–3 first-person action phrases '
+    "(5–12 words each). Default to 2 suggestions. See earlier instructions for "
+    "full rules. Always include all three top-level keys."
 )
 
 NARRATION_MAX_TOKENS: int = 1024
