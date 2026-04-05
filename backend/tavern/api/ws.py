@@ -256,6 +256,7 @@ async def _send_session_state(
             "character_id": str(t.character_id),
             "player_action": t.player_action,
             "rules_result": t.rules_result,
+            "mechanical_results": t.mechanical_results,
             "narrative": t.narrative_response,
         }
         for t in reversed(turns_result.scalars().all())

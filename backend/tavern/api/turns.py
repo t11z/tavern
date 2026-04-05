@@ -123,24 +123,179 @@ async def _consume_spell_slot(character: Character, slot_level: int) -> bool:
     return True
 
 
+def _mechanical_results_from_attack(
+    attack_result,
+    character_name: str,
+    target_name: str | None,
+    damage_type: str,
+) -> list[dict]:
+    """Build mechanical_results entries from a single AttackResult.
+
+    Produces an ``attack_roll`` entry and, on a hit, a ``damage`` entry.
+    """
+    entries: list[dict] = []
+
+    target = target_name or "target"
+    hit = attack_result.hit and not attack_result.total_cover
+
+    attack_entry: dict = {
+        "type": "attack_roll",
+        "attacker": character_name,
+        "target": target,
+        "roll": attack_result.attack_roll.total,
+        "ac": attack_result.effective_ac,
+        "hit": hit,
+    }
+    if hit and attack_result.damage is not None:
+        attack_entry["damage_amount"] = attack_result.damage.total
+        attack_entry["damage_type"] = attack_result.damage.damage_type
+    entries.append(attack_entry)
+
+    if hit and attack_result.damage is not None:
+        entries.append(
+            {
+                "type": "damage",
+                "target": target,
+                "amount": attack_result.damage.total,
+                "damage_type": attack_result.damage.damage_type,
+            }
+        )
+
+    return entries
+
+
+def _mechanical_results_from_spell(
+    spell_result,
+    character_name: str,
+    targets: list[dict],
+) -> list[dict]:
+    """Build mechanical_results entries from a SpellResult.
+
+    Produces a ``spell_cast`` entry, per-target ``saving_throw`` / ``damage``
+    / ``healing`` entries, and per-target ``condition_applied`` entries.
+    """
+    entries: list[dict] = []
+
+    target_names = [t.get("name", f"target {i}") for i, t in enumerate(targets)]
+
+    # spell_cast summary entry
+    spell_entry: dict = {
+        "type": "spell_cast",
+        "caster": character_name,
+        "spell_name": spell_result.spell_name,
+        "slot_level": spell_result.slot_consumed,
+        "targets": target_names,
+    }
+    entries.append(spell_entry)
+
+    # attack_roll for spell attack spells (single target in M1)
+    if spell_result.attack_result is not None:
+        ar = spell_result.attack_result
+        target = target_names[0] if target_names else "target"
+        hit = ar.hit and not ar.total_cover
+        attack_entry: dict = {
+            "type": "attack_roll",
+            "attacker": character_name,
+            "target": target,
+            "roll": ar.attack_roll.total,
+            "ac": ar.effective_ac,
+            "hit": hit,
+        }
+        if hit and ar.damage is not None:
+            attack_entry["damage_amount"] = ar.damage.total
+            attack_entry["damage_type"] = ar.damage.damage_type
+        entries.append(attack_entry)
+
+    # saving_throw entries (one per target that had a save)
+    for dmg_app in spell_result.damage:
+        if dmg_app.save_roll is not None:
+            t_name = (
+                target_names[dmg_app.target_index]
+                if dmg_app.target_index < len(target_names)
+                else f"target {dmg_app.target_index}"
+            )
+            entries.append(
+                {
+                    "type": "saving_throw",
+                    "target": t_name,
+                    "roll": dmg_app.save_roll.total,
+                    "success": dmg_app.saved,
+                }
+            )
+
+    # damage entries
+    for dmg_app in spell_result.damage:
+        if dmg_app.damage_total > 0:
+            t_name = (
+                target_names[dmg_app.target_index]
+                if dmg_app.target_index < len(target_names)
+                else f"target {dmg_app.target_index}"
+            )
+            entries.append(
+                {
+                    "type": "damage",
+                    "target": t_name,
+                    "amount": dmg_app.damage_total,
+                    "damage_type": dmg_app.damage_type,
+                }
+            )
+
+    # healing entries
+    if spell_result.healing:
+        for heal_app in spell_result.healing:
+            t_name = (
+                target_names[heal_app.target_index]
+                if heal_app.target_index < len(target_names)
+                else f"target {heal_app.target_index}"
+            )
+            entries.append(
+                {
+                    "type": "healing",
+                    "target": t_name,
+                    "amount": heal_app.healing_amount,
+                }
+            )
+
+    # condition_applied / condition_removed entries
+    for cond_app in spell_result.conditions_applied:
+        t_name = (
+            target_names[cond_app.target_index]
+            if cond_app.target_index < len(target_names)
+            else f"target {cond_app.target_index}"
+        )
+        entry_type = "condition_applied" if cond_app.applied else "condition_removed"
+        entries.append(
+            {
+                "type": entry_type,
+                "target": t_name,
+                "condition": cond_app.condition_name,
+                "source": spell_result.spell_name,
+            }
+        )
+
+    return entries
+
+
 async def _resolve_action(
     analysis: ActionAnalysis,
     character: Character,
     campaign_id: uuid.UUID,
-) -> tuple[str | None, dict | None]:
+) -> tuple[str | None, dict | None, list[dict] | None]:
     """Route the classified action to the appropriate Rules Engine function.
 
     Returns:
-        ``(rules_result, char_update)`` where *rules_result* is a human-readable
-        summary string for the Context Builder and *char_update* is a dict
-        broadcast via the ``character.updated`` WebSocket event, or ``None``
-        if no character state changed.
+        ``(rules_result, char_update, mechanical_results)`` where
+        *rules_result* is a human-readable summary string for the Context
+        Builder, *char_update* is a dict broadcast via the
+        ``character.updated`` WebSocket event (or ``None`` if no character
+        state changed), and *mechanical_results* is a list of typed entry
+        dicts for the JSONB column (or ``None`` for narrative-only turns).
     """
     char_update: dict | None = None
 
     if analysis.category == ActionCategory.CAST_SPELL:
         if analysis.spell_index is None:
-            return ("Cast a spell (unrecognized — no mechanical resolution).", None)
+            return ("Cast a spell (unrecognized — no mechanical resolution).", None, None)
 
         caster = _character_to_caster_state(character)
 
@@ -151,6 +306,7 @@ async def _resolve_action(
         # Build a minimal placeholder target
         placeholder_target = {
             "ac": _PLACEHOLDER_TARGET_AC,
+            "name": "target",
             "ability_scores": {"STR": 10, "DEX": 10, "CON": 10, "INT": 10, "WIS": 10, "CHA": 10},
             "saving_throw_modifiers": {},
         }
@@ -165,7 +321,7 @@ async def _resolve_action(
             )
         except ValueError as exc:
             logger.debug("Spell resolution skipped for %r: %s", analysis.spell_index, exc)
-            return (f"Attempted to cast {analysis.spell_index} — {exc}", None)
+            return (f"Attempted to cast {analysis.spell_index} — {exc}", None, None)
 
         if result.slot_consumed is not None:
             await _consume_spell_slot(character, result.slot_consumed)
@@ -185,7 +341,12 @@ async def _resolve_action(
                 "spell_slots": character.spell_slots,
             }
 
-        return (result.description, char_update)
+        mechanical_results = _mechanical_results_from_spell(
+            result,
+            character_name=character.name,
+            targets=[placeholder_target],
+        )
+        return (result.description, char_update, mechanical_results)
 
     if analysis.category in (ActionCategory.MELEE_ATTACK, ActionCategory.RANGED_ATTACK):
         mods = character.features.get("ability_modifiers", {})
@@ -224,7 +385,13 @@ async def _resolve_action(
             summary = f"Attack roll {attack_result.attack_roll.total} — miss."
 
         target = f" {analysis.target_name}" if analysis.target_name else ""
-        return (f"Attacks{target}: {summary}", None)
+        mechanical_results = _mechanical_results_from_attack(
+            attack_result,
+            character_name=character.name,
+            target_name=analysis.target_name,
+            damage_type=damage_type,
+        )
+        return (f"Attacks{target}: {summary}", None, mechanical_results)
 
     if analysis.category == ActionCategory.ABILITY_CHECK:
         mods = character.features.get("ability_modifiers", {})
@@ -234,10 +401,11 @@ async def _resolve_action(
         return (
             f"{ability} check: rolled {d20_result.natural} + {modifier} = {d20_result.total}.",
             None,
+            None,
         )
 
     # Movement, Interaction, Narrative, Unknown — no mechanical resolution
-    return (None, None)
+    return (None, None, None)
 
 
 # ---------------------------------------------------------------------------
@@ -569,6 +737,7 @@ async def _stream_narrative(
     current_summary: str,
     session_factory: async_sessionmaker,
     world_state: dict,
+    mechanical_results: list[dict] | None = None,
 ) -> None:
     """Run the full post-narration pipeline as a background task.
 
@@ -610,7 +779,11 @@ async def _stream_narrative(
         campaign_id,
         {
             "event": "turn.narrative_end",
-            "payload": {"turn_id": str(turn_id), "narrative": full_narrative},
+            "payload": {
+                "turn_id": str(turn_id),
+                "narrative": full_narrative,
+                "mechanical_results": mechanical_results,
+            },
         },
     )
 
@@ -888,10 +1061,12 @@ async def submit_turn(
     # 4. Run Rules Engine: classify action → resolve mechanics → update character state
     try:
         analysis = analyze_action(body.action, _character_to_caster_state(character))
-        rules_result, char_update = await _resolve_action(analysis, character, campaign_id)
+        rules_result, char_update, mechanical_results = await _resolve_action(
+            analysis, character, campaign_id
+        )
     except Exception as exc:
         logger.warning("Rules Engine error for turn (campaign=%s): %s", campaign_id, exc)
-        rules_result, char_update = None, None
+        rules_result, char_update, mechanical_results = None, None, None
 
     # 5. Determine sequence number and build snapshot
     sequence_number = campaign.state.turn_count + 1
@@ -982,6 +1157,7 @@ async def submit_turn(
         sequence_number=sequence_number,
         player_action=body.action,
         rules_result=rules_result,
+        mechanical_results=mechanical_results,
         narrative_response=None,  # Set by background task when streaming completes
     )
     db.add(turn)
@@ -1014,6 +1190,7 @@ async def submit_turn(
         current_summary=campaign_state.rolling_summary,
         session_factory=session_factory,
         world_state=world_state_copy,
+        mechanical_results=mechanical_results,
     )
 
     return TurnSubmitResponse(turn_id=turn.id, sequence_number=sequence_number)
