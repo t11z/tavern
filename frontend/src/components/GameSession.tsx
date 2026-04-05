@@ -4,6 +4,7 @@ import { useWebSocket } from '../hooks/useWebSocket'
 import { useBreakpoint } from '../hooks/useBreakpoint'
 import { CampaignHeader } from './CampaignHeader'
 import { CharacterPanel } from './CharacterPanel'
+import { CharacterSheetOverlay } from './CharacterSheetOverlay'
 import { ChatLog } from './ChatLog'
 import { ChatInput } from './ChatInput'
 
@@ -21,6 +22,8 @@ export function GameSession({ campaignId, onEndSession }: Props) {
   const [ending, setEnding] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [characterSheetOpen, setCharacterSheetOpen] = useState(false)
+  const [sheetCharacterId, setSheetCharacterId] = useState<string | null>(null)
   const { isMobile } = useBreakpoint()
 
   const showToast = (msg: string) => {
@@ -163,6 +166,9 @@ export function GameSession({ campaignId, onEndSession }: Props) {
   const activeChar: CharacterState | undefined = session.characters.find(
     (c) => c.id === activeCharId,
   )
+  const sheetCharacter: CharacterState | undefined = session.characters.find(
+    (c) => c.id === sheetCharacterId,
+  )
 
   const sidebarStyle: React.CSSProperties = isMobile
     ? {
@@ -217,7 +223,11 @@ export function GameSession({ campaignId, onEndSession }: Props) {
             key={c.id}
             character={c}
             isActive={c.id === activeCharId}
-            onClick={() => setActiveCharId(c.id)}
+            onClick={() => {
+              setActiveCharId(c.id)
+              setSheetCharacterId(c.id)
+              setCharacterSheetOpen(true)
+            }}
           />
         ))}
 
@@ -264,6 +274,14 @@ export function GameSession({ campaignId, onEndSession }: Props) {
           onSubmit={handleSubmit}
         />
       </div>
+
+      {/* Character sheet overlay */}
+      {characterSheetOpen && sheetCharacter && (
+        <CharacterSheetOverlay
+          character={sheetCharacter}
+          onClose={() => setCharacterSheetOpen(false)}
+        />
+      )}
     </div>
   )
 }
