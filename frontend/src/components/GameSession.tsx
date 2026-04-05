@@ -62,6 +62,7 @@ export function GameSession({ campaignId, onEndSession }: Props) {
   const [ending, setEnding] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
   const [combat, setCombat] = useState<{ initiative_order: InitiativeEntry[]; surprised: string[] } | null>(null)
+  const [suggestions, setSuggestions] = useState<string[]>([])
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [characterSheetOpen, setCharacterSheetOpen] = useState(false)
   const [sheetCharacterId, setSheetCharacterId] = useState<string | null>(null)
@@ -96,6 +97,7 @@ export function GameSession({ campaignId, onEndSession }: Props) {
         }
         case 'turn.narrative_start':
           setStreaming('')
+          setSuggestions([])
           break
         case 'turn.narrative_chunk':
           setStreaming((prev) => (prev ?? '') + event.payload.chunk)
@@ -143,6 +145,9 @@ export function GameSession({ campaignId, onEndSession }: Props) {
           break
         case 'combat.ended':
           setCombat(null)
+          break
+        case 'turn.suggested_actions':
+          setSuggestions(event.payload.suggestions)
           break
       }
     },
@@ -359,6 +364,8 @@ export function GameSession({ campaignId, onEndSession }: Props) {
         <ChatInput
           disabled={streaming !== null || wsStatus !== 'open'}
           onSubmit={handleSubmit}
+          suggestions={suggestions}
+          onSuggestionDismiss={() => setSuggestions([])}
         />
       </div>
 
