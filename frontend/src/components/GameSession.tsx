@@ -316,6 +316,11 @@ export function GameSession({ campaignId, onEndSession }: Props) {
         {combat && (
           <div style={s.combatPanel}>
             <span style={s.combatBadge}>COMBAT</span>
+            <div style={s.initiativeHeader}>
+              <span style={s.initiativeRank}>#</span>
+              <span style={{ ...s.initiativeName, color: 'var(--color-parchment-dim)', fontSize: '0.65rem', letterSpacing: '0.08em' }}>Name</span>
+              <span style={{ ...s.initiativeRoll, color: 'var(--color-parchment-dim)', fontSize: '0.65rem', letterSpacing: '0.08em' }}>Init</span>
+            </div>
             {combat.initiative_order.map((entry, i) => {
               const char = session.characters.find((c) => c.id === entry.character_id)
               const name = char?.name ?? entry.character_id
@@ -455,6 +460,15 @@ const s: Record<string, React.CSSProperties> = {
     color: 'var(--color-danger)',
     fontWeight: 700,
     marginBottom: '0.25rem',
+  },
+  initiativeHeader: {
+    display: 'flex',
+    alignItems: 'baseline',
+    gap: '0.3rem',
+    fontSize: '0.65rem',
+    color: 'var(--color-parchment-dim)',
+    opacity: 0.6,
+    marginBottom: '0.1rem',
   },
   initiativeEntry: {
     display: 'flex',
