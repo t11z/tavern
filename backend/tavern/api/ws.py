@@ -214,6 +214,7 @@ async def _send_session_state(
 ) -> None:
     """Send the session.state event with the current game snapshot."""
     scene: dict = {}
+    ws_data: dict = {}
     if campaign.state:
         ws_data = campaign.state.world_state or {}
         scene = {
@@ -260,6 +261,13 @@ async def _send_session_state(
         for t in reversed(turns_result.scalars().all())
     ]
 
+    combat: dict | None = None
+    if ws_data.get("mode") == "combat":
+        combat = {
+            "initiative_order": ws_data.get("initiative_order", []),
+            "surprised": ws_data.get("surprised", []),
+        }
+
     await websocket.send_json(
         {
             "event": "session.state",
@@ -273,6 +281,7 @@ async def _send_session_state(
                 "characters": characters,
                 "scene": scene,
                 "recent_turns": recent_turns,
+                "combat": combat,
             },
         }
     )

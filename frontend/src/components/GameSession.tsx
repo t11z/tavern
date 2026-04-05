@@ -88,6 +88,7 @@ export function GameSession({ campaignId, onEndSession }: Props) {
               narrative: t.narrative ?? null,
             })),
           )
+          setCombat(s.combat ?? null)
           if (s.characters.length > 0 && !activeCharId) {
             setActiveCharId(s.characters[0].id)
           }

@@ -112,6 +112,7 @@ export interface SessionState {
   characters: CharacterState[]
   scene: SessionScene
   recent_turns: TurnEntry[]
+  combat: { initiative_order: InitiativeEntry[]; surprised: string[] } | null
 }
 
 // ---------------------------------------------------------------------------
