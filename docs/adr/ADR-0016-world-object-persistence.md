@@ -1,6 +1,6 @@
 # ADR-0016: World Object Persistence
 
-- **Status**: Proposed
+- **Status**: Accepted
 - **Date**: 2026-04-05
 - **Deciders**: [@t11z](https://github.com/t11z)
 - **Scope**: `backend/tavern/core/` (Rules Engine), `backend/tavern/dm/` (Context Builder, GMSignals), `backend/tavern/api/` (REST endpoints), database schema (`world_objects` table), `frontend/` (Playercard), `backend/tavern/discord_bot/` (Playercard thread)
