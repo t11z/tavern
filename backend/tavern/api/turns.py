@@ -372,14 +372,16 @@ async def _run_combat_start(
     )
 
     # Transition to combat mode
+    order_payload, surprised_ids = _build_initiative_order_payload(ordered)
     world_state = dict(campaign_state.world_state or {})
     world_state["mode"] = "combat"
+    world_state["initiative_order"] = order_payload
+    world_state["surprised"] = surprised_ids
     campaign_state.world_state = world_state
     campaign_state.updated_at = datetime.now(tz=UTC)
     await db.flush()
 
     # Broadcast
-    order_payload, surprised_ids = _build_initiative_order_payload(ordered)
     await manager.broadcast_combat_started(campaign_id, order_payload, surprised_ids)
     logger.info(
         "Combat started (campaign=%s): %d participants, %d surprised",
@@ -644,6 +646,8 @@ async def _stream_narrative(
                 updated_ws = dict(campaign_state.world_state or {})
                 updated_ws["mode"] = "exploration"
                 updated_ws.pop("engine_combat_end", None)
+                updated_ws.pop("initiative_order", None)
+                updated_ws.pop("surprised", None)
                 campaign_state.world_state = updated_ws
                 campaign_state.updated_at = datetime.now(tz=UTC)
                 await db.flush()
@@ -737,6 +741,8 @@ async def _stream_narrative(
                 # Narrator-signalled combat end (no Engine authority override)
                 updated_ws = dict(campaign_state.world_state or {})
                 updated_ws["mode"] = "exploration"
+                updated_ws.pop("initiative_order", None)
+                updated_ws.pop("surprised", None)
                 campaign_state.world_state = updated_ws
                 campaign_state.updated_at = datetime.now(tz=UTC)
                 await db.flush()
