@@ -34,7 +34,7 @@ services:
     restart: unless-stopped
 
   5e-database:
-    image: ghcr.io/t11z/5e-database:v4.6.3-tavern.1
+    image: ghcr.io/t11z/5e-database:v4.6.3-tavern.2
     volumes:
       - srd_data:/data/db
     healthcheck:
