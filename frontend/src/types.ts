@@ -158,6 +158,26 @@ export interface WsCharacterUpdatedEvent {
   }
 }
 
+export interface InitiativeEntry {
+  character_id: string
+  participant_type: string
+  initiative_result: number
+  surprised: boolean
+}
+
+export interface WsCombatStartedEvent {
+  event: 'combat.started'
+  payload: {
+    initiative_order: InitiativeEntry[]
+    surprised: string[]
+  }
+}
+
+export interface WsCombatEndedEvent {
+  event: 'combat.ended'
+  payload: Record<string, never>
+}
+
 export type WsEvent =
   | WsSessionStateEvent
   | WsNarrativeStartEvent
@@ -165,6 +185,8 @@ export type WsEvent =
   | WsNarrativeEndEvent
   | WsSystemErrorEvent
   | WsCharacterUpdatedEvent
+  | WsCombatStartedEvent
+  | WsCombatEndedEvent
 
 // ---------------------------------------------------------------------------
 // API request/response shapes
