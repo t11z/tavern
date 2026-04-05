@@ -730,6 +730,7 @@ async def _stream_narrative(
     *,
     campaign_id: uuid.UUID,
     turn_id: uuid.UUID,
+    character_id: uuid.UUID,
     snapshot,
     narrator: Narrator,
     character_name: str,
@@ -788,13 +789,19 @@ async def _stream_narrative(
     )
 
     # Emit suggested actions immediately after narrative_end (ADR-0015)
+    logger.debug(
+        "GMSignals suggested_actions after parsing: %r (turn_id=%s)",
+        gm_signals.suggested_actions,
+        turn_id,
+    )
     if gm_signals.suggested_actions:
         await manager.broadcast(
             campaign_id,
             {
-                "type": "turn.suggested_actions",
+                "event": "turn.suggested_actions",
                 "payload": {
                     "turn_id": str(turn_id),
+                    "character_id": str(character_id),
                     "suggestions": gm_signals.suggested_actions,
                 },
             },
@@ -1183,6 +1190,7 @@ async def submit_turn(
         _stream_narrative,
         campaign_id=campaign_id,
         turn_id=turn.id,
+        character_id=body.character_id,
         snapshot=snapshot,
         narrator=narrator,
         character_name=character.name,

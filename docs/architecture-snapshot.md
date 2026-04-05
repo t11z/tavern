@@ -1,6 +1,6 @@
 # Architecture Snapshot
 
-> Last updated: 2026-04-05 — Wave 2: ADR-0015 (suggested actions), ADR-0017 (scene IDs), mechanical_results pipeline
+> Last updated: 2026-04-06 — Fix turn.suggested_actions: correct event key, add character_id to payload
 >
 > This document is maintained by Claude Code per the rules in CLAUDE.md.
 > It is consumed by the architecture consultant to inform decisions without
@@ -223,7 +223,7 @@ Events currently emitted by the API server:
 | turn.narrative_start | server → client | turn_id (streaming begins) |
 | turn.narrative_chunk | server → client | turn_id, chunk, sequence (token-by-token) |
 | turn.narrative_end | server → client | turn_id, narrative, mechanical_results |
-| turn.suggested_actions | server → client | turn_id, suggestions: list[str] (emitted only when suggestions non-empty; uses "type" key instead of "event") |
+| turn.suggested_actions | server → client | turn_id, character_id, suggestions: list[str] (emitted only when suggestions non-empty) |
 | system.error | server → client | message (narrator or system error) |
 | combat.started | server → client | initiative_order: list[dict], surprised: list[str] |
 | combat.ended | server → client | {} |
