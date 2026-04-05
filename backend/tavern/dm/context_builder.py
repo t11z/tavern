@@ -19,14 +19,15 @@ Total target: ~2,400 tokens per request.
 from __future__ import annotations
 
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from tavern.models.campaign import Campaign, CampaignState
 from tavern.models.character import Character
+from tavern.models.npc import NPC
 
 # ---------------------------------------------------------------------------
 # Token budget constants (ADR-0002)
@@ -108,6 +109,13 @@ class StateSnapshot:
     scene: SceneContext
     rolling_summary: str
     current_turn: TurnContext
+    npcs: list[dict] = field(default_factory=list)
+    """Compact NPC records from the database (ADR-0013).
+
+    Each entry is a plain dict produced by _serialize_npc_compact().
+    Fields vary by mode: exploration mode omits combat stats; combat mode
+    includes hp_current, hp_max, ac for alive NPCs.
+    """
 
 
 # ---------------------------------------------------------------------------
@@ -314,10 +322,36 @@ async def build_snapshot(
     # Build scene context
     scene = _build_scene_context(campaign.state)
 
+    # Query NPCs relevant to the current scene / recent turns (ADR-0013)
+    current_turn_number = campaign.state.turn_count
+    recency_threshold = max(0, current_turn_number - 10)
+    scene_location = str((campaign.state.world_state or {}).get("location", ""))
+
+    npc_result = await db_session.execute(
+        select(NPC)
+        .where(NPC.campaign_id == campaign_id)
+        .where(
+            or_(
+                NPC.scene_location == scene_location,
+                NPC.last_seen_turn >= recency_threshold,
+            )
+        )
+        .where(
+            or_(
+                NPC.status.notin_(["dead", "fled"]),
+                NPC.plot_significant.is_(True),
+            )
+        )
+    )
+    raw_npcs = npc_result.scalars().all()
+
     # Derive system prompt parameters
     ws = campaign.state.world_state or {}
     campaign_tone: str | None = ws.get("tone") or None
     is_multiplayer = len(campaign.characters) > 1
+    is_combat = str(ws.get("mode", "exploration")).lower() == "combat"
+
+    npc_dicts = [_serialize_npc_compact(n, combat_mode=is_combat) for n in raw_npcs]
 
     system_prompt = build_system_prompt(
         dm_persona=campaign.dm_persona,
@@ -331,12 +365,62 @@ async def build_snapshot(
         scene=scene,
         rolling_summary=campaign.state.rolling_summary,
         current_turn=current_turn,
+        npcs=npc_dicts,
     )
 
 
 # ---------------------------------------------------------------------------
 # Snapshot serialisation
 # ---------------------------------------------------------------------------
+
+
+def _serialize_npc_compact(npc: NPC, *, combat_mode: bool = False) -> dict:
+    """Produce a compact NPC dict for the snapshot.
+
+    Exploration mode: name, role, disposition, status, appearance.
+    Combat mode: additionally includes hp_current, hp_max, ac for alive NPCs.
+    """
+    entry: dict = {
+        "name": npc.name,
+        "role": npc.role,
+        "disposition": npc.disposition,
+        "status": npc.status,
+        "appearance": npc.appearance,
+    }
+    if combat_mode and npc.status == "alive":
+        entry["hp_current"] = npc.hp_current
+        entry["hp_max"] = npc.hp_max
+        entry["ac"] = npc.ac
+    return entry
+
+
+def _serialize_npcs(npcs: list[dict]) -> str:
+    """Render NPC list as plain text for the prompt."""
+    if not npcs:
+        return ""
+    lines: list[str] = ["NPCs:"]
+    for npc in npcs:
+        name = npc.get("name", "Unknown")
+        role = npc.get("role")
+        disposition = npc.get("disposition", "unknown")
+        status = npc.get("status", "unknown")
+        appearance = npc.get("appearance")
+
+        label = f"{name}"
+        if role:
+            label += f" ({role})"
+        label += f" — {disposition}, {status}"
+        if appearance:
+            label += f". {appearance}"
+
+        # Combat stats
+        if "hp_current" in npc and npc["hp_current"] is not None:
+            label += f" HP: {npc['hp_current']}/{npc.get('hp_max', '?')}"
+        if "ac" in npc and npc["ac"] is not None:
+            label += f" AC: {npc['ac']}"
+
+        lines.append(f"  {label}")
+    return "\n".join(lines)
 
 
 def _serialize_character(char: CharacterState) -> str:
@@ -408,6 +492,10 @@ def serialize_snapshot(snapshot: StateSnapshot) -> dict[str, object]:
 
     # 2. Scene
     sections.append(_serialize_scene(snapshot.scene))
+
+    # 2b. NPCs (ADR-0013) — rendered after scene, before rolling summary
+    if snapshot.npcs:
+        sections.append(_serialize_npcs(snapshot.npcs))
 
     # 3. Rolling summary
     if snapshot.rolling_summary:
