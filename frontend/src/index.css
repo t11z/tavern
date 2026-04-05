@@ -20,6 +20,10 @@
   padding: 0;
 }
 
+html {
+  font-size: 32px;
+}
+
 html, body, #root {
   height: 100%;
 }
@@ -28,7 +32,6 @@ body {
   background-color: var(--color-bg);
   color: var(--color-parchment);
   font-family: var(--font-serif);
-  font-size: 32px;
   line-height: 1.6;
 }
 
