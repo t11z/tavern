@@ -172,7 +172,7 @@ async def _resolve_action(
         hp_changed = False
         if result.healing:
             for h in result.healing:
-                new_hp = min(character.max_hp, character.hp + h.hp_restored)
+                new_hp = min(character.max_hp, character.hp + h.healing_amount)
                 character.hp = new_hp
                 hp_changed = True
 
