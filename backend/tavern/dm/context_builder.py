@@ -19,7 +19,7 @@ Total target: ~2,400 tokens per request.
 from __future__ import annotations
 
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -94,6 +94,11 @@ class TurnContext:
     """Human-readable Rules Engine result, e.g. 'Your attack hits. 14 damage.'
     None when the action has no mechanical resolution."""
 
+    stealth_rolls: dict[str, int] = field(default_factory=dict)
+    """Stealth check results from the preceding turn, keyed by character_id.
+    Populated when the preceding turn contained a Stealth check result.
+    Used by Path B surprise mechanics (ADR-0014)."""
+
 
 @dataclass
 class StateSnapshot:
@@ -108,6 +113,9 @@ class StateSnapshot:
     scene: SceneContext
     rolling_summary: str
     current_turn: TurnContext
+    session_mode: str = field(default="exploration")
+    """Current session mode: 'exploration' or 'combat'.
+    Guards the CombatClassifier — classifier must not run in combat mode (ADR-0011)."""
 
 
 # ---------------------------------------------------------------------------
