@@ -170,7 +170,8 @@ def _build_help_embed() -> discord.Embed:
             "`/lfg <description>` — Post a Looking For Group listing\n"
             "`/tavern start` — Resume a paused session\n"
             "`/tavern stop` — Pause the active session\n"
-            "`/tavern end` — Permanently end the campaign"
+            "`/tavern end` — Permanently end the campaign\n"
+            "`/tavern delete` — Delete campaign and all data"
         ),
         inline=False,
     )
@@ -249,6 +250,44 @@ class _ConfirmEndView(discord.ui.View):
     @discord.ui.button(label="No — keep going", style=discord.ButtonStyle.secondary)
     async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
         await interaction.response.send_message("Campaign end cancelled.", ephemeral=True)
+        self.stop()
+
+
+class _ConfirmDeleteView(discord.ui.View):
+    """Yes / No confirmation before permanently deleting a campaign and all its data."""
+
+    def __init__(self, cog: CampaignCog, campaign_id: str, campaign_name: str) -> None:
+        super().__init__(timeout=60)
+        self.cog = cog
+        self.campaign_id = campaign_id
+        self.campaign_name = campaign_name
+
+    @discord.ui.button(label="Yes — delete everything", style=discord.ButtonStyle.danger)
+    async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        await interaction.response.defer(thinking=True)
+        try:
+            await self.cog.api.delete_campaign(self.campaign_id)
+        except TavernAPIError as exc:
+            logger.error("Failed to delete campaign %s: %s", self.campaign_id, exc)
+            await interaction.followup.send(
+                f"❌ Failed to delete campaign: {exc.message}", ephemeral=True
+            )
+            self.stop()
+            return
+
+        # Clean up bot state for this channel
+        if interaction.channel_id is not None:
+            self.cog.state.unbind_channel(interaction.channel_id)
+            self.cog.state.clear_game_mode(interaction.channel_id)
+
+        await interaction.followup.send(
+            f"🗑️ **{self.campaign_name}** has been permanently deleted."
+        )
+        self.stop()
+
+    @discord.ui.button(label="No — keep it", style=discord.ButtonStyle.secondary)
+    async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        await interaction.response.send_message("Campaign deletion cancelled.", ephemeral=True)
         self.stop()
 
 
@@ -513,6 +552,46 @@ class CampaignCog(commands.Cog):
         await interaction.response.send_message(
             f"⚠️ End **{campaign_name}** permanently? This cannot be undone.",
             view=view,
+        )
+
+    # ------------------------------------------------------------------
+    # /tavern delete
+    # ------------------------------------------------------------------
+
+    @tavern.command(
+        name="delete", description="Permanently delete this campaign and all its data."
+    )
+    async def delete(self, interaction: discord.Interaction) -> None:
+        binding = await self._require_binding(interaction)
+        if binding is None:
+            return
+
+        campaign_id = str(binding.campaign_id)
+        if not await self._require_owner(interaction, campaign_id):
+            return
+
+        try:
+            campaign = await self.api.get_campaign(campaign_id)
+        except TavernAPIError as exc:
+            await interaction.response.send_message(
+                f"❌ Could not fetch campaign: {exc.message}", ephemeral=True
+            )
+            return
+
+        if campaign.get("status") == "active":
+            await interaction.response.send_message(
+                "❌ End the active session first (`/tavern stop`) before deleting the campaign.",
+                ephemeral=True,
+            )
+            return
+
+        campaign_name = campaign.get("name", "Campaign")
+        view = _ConfirmDeleteView(self, campaign_id, campaign_name)
+        await interaction.response.send_message(
+            f"⚠️ **Permanently delete '{campaign_name}'?** "
+            "This removes all characters, turns, and progress. This cannot be undone.",
+            view=view,
+            ephemeral=True,
         )
 
     # ------------------------------------------------------------------
