@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import type { CharacterState } from '../types'
-import { SKILL_ABILITY_MAP, CONDITION_SUMMARIES } from '../constants'
+import { ABILITY_EMOJIS, SKILL_ABILITY_MAP, CONDITION_SUMMARIES } from '../constants'
 
 interface Props {
   character: CharacterState
@@ -22,10 +22,6 @@ const ABILITY_FULL: Record<string, string> = {
 // Helper functions
 // ---------------------------------------------------------------------------
 
-function abilityMod(score: number): number {
-  return Math.floor((score - 10) / 2)
-}
-
 function calcProfBonus(level: number): number {
   return Math.floor((level - 1) / 4) + 2
 }
@@ -34,14 +30,29 @@ function modStr(mod: number): string {
   return mod >= 0 ? `+${mod}` : `${mod}`
 }
 
+/** Get ability modifier — server value preferred, local calc as fallback. */
+function getMod(character: CharacterState, abbr: string): number {
+  if (character.ability_modifiers?.[abbr] !== undefined) {
+    return character.ability_modifiers[abbr]
+  }
+  const score = character.ability_scores?.[abbr] ?? 10
+  return Math.floor((score - 10) / 2)
+}
+
+function modColor(mod: number): string {
+  if (mod > 0) return 'var(--color-success)'
+  if (mod < 0) return 'var(--color-danger)'
+  return 'var(--color-parchment-dim)'
+}
+
 function hasProficiency(character: CharacterState, name: string): boolean {
   if (!character.proficiencies?.length) return false
   const lower = name.toLowerCase()
   return character.proficiencies.some((p) => p.toLowerCase() === lower)
 }
 
-// Saving throw proficiency accepts the abbreviation ("STR"), full name
-// ("Strength"), or "Strength saving throw" — whichever the server sends.
+// Saving throw proficiency accepts abbreviation ("STR"), full name ("Strength"),
+// or "Strength saving throw" — whichever the server sends.
 function hasSaveProficiency(character: CharacterState, abbr: string): boolean {
   if (!character.proficiencies?.length) return false
   const full = ABILITY_FULL[abbr] ?? ''
@@ -91,18 +102,21 @@ export function CharacterSheetOverlay({ character, onClose }: Props) {
   const hpColor =
     hpPct > 60 ? 'var(--color-success)' : hpPct > 30 ? 'var(--color-gold)' : 'var(--color-danger)'
 
+  // Subtitle: species + class_name + level
   const subtitleParts = [character.species, character.class_name, `— Level ${character.level}`]
     .filter(Boolean)
   const subtitle = subtitleParts.join(' ')
 
   const initiativeMod =
-    character.initiative_modifier ?? (scores ? abilityMod(scores['DEX'] ?? 10) : null)
+    character.initiative_modifier ?? getMod(character, 'DEX')
 
+  const hasAbilities = !!(scores || character.ability_modifiers)
   const hasSpellSlots = Object.keys(character.spell_slots).length > 0
   const hasSpells = (character.spells?.length ?? 0) > 0
-  const hasFeatures = Object.keys(character.features ?? {}).length > 0
+  const hasClassFeatures = !!(character.class_features && Object.keys(character.class_features).length > 0)
   const hasInventory = (character.inventory?.length ?? 0) > 0
   const hasConditions = (character.conditions?.length ?? 0) > 0
+  const hasLanguages = (character.languages?.length ?? 0) > 0
 
   return (
     <div style={s.backdrop} onClick={onClose}>
@@ -119,6 +133,9 @@ export function CharacterSheetOverlay({ character, onClose }: Props) {
         <div style={s.header}>
           <h2 style={s.charName}>{character.name}</h2>
           <p style={s.subtitle}>{subtitle}</p>
+          {character.background && (
+            <p style={s.backgroundLine}>Background: {character.background}</p>
+          )}
 
           <div style={s.hpRow}>
             <span style={s.hpLabel}>HP {character.hp} / {character.max_hp}</span>
@@ -130,30 +147,33 @@ export function CharacterSheetOverlay({ character, onClose }: Props) {
           <div style={s.inlineStats}>
             <span>AC {character.ac}</span>
             {character.speed != null && <span>· Speed {character.speed} ft</span>}
-            {initiativeMod != null && <span>· Initiative {modStr(initiativeMod)}</span>}
+            <span>· Initiative {modStr(initiativeMod)}</span>
             <span>· Proficiency {modStr(profBonus)}</span>
           </div>
         </div>
 
         {/* ── Ability Scores ────────────────────────────────── */}
-        {scores && (
+        {hasAbilities && (
           <section style={s.section}>
             <h3 style={s.sectionTitle}>Ability Scores</h3>
             <div style={s.abilityGrid}>
               {ABILITY_ABBREVS.map((abbr) => {
-                const score = scores[abbr] ?? 10
-                const mod = abilityMod(score)
+                const score = scores?.[abbr]
+                const mod = getMod(character, abbr)
                 return (
                   <div key={abbr} style={s.abilityCell}>
+                    <span style={s.abilityEmoji}>{ABILITY_EMOJIS[abbr]}</span>
                     <span style={s.abilityAbbr}>{abbr}</span>
-                    <span style={s.abilityScore}>{score}</span>
-                    <span style={s.abilityModifier}>{modStr(mod)}</span>
+                    {score != null && <span style={s.abilityScore}>{score}</span>}
+                    <span style={{ ...s.abilityModifier, color: modColor(mod) }}>
+                      {modStr(mod)}
+                    </span>
                   </div>
                 )
               })}
             </div>
             {(() => {
-              const wisMod = abilityMod(scores['WIS'] ?? 10)
+              const wisMod = getMod(character, 'WIS')
               const percProf = hasProficiency(character, 'Perception')
               const pp = 10 + wisMod + (percProf ? profBonus : 0)
               return <p style={s.passivePerc}>Passive Perception: {pp}</p>
@@ -161,14 +181,21 @@ export function CharacterSheetOverlay({ character, onClose }: Props) {
           </section>
         )}
 
+        {/* ── Languages ─────────────────────────────────────── */}
+        {hasLanguages && (
+          <section style={s.section}>
+            <h3 style={s.sectionTitle}>Languages</h3>
+            <p style={s.languagesText}>🗣️ {character.languages!.join(', ')}</p>
+          </section>
+        )}
+
         {/* ── Saving Throws ─────────────────────────────────── */}
-        {scores && (
+        {hasAbilities && (
           <section style={s.section}>
             <h3 style={s.sectionTitle}>Saving Throws</h3>
             <div style={s.twoColGrid}>
               {ABILITY_ABBREVS.map((abbr) => {
-                const score = scores[abbr] ?? 10
-                const mod = abilityMod(score)
+                const mod = getMod(character, abbr)
                 const prof = hasSaveProficiency(character, abbr)
                 const total = mod + (prof ? profBonus : 0)
                 return (
@@ -177,7 +204,7 @@ export function CharacterSheetOverlay({ character, onClose }: Props) {
                       {prof ? '●' : '○'}
                     </span>
                     <span style={s.checkLabel}>{abbr}</span>
-                    <span style={s.checkValue}>{modStr(total)}</span>
+                    <span style={{ ...s.checkValue, color: modColor(total) }}>{modStr(total)}</span>
                   </div>
                 )
               })}
@@ -186,13 +213,12 @@ export function CharacterSheetOverlay({ character, onClose }: Props) {
         )}
 
         {/* ── Skills ────────────────────────────────────────── */}
-        {scores && (
+        {hasAbilities && (
           <section style={s.section}>
             <h3 style={s.sectionTitle}>Skills</h3>
             <div style={s.threeColGrid}>
               {Object.entries(SKILL_ABILITY_MAP).map(([skill, ability]) => {
-                const score = scores[ability] ?? 10
-                const mod = abilityMod(score)
+                const mod = getMod(character, ability)
                 const prof = hasProficiency(character, skill)
                 const total = mod + (prof ? profBonus : 0)
                 return (
@@ -203,7 +229,7 @@ export function CharacterSheetOverlay({ character, onClose }: Props) {
                     <span style={s.checkLabel}>
                       {skill} <span style={s.abilityTag}>({ability})</span>
                     </span>
-                    <span style={s.checkValue}>{modStr(total)}</span>
+                    <span style={{ ...s.checkValue, color: modColor(total) }}>{modStr(total)}</span>
                   </div>
                 )
               })}
@@ -219,11 +245,13 @@ export function CharacterSheetOverlay({ character, onClose }: Props) {
               {Object.entries(character.spell_slots)
                 .sort(([a], [b]) => Number(a) - Number(b))
                 .map(([level, current]) => {
+                  // If spell_slots_max is absent, treat current as max (all full).
                   const max = character.spell_slots_max?.[level] ?? current
                   return (
                     <div key={level} style={s.slotRow}>
-                      <span style={s.slotLabel}>Level {level}</span>
+                      <span style={s.slotLabel}>✨ Level {level}</span>
                       <Pips current={current} max={max} />
+                      <span style={s.slotCount}>{current} / {max}</span>
                     </div>
                   )
                 })}
@@ -257,15 +285,13 @@ export function CharacterSheetOverlay({ character, onClose }: Props) {
         )}
 
         {/* ── Class Features & Traits ───────────────────────── */}
-        {hasFeatures && (
+        {hasClassFeatures && (
           <section style={s.section}>
             <h3 style={s.sectionTitle}>Class Features & Traits</h3>
-            {Object.entries(character.features).map(([name, desc]) => (
+            {Object.entries(character.class_features!).map(([name, desc]) => (
               <div key={name} style={s.featureRow}>
                 <span style={s.featureName}>{name}</span>
-                {typeof desc === 'string' && desc && (
-                  <span style={s.featureDesc}>{desc}</span>
-                )}
+                {desc && <span style={s.featureDesc}>{desc}</span>}
               </div>
             ))}
           </section>
@@ -360,8 +386,13 @@ const s: Record<string, React.CSSProperties> = {
   subtitle: {
     fontSize: '0.85rem',
     color: 'var(--color-parchment-dim)',
-    marginBottom: '0.75rem',
+    marginBottom: '0.1rem',
     fontStyle: 'italic',
+  },
+  backgroundLine: {
+    fontSize: '0.78rem',
+    color: 'var(--color-parchment-dim)',
+    marginBottom: '0.65rem',
   },
   hpRow: {
     display: 'flex',
@@ -421,27 +452,37 @@ const s: Record<string, React.CSSProperties> = {
     border: '1px solid var(--color-border)',
     borderRadius: '4px',
     padding: '0.4rem 0.2rem',
-    gap: '0.1rem',
+    gap: '0.05rem',
+  },
+  abilityEmoji: {
+    fontSize: '0.9rem',
+    lineHeight: 1,
   },
   abilityAbbr: {
-    fontSize: '0.6rem',
+    fontSize: '0.55rem',
     textTransform: 'uppercase',
     letterSpacing: '0.06em',
     color: 'var(--color-gold-dim)',
   },
   abilityScore: {
-    fontSize: '1rem',
+    fontSize: '0.95rem',
     fontWeight: 700,
     color: 'var(--color-parchment)',
   },
   abilityModifier: {
     fontSize: '0.75rem',
-    color: 'var(--color-parchment-dim)',
+    fontWeight: 600,
   },
   passivePerc: {
     fontSize: '0.78rem',
     color: 'var(--color-parchment-dim)',
     marginTop: '0.4rem',
+  },
+
+  // Languages
+  languagesText: {
+    fontSize: '0.82rem',
+    color: 'var(--color-parchment)',
   },
 
   // Saving throws / skills grid
@@ -475,10 +516,10 @@ const s: Record<string, React.CSSProperties> = {
   },
   checkValue: {
     fontSize: '0.75rem',
-    color: 'var(--color-parchment-dim)',
     flexShrink: 0,
     minWidth: '2rem',
     textAlign: 'right',
+    fontWeight: 600,
   },
   abilityTag: {
     color: 'var(--color-parchment-dim)',
@@ -489,18 +530,23 @@ const s: Record<string, React.CSSProperties> = {
   slotGrid: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '0.3rem',
+    gap: '0.35rem',
   },
   slotRow: {
     display: 'flex',
     alignItems: 'center',
-    gap: '0.75rem',
+    gap: '0.6rem',
     fontSize: '0.8rem',
   },
   slotLabel: {
     color: 'var(--color-parchment-dim)',
-    width: '4rem',
+    width: '5rem',
     flexShrink: 0,
+  },
+  slotCount: {
+    fontSize: '0.75rem',
+    color: 'var(--color-parchment-dim)',
+    marginLeft: '0.25rem',
   },
   pipText: {
     color: 'var(--color-parchment)',

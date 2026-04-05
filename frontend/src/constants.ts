@@ -51,6 +51,10 @@ export const TONE_PRESETS = [
   { value: 'mystery_intrigue', label: 'Mystery & Intrigue' },
 ]
 
+export const ABILITY_EMOJIS: Record<string, string> = {
+  STR: '💪', DEX: '🏹', CON: '❤️', INT: '📚', WIS: '🦉', CHA: '✨',
+}
+
 export const SKILL_ABILITY_MAP: Record<string, string> = {
   'Acrobatics': 'DEX', 'Animal Handling': 'WIS', 'Arcana': 'INT',
   'Athletics': 'STR', 'Deception': 'CHA', 'History': 'INT',

@@ -1,5 +1,45 @@
 import { useCallback, useState } from 'react'
 import type { CharacterState, SessionState, TurnEntry, WsEvent } from '../types'
+
+// ---------------------------------------------------------------------------
+// Normalise a raw CharacterState from the server.
+// The server puts species, languages, background, ability_modifiers, and
+// proficiency_bonus inside features{} as a grab-bag. Extract known keys into
+// dedicated top-level fields; everything left over becomes class_features.
+// ---------------------------------------------------------------------------
+
+const KNOWN_FEATURE_KEYS = new Set([
+  'species', 'languages', 'background', 'ability_modifiers', 'proficiency_bonus',
+])
+
+function normalizeCharacter(raw: CharacterState): CharacterState {
+  const f = raw.features ?? {}
+
+  const species = (f['species'] as string | undefined) ?? raw.species
+  const languages = (f['languages'] as string[] | undefined) ?? raw.languages
+  const background = (f['background'] as string | undefined) ?? raw.background
+  const ability_modifiers =
+    (f['ability_modifiers'] as Record<string, number> | undefined) ?? raw.ability_modifiers
+  const proficiency_bonus =
+    (f['proficiency_bonus'] as number | undefined) ?? raw.proficiency_bonus
+
+  const class_features: Record<string, string> = {}
+  for (const [k, v] of Object.entries(f)) {
+    if (!KNOWN_FEATURE_KEYS.has(k)) {
+      class_features[k] = typeof v === 'string' ? v : JSON.stringify(v)
+    }
+  }
+
+  return {
+    ...raw,
+    species,
+    languages,
+    background,
+    ability_modifiers,
+    proficiency_bonus,
+    class_features: Object.keys(class_features).length > 0 ? class_features : undefined,
+  }
+}
 import { useWebSocket } from '../hooks/useWebSocket'
 import { useBreakpoint } from '../hooks/useBreakpoint'
 import { CampaignHeader } from './CampaignHeader'
@@ -36,7 +76,10 @@ export function GameSession({ campaignId, onEndSession }: Props) {
       switch (event.event) {
         case 'session.state': {
           const s = event.payload
-          setSession(s)
+          setSession({
+            ...s,
+            characters: s.characters.map(normalizeCharacter),
+          })
           setTurns(
             s.recent_turns.map((t) => ({
               ...t,
@@ -74,9 +117,12 @@ export function GameSession({ campaignId, onEndSession }: Props) {
             if (!s) return s
             return {
               ...s,
-              characters: s.characters.map((c) =>
-                c.id === character_id ? { ...c, hp, spell_slots } : c,
-              ),
+              characters: s.characters.map((c) => {
+                if (c.id !== character_id) return c
+                // Merge only the fields the server sent; preserve ability_scores
+                // and other data already on the character from session.state.
+                return normalizeCharacter({ ...c, hp, spell_slots })
+              }),
             }
           })
           break
