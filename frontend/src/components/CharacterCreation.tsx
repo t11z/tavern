@@ -239,7 +239,7 @@ export function CharacterCreation({ campaignId, onDone, onCancel }: Props) {
   if (step === 'scores') {
     return (
       <div style={s.center}>
-        <div style={{ ...s.card, maxWidth: '520px' }}>
+        <div style={s.card}>
           <h2 style={s.cardTitle}>Ability Scores</h2>
           <p style={s.stepHint}>
             Step 2 of 2 — Assign the Standard Array: {STANDARD_ARRAY.join(', ')}
@@ -318,12 +318,13 @@ const s: Record<string, React.CSSProperties> = {
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
     padding: '2rem 1rem',
+    boxSizing: 'border-box',
   },
   card: {
     width: '100%',
-    maxWidth: '460px',
+    maxWidth: '560px',
     background: 'var(--color-bg-panel)',
     border: '1px solid var(--color-border)',
     borderRadius: '6px',
@@ -331,6 +332,7 @@ const s: Record<string, React.CSSProperties> = {
     display: 'flex',
     flexDirection: 'column',
     gap: '0.75rem',
+    boxSizing: 'border-box',
   },
   cardTitle: {
     fontSize: '1.3rem',
@@ -364,6 +366,7 @@ const s: Record<string, React.CSSProperties> = {
   },
   col: {
     flex: 1,
+    minWidth: 0,
     display: 'flex',
     flexDirection: 'column',
     gap: '0.35rem',
