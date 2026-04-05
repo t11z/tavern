@@ -122,14 +122,13 @@ class TestSubmitTurn:
         self, api_client: AsyncClient, mock_narrator
     ) -> None:
         """narrate_turn_stream must be invoked (background task uses it, not narrate_turn)."""
+        from tavern.dm.gm_signals import safe_default
 
         called_with: list = []
-        original_stream = mock_narrator.narrate_turn_stream
 
         async def tracking_stream(*args, **kwargs):  # type: ignore[no-untyped-def]
             called_with.append((args, kwargs))
-            async for chunk in original_stream(*args, **kwargs):
-                yield chunk
+            return ("The goblin snarls.", safe_default())
 
         mock_narrator.narrate_turn_stream = tracking_stream
 

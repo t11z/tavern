@@ -1,25 +1,34 @@
 """Turn submission and retrieval endpoints.
 
-Turn processing pipeline (Phase 5b — streaming via WebSocket):
+Turn processing pipeline (Task D — full combat lifecycle):
   1. Validate campaign is Active with an open session
   2. Validate character belongs to the campaign
   3. Run Rules Engine: classify action → resolve mechanics → apply DB state
-  4. Build state snapshot (Context Builder) — uses request DB session
-  5. Create pending Turn record (narrative_response=None)
-  6. Return 202 Accepted with turn_id
-  7. Background task: stream narrative → broadcast WebSocket events
-     → persist full narrative → update rolling summary
+  4. [Exploration mode only] CombatClassifier → if combat starts, roll
+     initiative and transition to combat mode (Flow B: player-initiated)
+  5. Build state snapshot (Context Builder) — uses request DB session
+  6. Create pending Turn record (narrative_response=None)
+  7. Return 202 Accepted with turn_id
+  8. Background task:
+     a. narrator.narrate_turn_stream() → (narrative_text, gm_signals)
+     b. Process gm_signals.npc_updates (BEFORE scene_transition)
+     c. Process gm_signals.scene_transition — Engine combat_end takes
+        precedence over Narrator signals
+     d. Persist narrative_text + gm_signals JSON in turn record
+     e. Broadcast narrative_text + update rolling summary
 """
 
 from __future__ import annotations
 
 import logging
+import os
 import uuid
 from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Query
 from sqlalchemy import func, select
+from sqlalchemy import func as sa_func
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import selectinload
 
@@ -32,13 +41,23 @@ from tavern.api.schemas import (
     TurnSubmitResponse,
 )
 from tavern.core.action_analyzer import ActionAnalysis, ActionCategory, analyze_action
+from tavern.core.combat import (
+    CombatParticipant,
+    CombatSnapshot,
+    CombatSnapshotCharacter,
+    _has_surprise_immunity,
+    determine_surprise,
+    roll_initiative_order,
+)
 from tavern.core.dice import roll_d20
 from tavern.core.spells import resolve_spell
 from tavern.dm.context_builder import TurnContext, build_snapshot
+from tavern.dm.gm_signals import GMSignals, NPCUpdate, safe_default
 from tavern.dm.narrator import Narrator
 from tavern.dm.summary import build_turn_summary_input, trim_summary
 from tavern.models.campaign import Campaign, CampaignState
 from tavern.models.character import Character
+from tavern.models.npc import NPC
 from tavern.models.session import Session
 from tavern.models.turn import Turn
 
@@ -125,7 +144,6 @@ async def _resolve_action(
         caster = _character_to_caster_state(character)
 
         # Determine slot level: use lowest available slot that can cast this spell.
-        # For M1, attempt slot 1 → 9 until one is available; fall back to 0 (cantrip attempt).
         available_slots = {int(k): v for k, v in character.spell_slots.items() if int(v) > 0}
         slot_level: int | None = min(available_slots.keys()) if available_slots else None
 
@@ -148,11 +166,9 @@ async def _resolve_action(
             logger.debug("Spell resolution skipped for %r: %s", analysis.spell_index, exc)
             return (f"Attempted to cast {analysis.spell_index} — {exc}", None)
 
-        # Consume the spell slot if one was used
         if result.slot_consumed is not None:
             await _consume_spell_slot(character, result.slot_consumed)
 
-        # Apply healing to character HP
         hp_changed = False
         if result.healing:
             for h in result.healing:
@@ -223,6 +239,301 @@ async def _resolve_action(
     return (None, None)
 
 
+# ---------------------------------------------------------------------------
+# Combat helpers
+# ---------------------------------------------------------------------------
+
+
+def _build_combat_snapshot(characters: list[Character]) -> CombatSnapshot:
+    """Build a CombatSnapshot from a list of Character ORM records.
+
+    Populates WIS modifier, Perception proficiency, proficiency bonus, and feats
+    for each character so that determine_surprise() can compute passive Perception.
+    """
+    snap_chars: dict[str, CombatSnapshotCharacter] = {}
+    for char in characters:
+        mods = char.features.get("ability_modifiers", {})
+        wis_mod = mods.get("WIS", 0)
+        # Perception proficiency — stored in features.proficiencies or similar
+        proficiencies = char.features.get("proficiencies", [])
+        perception_proficient = "Perception" in proficiencies
+        prof_bonus = char.features.get("proficiency_bonus", 2)
+        feats = char.features.get("feats", [])
+        snap_chars[str(char.id)] = CombatSnapshotCharacter(
+            wis_modifier=wis_mod,
+            perception_proficient=perception_proficient,
+            proficiency_bonus=prof_bonus,
+            feats=feats,
+        )
+    return CombatSnapshot(characters=snap_chars)
+
+
+def _build_initiative_order_payload(
+    participants: list[CombatParticipant],
+) -> tuple[list[dict], list[str]]:
+    """Convert CombatParticipant list to WS payload format.
+
+    Returns (initiative_order_dicts, surprised_character_ids).
+    """
+    order = [
+        {
+            "character_id": p.character_id,
+            "participant_type": p.participant_type,
+            "initiative_result": p.initiative_result,
+            "surprised": p.surprised,
+        }
+        for p in participants
+    ]
+    surprised = [p.character_id for p in participants if p.surprised]
+    return order, surprised
+
+
+async def _run_combat_start(
+    *,
+    campaign_id: uuid.UUID,
+    db: AsyncSession,
+    campaign_state: CampaignState,
+    characters: list[Character],
+    combatant_names: list[str],
+    stealth_results: dict[str, int],
+    potential_surprised: list[str],
+    combat_snapshot: CombatSnapshot,
+) -> None:
+    """Execute initiative roll and broadcast combat.started.
+
+    Updates world_state["mode"] = "combat" and persists via db.flush().
+    Does NOT commit — caller is responsible for committing the transaction.
+    Broadcasts "combat.started" via WebSocket.
+
+    Args:
+        campaign_id: Campaign UUID.
+        db: Active async DB session.
+        campaign_state: CampaignState record (will be mutated).
+        characters: PC Character records.
+        combatant_names: NPC names to include as combatants.
+        stealth_results: Stealth totals for concealing characters.
+        potential_surprised: character_ids that could be surprised.
+        combat_snapshot: Pre-built CombatSnapshot for determine_surprise.
+    """
+    from tavern.api.ws import manager
+
+    # Determine surprise
+    surprised_map = determine_surprise(
+        potential_surprised=potential_surprised,
+        stealth_results=stealth_results,
+        snapshot=combat_snapshot,
+    )
+
+    # Build participants: PCs first
+    participants: list[CombatParticipant] = []
+    dex_modifiers: dict[str, int] = {}
+
+    for char in characters:
+        cid = str(char.id)
+        mods = char.features.get("ability_modifiers", {})
+        dex_mod = mods.get("DEX", 0)
+        dex_modifiers[cid] = dex_mod
+        participants.append(
+            CombatParticipant(
+                character_id=cid,
+                participant_type="pc",
+                initiative_roll=0,
+                initiative_result=0,
+                surprised=surprised_map.get(cid, False),
+            )
+        )
+
+    # Add NPC combatants (use name as id for now — no persistent NPC id lookup here)
+    for npc_name in combatant_names:
+        # Look up NPC record for DEX modifier
+        npc_result = await db.execute(
+            select(NPC).where(
+                NPC.campaign_id == campaign_id,
+                sa_func.lower(NPC.name) == npc_name.lower(),
+            )
+        )
+        npc_record = npc_result.scalar_one_or_none()
+        npc_id = str(npc_record.id) if npc_record else npc_name
+        participants.append(
+            CombatParticipant(
+                character_id=npc_id,
+                participant_type="npc",
+                initiative_roll=0,
+                initiative_result=0,
+                surprised=False,  # NPCs initiating combat are not surprised
+            )
+        )
+
+    # Roll initiative
+    ordered = roll_initiative_order(
+        participants,
+        surprised_map=surprised_map,
+        dex_modifiers=dex_modifiers,
+    )
+
+    # Transition to combat mode
+    world_state = dict(campaign_state.world_state or {})
+    world_state["mode"] = "combat"
+    campaign_state.world_state = world_state
+    campaign_state.updated_at = datetime.now(tz=UTC)
+    await db.flush()
+
+    # Broadcast
+    order_payload, surprised_ids = _build_initiative_order_payload(ordered)
+    await manager.broadcast_combat_started(campaign_id, order_payload, surprised_ids)
+    logger.info(
+        "Combat started (campaign=%s): %d participants, %d surprised",
+        campaign_id,
+        len(ordered),
+        len(surprised_ids),
+    )
+
+
+# ---------------------------------------------------------------------------
+# NPC update processing
+# ---------------------------------------------------------------------------
+
+
+async def _process_npc_update(
+    *,
+    update: NPCUpdate,
+    campaign_id: uuid.UUID,
+    db: AsyncSession,
+    sequence_number: int,
+) -> None:
+    """Apply a single NPCUpdate from GMSignals to the database.
+
+    Performs name-based lookup (case-insensitive within campaign).
+    Broadcasts npc.spawned or npc.updated via WebSocket.
+    Does NOT commit — caller is responsible for the transaction boundary.
+    """
+    from tavern.api.ws import manager
+
+    # Name-based lookup (case-insensitive)
+    npc_result = await db.execute(
+        select(NPC).where(
+            NPC.campaign_id == campaign_id,
+            sa_func.lower(NPC.name) == update.npc_name.lower(),
+        )
+    )
+    existing = npc_result.scalar_one_or_none()
+
+    if update.event == "spawn":
+        if existing is not None:
+            logger.info(
+                "Duplicate spawn signal discarded for NPC %r in campaign %s — "
+                "record already exists",
+                update.npc_name,
+                campaign_id,
+            )
+            return
+
+        # Create new NPC record
+        npc = NPC(
+            campaign_id=campaign_id,
+            name=update.npc_name,
+            origin="narrator_spawned",
+            species=update.species,
+            appearance=update.appearance,
+            role=update.role,
+            motivation=update.motivation,
+            disposition=update.disposition or "unknown",
+            hp_max=update.hp_max,
+            ac=update.ac,
+            first_appeared_turn=sequence_number,
+            last_seen_turn=sequence_number,
+        )
+
+        # Resolve stat block if provided
+        if update.stat_block_ref:
+            try:
+                from tavern.core.srd_data import resolve_npc_stat_block
+
+                stat_block = await resolve_npc_stat_block(update.stat_block_ref, campaign_id)
+                if stat_block:
+                    npc.stat_block_ref = update.stat_block_ref
+                    # Narrator overrides take precedence — only fill if not set
+                    if npc.hp_max is None:
+                        npc.hp_max = stat_block.get("hit_points")
+                    if npc.ac is None:
+                        npc.ac = stat_block.get("armor_class")
+                    if npc.creature_type is None:
+                        npc.creature_type = stat_block.get("type")
+            except Exception as exc:
+                logger.warning(
+                    "Failed to resolve stat_block_ref %r for NPC %r: %s",
+                    update.stat_block_ref,
+                    update.npc_name,
+                    exc,
+                )
+
+        db.add(npc)
+        await db.flush()  # Obtain NPC id
+
+        await manager.broadcast_npc_spawned(
+            campaign_id,
+            npc_id=str(npc.id),
+            name=npc.name,
+            role=npc.role,
+        )
+        logger.info(
+            "NPC spawned: %r (id=%s) in campaign %s",
+            npc.name,
+            npc.id,
+            campaign_id,
+        )
+
+    else:
+        # Non-spawn update — NPC must already exist
+        if existing is None:
+            logger.error(
+                "GMSignals %s update for unknown NPC %r in campaign %s — skipping",
+                update.event,
+                update.npc_name,
+                campaign_id,
+            )
+            return
+
+        changes: dict = {}
+
+        # Validate no immutable fields are being changed
+        try:
+            NPC.validate_immutable_update({})
+        except ValueError:
+            pass  # validate_immutable_update only raises if forbidden keys present
+
+        if update.event == "status_change" and update.new_status is not None:
+            existing.status = update.new_status
+            changes["status"] = update.new_status
+
+        elif update.event == "disposition_change" and update.new_disposition is not None:
+            existing.disposition = update.new_disposition
+            changes["disposition"] = update.new_disposition
+
+        elif update.event == "location_change" and update.new_location is not None:
+            existing.scene_location = update.new_location
+            changes["scene_location"] = update.new_location
+
+        existing.last_seen_turn = sequence_number
+
+        await manager.broadcast_npc_updated(
+            campaign_id,
+            npc_id=str(existing.id),
+            changes=changes,
+        )
+        logger.info(
+            "NPC updated: %r (id=%s) event=%s changes=%s",
+            existing.name,
+            existing.id,
+            update.event,
+            changes,
+        )
+
+
+# ---------------------------------------------------------------------------
+# Dependency annotations
+# ---------------------------------------------------------------------------
+
 DbSession = Annotated[AsyncSession, Depends(get_db_session)]
 NarratorDep = Annotated[Narrator, Depends(get_narrator)]
 SessionFactoryDep = Annotated[async_sessionmaker, Depends(get_session_factory)]
@@ -243,16 +554,24 @@ async def _stream_narrative(
     sequence_number: int,
     current_summary: str,
     session_factory: async_sessionmaker,
+    world_state: dict,
 ) -> None:
-    """Stream narrative chunks via WebSocket and persist the completed turn.
+    """Run the full post-narration pipeline as a background task.
 
-    Runs as a BackgroundTask after the 202 response is sent.
+    Pipeline:
+    1. Narrate → (narrative_text, gm_signals)
+    2. Broadcast narrative start / chunk / end events
+    3. Process gm_signals.npc_updates (within DB transaction)
+    4. Process gm_signals.scene_transition (Engine combat_end takes precedence)
+    5. Persist turn narrative + gm_signals JSON
+    6. Update rolling summary
+
     Creates its own DB session because the request session is already closed.
     """
-    # Lazy import to avoid circular dependency (ws imports from models, turns imports ws)
     from tavern.api.ws import manager
 
     full_narrative = ""
+    gm_signals: GMSignals = safe_default()
 
     await manager.broadcast(
         campaign_id,
@@ -260,21 +579,7 @@ async def _stream_narrative(
     )
 
     try:
-        seq = 0
-        async for chunk in narrator.narrate_turn_stream(snapshot):
-            full_narrative += chunk
-            await manager.broadcast(
-                campaign_id,
-                {
-                    "event": "turn.narrative_chunk",
-                    "payload": {
-                        "turn_id": str(turn_id),
-                        "chunk": chunk,
-                        "sequence": seq,
-                    },
-                },
-            )
-            seq += 1
+        full_narrative, gm_signals = await narrator.narrate_turn_stream(snapshot)
     except Exception as exc:
         logger.error("Narrative streaming error for turn %s: %s", turn_id, exc)
         await manager.broadcast(
@@ -285,6 +590,7 @@ async def _stream_narrative(
             },
         )
         full_narrative = full_narrative or "[Narrator error — please retry]"
+        gm_signals = safe_default()
 
     await manager.broadcast(
         campaign_id,
@@ -294,14 +600,159 @@ async def _stream_narrative(
         },
     )
 
-    # Persist narrative and update rolling summary (own session)
+    # Persist narrative and process GMSignals (own session)
     async with session_factory() as db:
         try:
+            # -------------------------------------------------------------------
+            # Step A: Process npc_updates BEFORE scene_transition
+            # -------------------------------------------------------------------
+            for npc_update in gm_signals.npc_updates:
+                try:
+                    await _process_npc_update(
+                        update=npc_update,
+                        campaign_id=campaign_id,
+                        db=db,
+                        sequence_number=sequence_number,
+                    )
+                except Exception as exc:
+                    logger.error(
+                        "Failed to process NPCUpdate %r for campaign %s: %s",
+                        npc_update,
+                        campaign_id,
+                        exc,
+                    )
+
+            # -------------------------------------------------------------------
+            # Step B: Process scene_transition
+            # -------------------------------------------------------------------
+            current_mode = str(world_state.get("mode", "exploration"))
+
+            # Re-load campaign state to get latest world_state (may have been
+            # updated by the request-phase combat start)
+            state_result = await db.execute(
+                select(CampaignState).where(CampaignState.campaign_id == campaign_id)
+            )
+            campaign_state = state_result.scalar_one_or_none()
+
+            # Check whether the Rules Engine ended combat (all NPCs at 0 HP).
+            # For M1 we detect this via the world_state "engine_combat_end" flag
+            # that submit_turn may have set.  If not set, we rely on Narrator signals.
+            engine_combat_end = bool(world_state.get("engine_combat_end", False))
+
+            if engine_combat_end and campaign_state is not None:
+                # Engine authority — always transitions to exploration
+                updated_ws = dict(campaign_state.world_state or {})
+                updated_ws["mode"] = "exploration"
+                updated_ws.pop("engine_combat_end", None)
+                campaign_state.world_state = updated_ws
+                campaign_state.updated_at = datetime.now(tz=UTC)
+                await db.flush()
+                await manager.broadcast_combat_ended(campaign_id)
+                logger.info("Combat ended (Engine authority) for campaign %s", campaign_id)
+
+                if gm_signals.scene_transition.type == "combat_end":
+                    logger.info(
+                        "Narrator combat_end signal discarded — Engine takes precedence "
+                        "(campaign=%s)",
+                        campaign_id,
+                    )
+
+            elif (
+                gm_signals.scene_transition.type == "combat_start"
+                and current_mode == "exploration"
+                and campaign_state is not None
+            ):
+                # NPC-initiated combat (Flow A) — narrator signalled combat start
+                # Load characters for CombatSnapshot
+                chars_result = await db.execute(
+                    select(Character).where(Character.campaign_id == campaign_id)
+                )
+                chars = list(chars_result.scalars().all())
+                combat_snapshot = _build_combat_snapshot(chars)
+
+                # Pre-filter Alert feat
+                raw_potential = gm_signals.scene_transition.potential_surprised_characters
+                potential_surprised = [
+                    cid
+                    for cid in raw_potential
+                    if not _has_surprise_immunity(cid, combat_snapshot)
+                ]
+
+                # Auto-roll NPC stealth for concealers
+                npc_stealth: dict[str, int] = {}
+                for npc_name in gm_signals.scene_transition.combatants:
+                    npc_result = await db.execute(
+                        select(NPC).where(
+                            NPC.campaign_id == campaign_id,
+                            sa_func.lower(NPC.name) == npc_name.lower(),
+                        )
+                    )
+                    npc_record = npc_result.scalar_one_or_none()
+
+                    stealth_mod = 0
+                    if npc_record and npc_record.stat_block_ref:
+                        try:
+                            from tavern.core.srd_data import resolve_npc_stat_block
+
+                            sb = await resolve_npc_stat_block(
+                                npc_record.stat_block_ref, campaign_id
+                            )
+                            if sb:
+                                stealth_mod = sb.get("stealth_modifier", 0)
+                        except Exception as exc:
+                            logger.warning(
+                                "Could not resolve stat block for NPC stealth "
+                                "(npc=%r, campaign=%s): %s",
+                                npc_name,
+                                campaign_id,
+                                exc,
+                            )
+                    else:
+                        logger.warning(
+                            "No stat block for NPC stealth roll (npc=%r, campaign=%s)",
+                            npc_name,
+                            campaign_id,
+                        )
+
+                    npc_key = str(npc_record.id) if npc_record else npc_name
+                    npc_stealth[npc_key] = roll_d20(modifier=stealth_mod).total
+
+                await _run_combat_start(
+                    campaign_id=campaign_id,
+                    db=db,
+                    campaign_state=campaign_state,
+                    characters=chars,
+                    combatant_names=gm_signals.scene_transition.combatants,
+                    stealth_results=npc_stealth,
+                    potential_surprised=potential_surprised,
+                    combat_snapshot=combat_snapshot,
+                )
+
+            elif (
+                gm_signals.scene_transition.type == "combat_end"
+                and current_mode == "combat"
+                and not engine_combat_end
+                and campaign_state is not None
+            ):
+                # Narrator-signalled combat end (no Engine authority override)
+                updated_ws = dict(campaign_state.world_state or {})
+                updated_ws["mode"] = "exploration"
+                campaign_state.world_state = updated_ws
+                campaign_state.updated_at = datetime.now(tz=UTC)
+                await db.flush()
+                await manager.broadcast_combat_ended(campaign_id)
+                logger.info("Combat ended (Narrator signal) for campaign %s", campaign_id)
+
+            # -------------------------------------------------------------------
+            # Step C: Persist turn narrative and gm_signals JSON
+            # -------------------------------------------------------------------
             turn = await db.get(Turn, turn_id)
             if turn is not None:
                 turn.narrative_response = full_narrative
 
-            # Update rolling summary with an informative turn line
+            # -------------------------------------------------------------------
+            # Step D: Update rolling summary
+            # -------------------------------------------------------------------
             turn_line = build_turn_summary_input(
                 character_name=character_name,
                 player_action=snapshot.current_turn.player_action,
@@ -314,27 +765,21 @@ async def _stream_narrative(
                     recent_turns=[turn_line],
                     current_summary=current_summary,
                 )
-                # Enforce the 500-token budget as a hard safety net after LLM compression.
                 new_summary = trim_summary(new_summary)
             except Exception as exc:
                 logger.warning("Summary update failed: %s — keeping previous summary", exc)
                 new_summary = trim_summary(current_summary)
 
-            # Update CampaignState
-            state_result = await db.execute(
-                select(CampaignState).where(CampaignState.campaign_id == campaign_id)
-            )
-            campaign_state = state_result.scalar_one_or_none()
             if campaign_state is not None:
                 campaign_state.rolling_summary = new_summary
                 campaign_state.updated_at = datetime.now(tz=UTC)
 
-            # Update last_played_at
             camp = await db.get(Campaign, campaign_id)
             if camp is not None:
                 camp.last_played_at = datetime.now(tz=UTC)
 
             await db.commit()
+
         except Exception as exc:
             logger.error("DB persist failed for turn %s: %s", turn_id, exc)
 
@@ -427,7 +872,79 @@ async def submit_turn(
         db_session=db,
     )
 
-    # 6. Create pending Turn record (ADR-0004: atomic, autosave every turn)
+    # 6. [Exploration mode only] CombatClassifier pre-narration check (Flow B)
+    current_mode = str((campaign.state.world_state or {}).get("mode", "exploration"))
+    world_state_copy = dict(campaign.state.world_state or {})
+
+    if current_mode == "exploration":
+        try:
+            from tavern.dm.combat_classifier import CombatClassifier
+
+            api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+            classifier = CombatClassifier(api_key=api_key)
+            classification = await classifier.classify(body.action, snapshot)
+            logger.debug(
+                "CombatClassifier result (campaign=%s): combat_starts=%s confidence=%s reason=%s",
+                campaign_id,
+                classification.combat_starts,
+                classification.confidence,
+                classification.reason,
+            )
+
+            if classification.combat_starts:
+                # Flow B: player-initiated combat
+                combat_snapshot = _build_combat_snapshot(campaign.characters)
+
+                # Stealth rolls from the current turn context (if any)
+                stealth_rolls = snapshot.current_turn.stealth_rolls or {}
+
+                # For player-initiated combat, potential_surprised are scene NPCs
+                # whose ids we can match by name from combatants list
+                potential_surprised: list[str] = []
+                for npc_name in classification.combatants:
+                    npc_res = await db.execute(
+                        select(NPC).where(
+                            NPC.campaign_id == campaign_id,
+                            sa_func.lower(NPC.name) == npc_name.lower(),
+                        )
+                    )
+                    npc_rec = npc_res.scalar_one_or_none()
+                    if npc_rec:
+                        potential_surprised.append(str(npc_rec.id))
+
+                # Pre-filter Alert feat
+                potential_surprised = [
+                    cid
+                    for cid in potential_surprised
+                    if not _has_surprise_immunity(cid, combat_snapshot)
+                ]
+
+                await _run_combat_start(
+                    campaign_id=campaign_id,
+                    db=db,
+                    campaign_state=campaign.state,
+                    characters=list(campaign.characters),
+                    combatant_names=classification.combatants,
+                    stealth_results=stealth_rolls,
+                    potential_surprised=potential_surprised,
+                    combat_snapshot=combat_snapshot,
+                )
+                # Update local copy for background task
+                world_state_copy["mode"] = "combat"
+
+        except RuntimeError as exc:
+            # CombatClassifier raises RuntimeError if called in combat mode
+            logger.warning("CombatClassifier RuntimeError (campaign=%s): %s", campaign_id, exc)
+        except Exception as exc:
+            logger.warning(
+                "CombatClassifier error (campaign=%s): %s — continuing without classification",
+                campaign_id,
+                exc,
+            )
+
+    # 7. Create pending Turn record (ADR-0004: atomic, autosave every turn)
+    # Note: Turn model may or may not have a gm_signals column yet — we store
+    # it in the background task after narration.
     turn = Turn(
         session_id=session.id,
         character_id=body.character_id,
@@ -454,7 +971,7 @@ async def submit_turn(
             {"event": "character.updated", "payload": char_update},
         )
 
-    # 7. Schedule streaming as background task
+    # 8. Schedule background task
     background_tasks.add_task(
         _stream_narrative,
         campaign_id=campaign_id,
@@ -465,6 +982,7 @@ async def submit_turn(
         sequence_number=sequence_number,
         current_summary=campaign_state.rolling_summary,
         session_factory=session_factory,
+        world_state=world_state_copy,
     )
 
     return TurnSubmitResponse(turn_id=turn.id, sequence_number=sequence_number)

@@ -27,6 +27,7 @@ from typing import Literal, Protocol
 import anthropic
 
 from tavern.dm.context_builder import StateSnapshot, serialize_snapshot
+from tavern.dm.gm_signals import GM_SIGNALS_DELIMITER, GMSignals, parse_gm_signals
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +39,27 @@ MODEL_MAP: dict[str, str] = {
     "high": "claude-sonnet-4-20250514",
     "low": "claude-haiku-4-5-20251001",
 }
+
+# GMSignals instruction appended to the system prompt for every narration
+# request (ADR-0012, ADR-0013).  The model MUST append the delimiter line and
+# JSON block after every narrative response so the turn pipeline can extract
+# structured signals without player-facing text being contaminated.
+_GM_SIGNALS_INSTRUCTION = (
+    "\n\nAfter your narrative response, you MUST always append a GMSignals block "
+    "on a new line. The delimiter must appear on its own line with no leading or "
+    "trailing spaces, followed immediately by the JSON object on the next line. "
+    "Do not omit either element.\n\n"
+    "Format (copy exactly):\n"
+    f"{GM_SIGNALS_DELIMITER}\n"
+    '{"scene_transition": {"type": "none", "combatants": [], '
+    '"potential_surprised_characters": [], "reason": ""}, "npc_updates": []}\n\n'
+    'Rules for scene_transition.type: must be exactly "none", "combat_start", or '
+    '"combat_end". Use "combat_start" only when NPCs initiate an unprovoked attack. '
+    'Use "combat_end" only when all hostile NPCs are defeated or fled. '
+    '"npc_updates" must be a list (may be empty). Each entry needs "event" '
+    '(spawn|status_change|disposition_change|location_change) and "npc_name". '
+    "Always include both top-level keys."
+)
 
 NARRATION_MAX_TOKENS: int = 1024
 NARRATION_TEMPERATURE: float = 0.8
@@ -150,6 +172,10 @@ class AnthropicProvider:
     def __init__(self, api_key: str) -> None:
         self._client = anthropic.AsyncAnthropic(api_key=api_key)
 
+    def _build_system_with_signals(self, system_text: str) -> str:
+        """Append the GMSignals instruction to the system prompt."""
+        return system_text + _GM_SIGNALS_INSTRUCTION
+
     async def narrate(
         self,
         snapshot: StateSnapshot,
@@ -164,6 +190,7 @@ class AnthropicProvider:
         """
         serialized = serialize_snapshot(snapshot)
         system_text: str = serialized["system"]  # type: ignore[assignment]
+        system_text = self._build_system_with_signals(system_text)
         messages_list = serialized["messages"]  # type: ignore[assignment]
         user_content: str = messages_list[0]["content"]  # type: ignore[index]
 
@@ -203,12 +230,17 @@ class AnthropicProvider:
         Uses the Anthropic SDK streaming mode. Each yielded value is a
         raw text chunk — callers assemble the full narrative by joining.
 
+        Note: The GMSignals delimiter and JSON tail are included in the raw
+        stream.  Use narrate_stream_buffered() when you need the narrative
+        text split from the GMSignals block.
+
         Raises:
             TimeoutError: If the request times out.
             RuntimeError: If the API rate limit is exceeded.
         """
         serialized = serialize_snapshot(snapshot)
         system_text: str = serialized["system"]  # type: ignore[assignment]
+        system_text = self._build_system_with_signals(system_text)
         messages_list = serialized["messages"]  # type: ignore[assignment]
         user_content: str = messages_list[0]["content"]  # type: ignore[index]
 
@@ -363,11 +395,20 @@ class Narrator:
     async def narrate_turn_stream(
         self,
         snapshot: StateSnapshot,
-    ) -> AsyncGenerator[str, None]:
-        """Stream narrative tokens, applying the same tier routing as narrate_turn.
+    ) -> tuple[str, GMSignals]:
+        """Collect the full narrative and parse the embedded GMSignals block.
 
-        Yields raw text chunks. Logs quality warnings on the completed text.
-        Falls back to a single yield if the provider does not support streaming.
+        Applies the same tier-routing logic as narrate_turn.  Buffers all
+        chunks from the provider stream (or the non-streaming fallback),
+        splits the raw output at the GM_SIGNALS_DELIMITER, and returns:
+
+          (narrative_text, gm_signals)
+
+        where *narrative_text* is everything before the delimiter (stripped)
+        and *gm_signals* is the parsed GMSignals dataclass.  On any parse
+        failure parse_gm_signals() returns safe_default().
+
+        Logs quality warnings on the narrative portion only.
         """
         turn = snapshot.current_turn
         if turn.rules_result is None and _is_simple_action(turn.player_action):
@@ -377,16 +418,23 @@ class Narrator:
 
         provider_stream = getattr(self._provider, "narrate_stream", None)
         if provider_stream is not None:
-            full = ""
+            raw = ""
             async for chunk in provider_stream(snapshot, tier):
-                full += chunk
-                yield chunk
-            _check_response_quality(full)
+                raw += chunk
         else:
-            # Non-streaming fallback: collect whole response and yield once
-            narrative = await self._provider.narrate(snapshot, tier)
-            _check_response_quality(narrative)
-            yield narrative
+            # Non-streaming fallback
+            raw = await self._provider.narrate(snapshot, tier)
+
+        # Split at the delimiter — everything before is narrative prose
+        if GM_SIGNALS_DELIMITER in raw:
+            narrative_text, _, _ = raw.partition(GM_SIGNALS_DELIMITER)
+            narrative_text = narrative_text.rstrip()
+        else:
+            narrative_text = raw
+
+        _check_response_quality(narrative_text)
+        gm_signals = parse_gm_signals(raw)
+        return narrative_text, gm_signals
 
     async def narrate_turn(self, snapshot: StateSnapshot) -> str:
         """Determine model tier, get narration, and validate the response.

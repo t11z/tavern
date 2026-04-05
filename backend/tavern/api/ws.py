@@ -78,6 +78,73 @@ class ConnectionManager:
     def connection_count(self, campaign_id: uuid.UUID) -> int:
         return len(self._connections.get(campaign_id, []))
 
+    # -----------------------------------------------------------------------
+    # Typed broadcast helpers (ADR-0012, ADR-0013)
+    # -----------------------------------------------------------------------
+
+    async def broadcast_combat_started(
+        self,
+        campaign_id: uuid.UUID,
+        initiative_order: list[dict],
+        surprised: list[str],
+    ) -> None:
+        """Broadcast a combat.started event.
+
+        Args:
+            campaign_id: Campaign to broadcast to.
+            initiative_order: List of dicts with keys:
+                character_id, participant_type, initiative_result, surprised.
+            surprised: List of character_ids that are surprised.
+        """
+        await self.broadcast(
+            campaign_id,
+            {
+                "event": "combat.started",
+                "payload": {
+                    "initiative_order": initiative_order,
+                    "surprised": surprised,
+                },
+            },
+        )
+
+    async def broadcast_combat_ended(self, campaign_id: uuid.UUID) -> None:
+        """Broadcast a combat.ended event."""
+        await self.broadcast(
+            campaign_id,
+            {"event": "combat.ended", "payload": {}},
+        )
+
+    async def broadcast_npc_spawned(
+        self,
+        campaign_id: uuid.UUID,
+        npc_id: str,
+        name: str,
+        role: str | None,
+    ) -> None:
+        """Broadcast an npc.spawned event."""
+        await self.broadcast(
+            campaign_id,
+            {
+                "event": "npc.spawned",
+                "payload": {"npc_id": npc_id, "name": name, "role": role},
+            },
+        )
+
+    async def broadcast_npc_updated(
+        self,
+        campaign_id: uuid.UUID,
+        npc_id: str,
+        changes: dict,
+    ) -> None:
+        """Broadcast an npc.updated event."""
+        await self.broadcast(
+            campaign_id,
+            {
+                "event": "npc.updated",
+                "payload": {"npc_id": npc_id, "changes": changes},
+            },
+        )
+
 
 # Module-level singleton — shared across all requests in the same process.
 manager = ConnectionManager()

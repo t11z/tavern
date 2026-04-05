@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from sqlalchemy.pool import StaticPool
 
 from tavern.api.dependencies import get_db_session, get_narrator, get_session_factory
+from tavern.dm.gm_signals import safe_default
 from tavern.dm.narrator import Narrator
 from tavern.main import app
 from tavern.models.base import Base
@@ -69,18 +70,14 @@ async def _reset_api_test_db() -> AsyncGenerator[None, None]:
 def mock_narrator() -> Narrator:
     """Narrator mock that never calls the Anthropic API.
 
-    narrate_turn_stream is an async generator that yields MOCK_CHUNKS.
+    narrate_turn_stream returns (MOCK_NARRATIVE, safe_default()) — matching
+    the updated Narrator.narrate_turn_stream signature (Task D).
     """
     narrator = MagicMock(spec=Narrator)
     narrator.narrate_turn = AsyncMock(return_value=MOCK_NARRATIVE)
     narrator.update_summary = AsyncMock(return_value=MOCK_SUMMARY)
     narrator.generate_campaign_brief = AsyncMock(return_value=MOCK_CAMPAIGN_BRIEF)
-
-    async def _stream(*args, **kwargs):  # type: ignore[no-untyped-def]
-        for chunk in MOCK_CHUNKS:
-            yield chunk
-
-    narrator.narrate_turn_stream = _stream
+    narrator.narrate_turn_stream = AsyncMock(return_value=(MOCK_NARRATIVE, safe_default()))
     return narrator  # type: ignore[return-value]
 
 
