@@ -1,5 +1,13 @@
 import { useCallback, useState } from 'react'
-import type { CharacterState, InitiativeEntry, SessionState, TurnEntry, WsEvent } from '../types'
+import type {
+  CharacterState,
+  InitiativeEntry,
+  MechanicalResultEntry,
+  SessionState,
+  TurnEntry,
+  TurnMechanicalGroup,
+  WsEvent,
+} from '../types'
 
 // ---------------------------------------------------------------------------
 // Normalise a raw CharacterState from the server.
@@ -47,6 +55,7 @@ import { CharacterPanel } from './CharacterPanel'
 import { CharacterSheetOverlay } from './CharacterSheetOverlay'
 import { ChatLog } from './ChatLog'
 import { ChatInput } from './ChatInput'
+import { MechanicalLog } from './MechanicalLog'
 
 interface Props {
   campaignId: string
@@ -66,6 +75,9 @@ export function GameSession({ campaignId, onEndSession }: Props) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [characterSheetOpen, setCharacterSheetOpen] = useState(false)
   const [sheetCharacterId, setSheetCharacterId] = useState<string | null>(null)
+  const [mechLog, setMechLog] = useState<TurnMechanicalGroup[]>([])
+  const [preMigration, setPreMigration] = useState(false)
+  const [logTab, setLogTab] = useState<'story' | 'log'>('story')
   const { isMobile } = useBreakpoint()
 
   const showToast = (msg: string) => {
@@ -93,6 +105,29 @@ export function GameSession({ campaignId, onEndSession }: Props) {
           if (s.characters.length > 0 && !activeCharId) {
             setActiveCharId(s.characters[0].id)
           }
+          // Build mechanical log from recent_turns.
+          // If none of the turns have a mechanical_results key at all,
+          // treat this as a pre-migration payload.
+          const anyHasMechKey = s.recent_turns.some(
+            (t) => 'mechanical_results' in t,
+          )
+          setPreMigration(!anyHasMechKey)
+          if (anyHasMechKey) {
+            const charById: Record<string, string> = {}
+            for (const c of s.characters) charById[c.id] = c.name
+            setMechLog(
+              s.recent_turns.map((t) => ({
+                turn_id: t.turn_id,
+                sequence_number: t.sequence_number,
+                character_name:
+                  t.character_name ??
+                  charById[t.character_id] ??
+                  t.character_id,
+                entries: (t.mechanical_results ?? []) as MechanicalResultEntry[],
+                created_at: t.created_at ?? '',
+              })),
+            )
+          }
           break
         }
         case 'turn.narrative_start':
@@ -103,7 +138,8 @@ export function GameSession({ campaignId, onEndSession }: Props) {
           setStreaming((prev) => (prev ?? '') + event.payload.chunk)
           break
         case 'turn.narrative_end': {
-          const narrative = event.payload.narrative
+          const { narrative, mechanical_results, turn_id, sequence_number, character_name, created_at } =
+            event.payload
           setStreaming(null)
           setTurns((prev) => {
             const idx = [...prev].reverse().findIndex((t) => t.narrative === null)
@@ -113,6 +149,25 @@ export function GameSession({ campaignId, onEndSession }: Props) {
             updated[realIdx] = { ...updated[realIdx], narrative }
             return updated
           })
+          // Append new turn group to mechanical log
+          if (mechanical_results !== null && mechanical_results !== undefined) {
+            setMechLog((prev) => {
+              // Avoid duplicates (e.g. reconnect delivering session.state followed by stale event)
+              if (prev.some((g) => g.turn_id === turn_id)) return prev
+              // Resolve character name: prefer payload field, then look up from session
+              const resolvedName = character_name ?? turn_id
+              return [
+                ...prev,
+                {
+                  turn_id,
+                  sequence_number: sequence_number ?? (prev.length > 0 ? prev[prev.length - 1].sequence_number + 1 : 1),
+                  character_name: resolvedName,
+                  entries: mechanical_results,
+                  created_at: created_at ?? new Date().toISOString(),
+                },
+              ]
+            })
+          }
           break
         }
         case 'character.updated': {
@@ -354,19 +409,58 @@ export function GameSession({ campaignId, onEndSession }: Props) {
         )}
       </aside>
 
-      {/* Main column */}
+      {/* Main column: narrative + mechanical log */}
       <div style={s.main}>
         {isMobile && (
           <button style={s.menuBtn} onClick={() => setSidebarOpen(true)} title="Characters">☰</button>
         )}
         <CampaignHeader campaign={session.campaign} wsStatus={wsStatus} />
-        <ChatLog turns={turns} streamingNarrative={streaming} />
-        <ChatInput
-          disabled={streaming !== null || wsStatus !== 'open'}
-          onSubmit={handleSubmit}
-          suggestions={suggestions}
-          onSuggestionDismiss={() => setSuggestions([])}
-        />
+
+        {/* Mobile tab bar */}
+        <div className="log-tab-bar">
+          <button
+            className={logTab === 'story' ? 'active' : ''}
+            onClick={() => setLogTab('story')}
+          >
+            📜 Story
+          </button>
+          <button
+            className={logTab === 'log' ? 'active' : ''}
+            onClick={() => setLogTab('log')}
+          >
+            ⚔️ Log
+          </button>
+        </div>
+
+        {/* Content area: narrative left, log right (desktop); tab-switched (mobile) */}
+        <div style={s.contentArea}>
+          {/* Narrative pane */}
+          <div
+            style={{
+              ...s.narrativePane,
+              display: isMobile && logTab !== 'story' ? 'none' : 'flex',
+            }}
+          >
+            <ChatLog turns={turns} streamingNarrative={streaming} />
+            <ChatInput
+              disabled={streaming !== null || wsStatus !== 'open'}
+              onSubmit={handleSubmit}
+              suggestions={suggestions}
+              onSuggestionDismiss={() => setSuggestions([])}
+            />
+          </div>
+
+          {/* Mechanical log pane */}
+          <div
+            style={{
+              ...s.logPane,
+              display: isMobile && logTab !== 'log' ? 'none' : 'flex',
+            }}
+          >
+            <span className="mech-log-label">⚔️ Mechanical Log</span>
+            <MechanicalLog turnGroups={mechLog} preMigration={preMigration} />
+          </div>
+        </div>
       </div>
 
       {/* Character sheet overlay */}
@@ -516,6 +610,27 @@ const s: Record<string, React.CSSProperties> = {
     minWidth: 0,
     overflow: 'hidden',
     position: 'relative',
+  },
+  contentArea: {
+    flex: 1,
+    display: 'flex',
+    flexDirection: 'row',
+    overflow: 'hidden',
+    minHeight: 0,
+  },
+  narrativePane: {
+    flex: '3 1 0',
+    display: 'flex',
+    flexDirection: 'column',
+    minWidth: 0,
+    overflow: 'hidden',
+  },
+  logPane: {
+    flex: '2 1 0',
+    display: 'flex',
+    flexDirection: 'column',
+    minWidth: 0,
+    overflow: 'hidden',
   },
   center: {
     height: '100vh',

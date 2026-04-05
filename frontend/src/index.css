@@ -82,3 +82,143 @@ input, textarea, select {
 .suggestion-chip:active {
   transform: scale(0.97);
 }
+
+/* ---------------------------------------------------------------------------
+   Mechanical Results Log
+   --------------------------------------------------------------------------- */
+
+/* Colour classes */
+.mech-success { color: var(--color-success, #4ade80); }
+.mech-fail    { color: var(--color-danger, #f87171); }
+.mech-warning { color: var(--color-warning, #fbbf24); }
+.mech-neutral { color: var(--color-parchment-dim, #9ca3af); }
+
+/* Log panel (scroll container) */
+.mech-log-container {
+  overflow-y: auto;
+  flex: 1;
+  padding: 1rem;
+  border-left: 1px solid var(--color-border);
+  background: #0d0a06; /* slightly darker than --color-bg-panel (#110c07) */
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* Turn group */
+.mech-turn-group {
+  border-bottom: 1px solid var(--color-border);
+}
+
+.mech-group-header {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  width: 100%;
+  background: transparent;
+  border: none;
+  color: var(--color-parchment);
+  font-family: var(--font-serif);
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 0.4rem 0;
+  cursor: pointer;
+  text-align: left;
+}
+
+.mech-group-header:hover {
+  color: var(--color-gold);
+}
+
+.mech-group-arrow {
+  color: var(--color-gold-dim);
+  flex-shrink: 0;
+  font-size: 0.75rem;
+}
+
+.mech-group-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Group body */
+.mech-group-body {
+  padding: 0.25rem 0 0.5rem 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* Entry rows */
+.mech-entry {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  line-height: 1.4;
+  padding: 0.25rem 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Empty state */
+.mech-empty {
+  font-style: italic;
+  color: var(--color-parchment-dim);
+  font-size: 0.8rem;
+  text-align: center;
+  padding: 0.25rem 0;
+  font-family: var(--font-serif);
+}
+
+/* Pre-migration notice */
+.mech-premigration {
+  font-style: italic;
+  color: var(--color-parchment-dim);
+  font-size: 0.8rem;
+  text-align: center;
+  padding: 1rem 0;
+  font-family: var(--font-serif);
+}
+
+/* Log panel label */
+.mech-log-label {
+  font-size: 0.65rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-gold-dim);
+  padding: 0.4rem 1rem 0;
+  background: #0d0a06;
+  border-left: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+/* Mobile tab bar */
+.log-tab-bar {
+  display: none;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg-panel);
+}
+
+.log-tab-bar button {
+  flex: 1;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--color-parchment-dim);
+  font-family: var(--font-serif);
+  font-size: 0.8rem;
+  padding: 0.5rem;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.log-tab-bar button.active {
+  color: var(--color-gold);
+  border-bottom-color: var(--color-gold);
+}
+
+@media (max-width: 768px) {
+  .log-tab-bar {
+    display: flex;
+  }
+}
