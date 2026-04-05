@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import ForeignKey, Integer, Text, func
+from sqlalchemy import DateTime, ForeignKey, Integer, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from tavern.models.base import Base
@@ -22,7 +22,9 @@ class Turn(Base):
     player_action: Mapped[str] = mapped_column(Text)
     rules_result: Mapped[str | None] = mapped_column(Text, nullable=True)
     narrative_response: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
 
     session: Mapped["Session"] = relationship(back_populates="turns")
     character: Mapped["Character"] = relationship(back_populates="turns")

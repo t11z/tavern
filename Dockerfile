@@ -34,4 +34,4 @@ ENV PYTHONPATH=/app/backend
 
 EXPOSE 3000
 
-CMD ["/app/.venv/bin/uvicorn", "tavern.main:app", "--host", "0.0.0.0", "--port", "3000"]
+CMD /app/.venv/bin/alembic upgrade head && /app/.venv/bin/uvicorn tavern.main:app --host 0.0.0.0 --port 3000

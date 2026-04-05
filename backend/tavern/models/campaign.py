@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import CheckConstraint, ForeignKey, String, Text, func
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 
 from tavern.models.base import JSONB, Base
@@ -28,8 +28,10 @@ class Campaign(Base):
     status: Mapped[str] = mapped_column(String)
     world_seed: Mapped[str | None] = mapped_column(Text, nullable=True)
     dm_persona: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
-    last_played_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    last_played_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     state: Mapped["CampaignState"] = relationship(back_populates="campaign", uselist=False)
     sessions: Mapped[list["Session"]] = relationship(back_populates="campaign")
@@ -53,6 +55,8 @@ class CampaignState(Base):
     scene_context: Mapped[str] = mapped_column(Text)
     world_state: Mapped[dict] = mapped_column(JSONB)
     turn_count: Mapped[int] = mapped_column(default=0)
-    updated_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
 
     campaign: Mapped["Campaign"] = relationship(back_populates="state")
