@@ -43,6 +43,12 @@ The sea is central to everything. It provides food, trade, and danger in equal m
 
 ## Key NPCs
 
+These NPCs are predefined in the campaign roster (ADR-0013) when a campaign is started
+from the Shattered Coast preset. Their names, species, and appearances are fixed at
+campaign creation and cannot be changed by the Narrator. Mutable attributes (disposition,
+status, current location) evolve through gameplay. The `plot_significant` flag is set to
+`true` for all five — they persist in the Narrator's snapshot even after death or flight.
+
 **Maren Voss** — Harbormaster and Council chair. Mid-50s, sharp, patient, ruthless when necessary. She built Driftmere's trade network from nothing after the previous Harbormaster died in a storm. She genuinely believes commerce is the only thing holding the Coast together, and she will sacrifice anything — including the truth — to protect it.
 *Secret*: She possesses a Concordance artifact that she has never reported to the Council. It showed her something about the Sinking that she has told no one.
 
@@ -92,3 +98,8 @@ Game mechanics are compatible with the System Reference Document 5.2 by Wizards 
 ## Preset Format Reference
 
 This file follows the community preset format defined in campaign-design.md. Community contributors can use this structure as a template for their own world presets. The required sections are Setting, Factions, Key NPCs, World Rules, and Attribution.
+
+If a preset defines NPCs with mechanical roles (guards, named combatants), include a
+`stat_block_ref` field referencing a valid SRD monster index (e.g. `"veteran"`,
+`"bandit-captain"`). This allows the Rules Engine to populate mechanical attributes at
+campaign start without Narrator-provided values.
