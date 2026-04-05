@@ -130,6 +130,53 @@ def _check_response_quality(text: str) -> None:
         )
 
 
+# Known assistant-mode phrases that should never appear in structured output
+_ASSISTANT_BLEED_PHRASES = [
+    "I'm ready to",
+    "I'd be happy to",
+    "Could you please",
+    "Let me know",
+    "Here's",
+    "Here is",
+    "I'll help",
+    "I can help",
+    "Sure!",
+    "Of course!",
+    "I notice",
+    "However, I",
+]
+
+
+def _validate_structured_output(text: str, output_type: str) -> bool:
+    """Check if LLM output looks like assistant conversation instead of structured content.
+
+    Returns True if the output passes validation, False if it appears
+    to be conversational bleed-through.
+
+    Logs a warning with the output_type label on failure.
+    """
+    if "?" in text:
+        logger.warning(
+            "%s output contains question marks (likely assistant bleed-through): %r",
+            output_type,
+            text[:200],
+        )
+        return False
+
+    text_lower = text.lower()
+    for phrase in _ASSISTANT_BLEED_PHRASES:
+        if phrase.lower() in text_lower:
+            logger.warning(
+                "%s output contains assistant phrase %r (bleed-through): %r",
+                output_type,
+                phrase,
+                text[:200],
+            )
+            return False
+
+    return True
+
+
 # ---------------------------------------------------------------------------
 # Provider protocol
 # ---------------------------------------------------------------------------
@@ -311,6 +358,12 @@ class AnthropicProvider:
 
         raw = response.content[0].text  # type: ignore[union-attr]
 
+        if not _validate_structured_output(raw, "Campaign brief"):
+            raise ValueError(
+                "Campaign brief response appears to be conversational rather than JSON: "
+                f"{raw[:200]!r}"
+            )
+
         # Strip optional markdown code fences before parsing
         cleaned = re.sub(r"```(?:json)?\s*", "", raw).strip().rstrip("`").strip()
         try:
@@ -336,20 +389,29 @@ class AnthropicProvider:
         Always uses the "low" tier — summary compression is mechanical
         text transformation, not creative narration (ADR-0002).
 
+        If both turns and current_summary are empty, returns "" immediately
+        without making an API call.
+
+        On bleed-through detection (Claude responds conversationally instead
+        of with a summary), logs an error and returns current_summary unchanged.
+
         Raises:
             TimeoutError: If the request times out.
             RuntimeError: If the API rate limit is exceeded.
             ValueError: If the response contains no content.
         """
         turns_text = "\n".join(turns)
+        if not turns_text.strip() and not (current_summary or "").strip():
+            return ""
+
         prompt = (
-            "You are a note-taker for a tabletop RPG session.\n"
-            "Compress the following recent turns into a brief summary that "
-            "captures key events, decisions, and outcomes. Preserve character "
-            "names, locations, and mechanical results. Drop dialogue and "
-            f"atmospheric detail. Keep it under {max_tokens} tokens.\n\n"
-            f"Current summary: {current_summary}\n\n"
-            f"New turns:\n{turns_text}"
+            "Compress the new turns into the existing summary. "
+            "Preserve character names, locations, and mechanical results "
+            "(dice rolls, damage, HP changes, spell slots). "
+            "Drop verbatim dialogue and atmospheric detail. "
+            f"Keep the result under {max_tokens} tokens.\n\n"
+            f"EXISTING SUMMARY:\n{current_summary or '(none)'}\n\n"
+            f"NEW TURNS:\n{turns_text or '(none)'}"
         )
 
         try:
@@ -357,6 +419,25 @@ class AnthropicProvider:
                 model=MODEL_MAP["low"],
                 max_tokens=max_tokens,
                 temperature=SUMMARY_TEMPERATURE,
+                system=[
+                    {
+                        "type": "text",
+                        "text": (
+                            "You are a turn-log compressor for a tabletop RPG session. "
+                            "Your ONLY output is the compressed summary text. "
+                            "Rules:\n"
+                            "- Output ONLY the updated summary. Nothing else.\n"
+                            "- No preamble. No questions. No meta-commentary.\n"
+                            "- No bullet points about what you would do.\n"
+                            "- Never ask for clarification.\n"
+                            "- Never refer to yourself or your capabilities.\n"
+                            "- If the new turns section is empty, return the existing "
+                            "summary unchanged.\n"
+                            "- If both existing summary and new turns are empty, return "
+                            "an empty string."
+                        ),
+                    }
+                ],
                 messages=[{"role": "user", "content": prompt}],
             )
         except anthropic.APITimeoutError as exc:
@@ -371,7 +452,16 @@ class AnthropicProvider:
         if not response.content:
             raise ValueError("Anthropic API returned an empty response during summary compression")
 
-        return response.content[0].text  # type: ignore[union-attr]
+        result = response.content[0].text  # type: ignore[union-attr]
+
+        if not _validate_structured_output(result, "Summary compression"):
+            logger.error(
+                "Summary compression produced invalid output — "
+                "returning previous summary unchanged"
+            )
+            return current_summary
+
+        return result
 
 
 # ---------------------------------------------------------------------------
