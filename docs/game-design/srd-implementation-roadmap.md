@@ -4,7 +4,7 @@
 - **Date**: 2026-04-04
 - **Author**: [@t11z](https://github.com/t11z)
 - **Scope**: `backend/tavern/core/` (Rules Engine), `backend/tavern/dm/` (DM Layer), `backend/tavern/api/` (Turn Lifecycle), `frontend/` (Web Client), `backend/tavern/discord_bot/` (Discord Bot)
-- **References**: ADR-0001 (SRD Rules Engine), ADR-0002 (Claude as Narrator), ADR-0004 (Campaign and Session Lifecycle), ADR-0005 (Client Architecture), ADR-0007 (Multiplayer), ADR-0009 (Interactive Dice Rolling)
+- **References**: ADR-0001 (SRD Rules Engine), ADR-0002 (Claude as Narrator), ADR-0004 (Campaign and Session Lifecycle), ADR-0005 (Client Architecture), ADR-0007 (Multiplayer), ADR-0009 (Interactive Dice Rolling), ADR-0011 (Combat Trigger Classifier), ADR-0012 (NPC-Initiated Combat), ADR-0013 (NPC Lifecycle), ADR-0014 (Surprise Mechanics)
 
 ## Purpose
 
@@ -150,6 +150,15 @@ M1-04 (campaign brief) ──┘
 
 **What this adds over M1**: Everything that makes D&D tactically interesting rather than just narratively interesting.
 
+#### Combat Lifecycle
+
+| Feature | Complexity | ADR |
+|---|---|---|
+| Combat trigger — player-initiated (CombatClassifier) | Medium | ADR-0011 |
+| Combat trigger — NPC-initiated (GMSignals envelope) | Medium | ADR-0012 |
+| NPC lifecycle — spawn, status, death, persistence | High | ADR-0013 |
+| Surprise determination (Stealth vs. passive Perception, Disadvantage on initiative) | Low | ADR-0014 |
+
 #### Engine Features
 
 | Feature | Complexity | Notes |
@@ -198,6 +207,11 @@ M1-04 (campaign brief) ──┘
 
 #### M2 Definition of Done
 
+- [ ] Combat initiation fires correctly for both player-initiated and NPC-initiated cases
+- [ ] Initiative roll includes Disadvantage for surprised combatants (SRD 5.2.1)
+- [ ] NPC records are created on first appearance and persist across turns
+- [ ] Pre-defined NPCs (campaign setup) are injected into the snapshot before the first session
+- [ ] `GMSignals` envelope is parsed after every Narrator call; `scene_transition` and `npc_updates` are processed
 - [ ] Full SRD spell catalog (Levels 0–9) resolvable by engine
 - [ ] Concentration tracking enforced across turns
 - [ ] AoE spells resolve targets (geometry or simplified zone model — see review triggers)
@@ -264,6 +278,12 @@ Between milestones, some mechanics will be specced in the SRD but not yet implem
 - NPC HP tracking in M1 is narrative — the engine resolves player attacks ("14 damage to Goblin A") but does not persist NPC state. Claude decides narratively when NPCs are defeated.
 
 **Hard constraint**: Claude's narrative adjudication must never contradict an engine result. If the engine says "attack hits, 8 damage," Claude narrates the hit. Claude only adjudicates mechanics the engine does not cover.
+
+**NPC lifecycle between milestones**: Until ADR-0013 is fully implemented, NPC
+consistency is not guaranteed — the Narrator invents NPC attributes from scene context
+on each call. This is the known failure mode that ADR-0013 addresses. Do not attempt
+to work around it via prompt engineering alone; the fix is architectural (persistent
+NPC records, snapshot injection).
 
 ### Test Strategy
 

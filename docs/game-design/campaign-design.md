@@ -41,7 +41,10 @@ The brief contains:
 - **Central conflict**: The main narrative thread that gives the campaign direction. A problem, a mystery, a threat — something that creates momentum.
 - **Antagonist**: Name, motivation, resources, location. The force behind the central conflict. Not necessarily a villain — could be a natural disaster, a political movement, or an unknowable entity, depending on tone.
 - **Act structure**: 3-5 milestones that sketch the narrative arc from introduction to climax. These are waypoints, not checkpoints — the campaign does not require the players to hit them in order or at all.
-- **Key NPCs**: 3-5 characters with name, role, disposition, and a secret. These are Claude's cast — recurring characters that give the world continuity.
+- **Key NPCs**: 3-5 characters with name, role, disposition, and a secret. These are
+  authored as predefined NPC records (ADR-0013) at campaign creation — not generated
+  dynamically at runtime. They are injected into the Narrator's snapshot before the
+  first session so the Narrator can reference them consistently from turn one.
 - **World rules**: Any setting-specific constraints (e.g., "magic is feared and persecuted," "the sea is impassable," "the gods are silent"). These shape Claude's narrative decisions throughout the campaign.
 
 The brief is generated once at campaign start and updated by Claude as the campaign evolves. If the players' actions invalidate a milestone or the antagonist is defeated early, Claude revises the brief — the brief serves the story, not the other way around.
@@ -55,6 +58,67 @@ The campaign length parameter changes the brief's structure:
 **Short Campaign (3-5 sessions)**: A focused narrative arc with a clear beginning, middle, and end. The act structure has 3 milestones. World-building is light — enough to sustain a few sessions, not enough to overwhelm.
 
 **Full Campaign (10+)**: A rich world with multiple factions, subplots, and a multi-act arc. The brief is more detailed, with 5 milestones, more NPCs, and deeper world-building. Claude generates additional world detail as the campaign progresses — new regions, new factions, new conflicts that emerge from player actions.
+
+## NPC Management
+
+Tavern maintains a persistent NPC roster per campaign. Every named NPC that appears
+in a campaign — whether authored before the first session or introduced spontaneously
+by the Narrator mid-campaign — is stored as a record with fixed core attributes and
+mutable state. This is the mechanism that prevents the Narrator from reinventing NPC
+names, appearances, and personalities across turns.
+
+### Predefined NPCs
+
+Predefined NPCs are created by the player via the campaign management API before or
+during campaign setup. They are the campaign's named cast: the quest-giving merchant,
+the recurring antagonist, the dragon at the centre of the narrative.
+
+A predefined NPC carries:
+- **Fixed attributes** (set at creation, immutable thereafter): name, species, appearance,
+  stat block reference (optional)
+- **Mutable attributes** (updated by gameplay): HP, disposition, status (alive/dead/fled),
+  current location
+- **Narrative attributes** (readable by the Narrator): role, motivation
+
+Predefined NPCs with `plot_significant = true` remain in the Narrator's snapshot even
+after death or flight — they are too important to the story to disappear silently.
+
+### Narrator-Spawned NPCs
+
+When the Narrator introduces a new character not already in the roster, it emits an
+NPC spawn signal via the `GMSignals` envelope. The server creates a persistent record
+immediately, before processing any other signals from that turn. Once created, a
+spawned NPC is treated identically to a predefined NPC.
+
+The Narrator's system prompt instructs it to emit a spawn signal only on a character's
+first appearance — never for NPCs already present in the snapshot. Duplicate spawn
+signals are discarded by the server.
+
+### NPC Consistency Guarantee
+
+Once an NPC exists in the roster, its name, species, and appearance are locked. The
+Narrator cannot modify these fields via spawn signals — it can only read them from the
+snapshot. A player who wants to rename or re-describe an NPC can do so via the campaign
+management API; this action is logged as a campaign event.
+
+The Narrator snapshot for a scene includes all NPCs whose current location matches the
+scene, plus any NPCs seen recently (within the last N turns). Mechanical attributes
+(HP, AC) are included only when the session is in combat mode.
+
+### Stat Blocks and Custom Creatures
+
+An NPC can reference a stat block via `stat_block_ref` — an index resolved through the
+three-tier lookup (Campaign Override → Instance Library → SRD Baseline). This means:
+
+- Standard SRD creatures (goblin, bandit, veteran) resolve from the 5e-database.
+- Licensed non-SRD creatures (imported by the player via the Instance Library) resolve
+  from the instance's custom data.
+- Campaign-specific variants resolve from campaign overrides.
+
+Stat block values populate mechanical attributes at spawn. Narrator-provided overrides
+(e.g. an elite goblin with higher HP) apply selectively on top of the stat block.
+
+For the campaign management API endpoints, see ADR-0013 §6.
 
 ## World Generation
 

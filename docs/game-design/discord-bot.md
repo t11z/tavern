@@ -4,7 +4,7 @@
 - **Date**: 2026-04-03
 - **Author**: [@t11z](https://github.com/t11z)
 - **Scope**: `backend/tavern/discord_bot/` — interaction design, command surface, channel management, embed layout, voice overlay, multiplayer coordination, interactive rolling
-- **References**: ADR-0003 (Tech Stack), ADR-0004 (Campaign Lifecycle), ADR-0005 (Client Architecture), ADR-0006 (Auth), ADR-0007 (Multiplayer), ADR-0008 (Voice Pipeline), ADR-0009 (Interactive Dice Rolling)
+- **References**: ADR-0003 (Tech Stack), ADR-0004 (Campaign Lifecycle), ADR-0005 (Client Architecture), ADR-0006 (Auth), ADR-0007 (Multiplayer), ADR-0008 (Voice Pipeline), ADR-0009 (Interactive Dice Rolling), ADR-0013 (NPC Lifecycle)
 
 ## Design Principles
 
@@ -239,6 +239,19 @@ A server can run multiple campaigns. Each gets its own category with its own cha
 | `/character sheet @user` | View another player's character sheet. | Any member |
 | `/character inventory` | Detailed inventory embed. | Any member |
 | `/character spells` | Spells and spell slots embed. | Spellcasters |
+
+### NPC Management
+
+NPC management commands are available to campaign owners only. They operate on the
+campaign's NPC roster (ADR-0013).
+
+| Command | Description | Who |
+|---|---|---|
+| `/npc list` | List all NPCs in the campaign roster. Shows name, role, status, and disposition. | Owner |
+| `/npc add <name>` | Create a predefined NPC. Bot opens a thread for guided NPC setup (name, species, appearance, role, motivation, disposition, optional stat block reference). | Owner |
+| `/npc view <name>` | Display an NPC's card: fixed attributes and current mutable state. | Owner, Players |
+| `/npc update <name>` | Update mutable NPC attributes: disposition, status, current location. Cannot update name, species, or appearance — those are immutable after creation. | Owner |
+| `/npc stat-block <name> <ref>` | Assign a stat block reference to an existing NPC (e.g. `goblin`, `veteran`). Resolved via the three-tier SRD lookup. | Owner |
 
 ### Gameplay
 
