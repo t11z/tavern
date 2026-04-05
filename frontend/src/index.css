@@ -21,7 +21,8 @@
 }
 
 html {
-  font-size: 32px;
+  /* Scales from 16px on narrow mobile to 32px on wide desktop (~1280px) */
+  font-size: clamp(16px, 2.5vw, 32px);
 }
 
 html, body, #root {

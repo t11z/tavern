@@ -199,7 +199,7 @@ const s: Record<string, React.CSSProperties> = {
   },
   topBar: {
     width: '100%',
-    maxWidth: '640px',
+    maxWidth: 'min(90vw, 38rem)',
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -216,7 +216,7 @@ const s: Record<string, React.CSSProperties> = {
   },
   body: {
     width: '100%',
-    maxWidth: '640px',
+    maxWidth: 'min(90vw, 38rem)',
     display: 'flex',
     flexDirection: 'column',
     gap: '1.25rem',
@@ -308,7 +308,7 @@ const s: Record<string, React.CSSProperties> = {
     gap: '0.2rem',
   },
   hpTrack: {
-    height: '5px',
+    height: '0.25rem',
     background: 'var(--color-border)',
     borderRadius: '3px',
     overflow: 'hidden',

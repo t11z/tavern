@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react'
 import type { CharacterState, SessionState, TurnEntry, WsEvent } from '../types'
 import { useWebSocket } from '../hooks/useWebSocket'
+import { useBreakpoint } from '../hooks/useBreakpoint'
 import { CampaignHeader } from './CampaignHeader'
 import { CharacterPanel } from './CharacterPanel'
 import { ChatLog } from './ChatLog'
@@ -19,6 +20,8 @@ export function GameSession({ campaignId, onEndSession }: Props) {
   const [error, setError] = useState<string | null>(null)
   const [ending, setEnding] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
+  const { isMobile } = useBreakpoint()
 
   const showToast = (msg: string) => {
     setToast(msg)
@@ -161,6 +164,18 @@ export function GameSession({ campaignId, onEndSession }: Props) {
     (c) => c.id === activeCharId,
   )
 
+  const sidebarStyle: React.CSSProperties = isMobile
+    ? {
+        ...s.sidebar,
+        position: 'fixed',
+        top: 0, left: 0, bottom: 0,
+        zIndex: 50,
+        width: '16rem',
+        transform: sidebarOpen ? 'translateX(0)' : 'translateX(-100%)',
+        transition: 'transform 0.2s ease',
+      }
+    : { ...s.sidebar, width: 'clamp(12rem, 18vw, 16rem)' }
+
   return (
     <div style={s.layout}>
       {toast && (
@@ -170,18 +185,31 @@ export function GameSession({ campaignId, onEndSession }: Props) {
         </div>
       )}
 
+      {/* Mobile overlay */}
+      {isMobile && sidebarOpen && (
+        <div
+          style={s.overlay}
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
       {/* Sidebar */}
-      <aside style={s.sidebar}>
+      <aside style={sidebarStyle}>
         <div style={s.sidebarTop}>
           <span style={s.sidebarTitle}>Characters</span>
-          <button
-            style={{ ...s.btn, ...s.btnDanger, opacity: ending ? 0.5 : 1 }}
-            onClick={handleEndSession}
-            disabled={ending}
-            title="End Session"
-          >
-            {ending ? '…' : 'End'}
-          </button>
+          <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+            {isMobile && (
+              <button style={s.closeBtn} onClick={() => setSidebarOpen(false)} title="Close">×</button>
+            )}
+            <button
+              style={{ ...s.btn, ...s.btnDanger, opacity: ending ? 0.5 : 1 }}
+              onClick={handleEndSession}
+              disabled={ending}
+              title="End Session"
+            >
+              {ending ? '…' : 'End'}
+            </button>
+          </div>
         </div>
 
         {session.characters.map((c) => (
@@ -226,6 +254,9 @@ export function GameSession({ campaignId, onEndSession }: Props) {
 
       {/* Main column */}
       <div style={s.main}>
+        {isMobile && (
+          <button style={s.menuBtn} onClick={() => setSidebarOpen(true)} title="Characters">☰</button>
+        )}
         <CampaignHeader campaign={session.campaign} wsStatus={wsStatus} />
         <ChatLog turns={turns} streamingNarrative={streaming} />
         <ChatInput
@@ -244,7 +275,6 @@ const s: Record<string, React.CSSProperties> = {
     overflow: 'hidden',
   },
   sidebar: {
-    width: '260px',
     flexShrink: 0,
     background: 'var(--color-bg-panel)',
     borderRight: '1px solid var(--color-border)',
@@ -253,6 +283,35 @@ const s: Record<string, React.CSSProperties> = {
     flexDirection: 'column',
     gap: '0.5rem',
     padding: '0.75rem',
+  },
+  overlay: {
+    position: 'fixed',
+    inset: 0,
+    zIndex: 49,
+    background: 'rgba(0,0,0,0.55)',
+  },
+  menuBtn: {
+    position: 'absolute',
+    top: '0.5rem',
+    left: '0.5rem',
+    zIndex: 10,
+    background: 'transparent',
+    border: '1px solid var(--color-border)',
+    color: 'var(--color-gold-dim)',
+    borderRadius: '4px',
+    fontSize: '1.1rem',
+    padding: '0.2rem 0.5rem',
+    cursor: 'pointer',
+    lineHeight: 1,
+  },
+  closeBtn: {
+    background: 'transparent',
+    border: 'none',
+    color: 'var(--color-parchment-dim)',
+    fontSize: '1.2rem',
+    cursor: 'pointer',
+    padding: '0 0.2rem',
+    lineHeight: 1,
   },
   sidebarTop: {
     display: 'flex',
@@ -292,6 +351,7 @@ const s: Record<string, React.CSSProperties> = {
     flexDirection: 'column',
     minWidth: 0,
     overflow: 'hidden',
+    position: 'relative',
   },
   center: {
     height: '100vh',

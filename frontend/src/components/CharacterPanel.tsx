@@ -89,7 +89,7 @@ const styles: Record<string, React.CSSProperties> = {
     marginBottom: '0.2rem',
   },
   hpTrack: {
-    height: '6px',
+    height: '0.3rem',
     background: 'var(--color-border)',
     borderRadius: '3px',
     overflow: 'hidden',
