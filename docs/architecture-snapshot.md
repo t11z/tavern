@@ -299,6 +299,9 @@ Tavern's SRD data comes from `t11z/5e-database`, a fork of `5e-bits/5e-database`
 | 0012 | NPC-Initiated Combat | Accepted |
 | 0013 | NPC Lifecycle | Accepted |
 | 0014 | Surprise Mechanics | Accepted |
+| 0015 | Narrator-Generated Suggested Actions | Accepted |
+| 0016 | World Object Persistence | Accepted |
+| 0017 | Scene Identifier Convention | Accepted |
 
 ## Known Deviations
 
