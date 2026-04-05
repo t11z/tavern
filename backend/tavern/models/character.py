@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import ForeignKey, String, Text, func
+from sqlalchemy import DateTime, ForeignKey, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from tavern.models.base import JSONB, Base
@@ -54,6 +54,8 @@ class CharacterCondition(Base):
     condition_name: Mapped[str] = mapped_column(String)
     duration_rounds: Mapped[int | None] = mapped_column(nullable=True)
     source: Mapped[str | None] = mapped_column(String, nullable=True)
-    applied_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    applied_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
 
     character: Mapped["Character"] = relationship(back_populates="conditions")
