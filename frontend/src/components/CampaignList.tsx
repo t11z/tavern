@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { Campaign } from '../types'
 import { TONE_PRESETS } from '../constants'
+import { useBreakpoint } from '../hooks/useBreakpoint'
 
 interface Props {
   onSelect: (campaignId: string) => void
@@ -13,6 +14,7 @@ export function CampaignList({ onSelect }: Props) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [mode, setMode] = useState<Mode>('list')
+  const { isDesktop } = useBreakpoint()
 
   // Create form state
   const [name, setName] = useState('')
@@ -124,6 +126,14 @@ export function CampaignList({ onSelect }: Props) {
     )
   }
 
+  const bodyStyle: React.CSSProperties = {
+    ...s.body,
+    maxWidth: isDesktop ? 'min(90vw, 52rem)' : 'min(92vw, 32rem)',
+  }
+  const listStyle: React.CSSProperties = isDesktop
+    ? { display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.5rem' }
+    : s.list
+
   return (
     <div style={s.page}>
       <header style={s.header}>
@@ -131,7 +141,7 @@ export function CampaignList({ onSelect }: Props) {
         <p style={s.tagline}>A solo D&amp;D adventure awaits.</p>
       </header>
 
-      <div style={s.body}>
+      <div style={bodyStyle}>
         <div style={s.sectionHeader}>
           <span style={s.sectionTitle}>Your Campaigns</span>
           <button style={{ ...s.btn, ...s.btnPrimary }} onClick={() => setMode('create')}>
@@ -142,7 +152,7 @@ export function CampaignList({ onSelect }: Props) {
         {campaigns.length === 0 ? (
           <p style={s.muted}>No campaigns yet. Create one to begin your adventure.</p>
         ) : (
-          <div style={s.list}>
+          <div style={listStyle}>
             {campaigns.map((c) => (
               <button key={c.id} style={s.campaignRow} onClick={() => onSelect(c.id)}>
                 <div style={s.campaignName}>{c.name}</div>
@@ -175,7 +185,7 @@ const s: Record<string, React.CSSProperties> = {
     marginBottom: '3rem',
   },
   splash: {
-    fontSize: '3.5rem',
+    fontSize: 'clamp(2rem, 5vw, 3.5rem)',
     color: 'var(--color-gold)',
     letterSpacing: '0.25em',
     textTransform: 'uppercase',
@@ -189,7 +199,6 @@ const s: Record<string, React.CSSProperties> = {
   },
   body: {
     width: '100%',
-    maxWidth: '640px',
   },
   sectionHeader: {
     display: 'flex',
@@ -246,7 +255,7 @@ const s: Record<string, React.CSSProperties> = {
   },
   card: {
     width: '100%',
-    maxWidth: '440px',
+    maxWidth: 'min(92vw, 24rem)',
     background: 'var(--color-bg-panel)',
     border: '1px solid var(--color-border)',
     borderRadius: '6px',
