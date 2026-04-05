@@ -167,9 +167,9 @@ models/  ──→ (no internal dependencies)
 |---|---|---|
 | react | UI framework | ^18.3.1 |
 | react-dom | DOM bindings | ^18.3.1 |
-| vite | Build tool + dev server proxy | ^5.4.10 |
+| vite | Build tool + dev server proxy (Rolldown bundler) | ^8.0.3 |
 | typescript | Type checking | ^5.6.2 |
-| @vitejs/plugin-react | Vite plugin for React/JSX transform | ^4.3.3 |
+| @vitejs/plugin-react | Vite plugin for React/JSX transform (Oxc-based) | ^6.0.1 |
 
 ## API Surface
 
