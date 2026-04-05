@@ -95,6 +95,11 @@ class TurnContext:
     """Human-readable Rules Engine result, e.g. 'Your attack hits. 14 damage.'
     None when the action has no mechanical resolution."""
 
+    stealth_rolls: dict[str, int] = field(default_factory=dict)
+    """Stealth check results from the preceding turn, keyed by character_id.
+    Populated when the preceding turn contained a Stealth check result.
+    Used by Path B surprise mechanics (ADR-0014)."""
+
 
 @dataclass
 class StateSnapshot:
@@ -116,6 +121,9 @@ class StateSnapshot:
     Fields vary by mode: exploration mode omits combat stats; combat mode
     includes hp_current, hp_max, ac for alive NPCs.
     """
+    session_mode: str = field(default="exploration")
+    """Current session mode: 'exploration' or 'combat'.
+    Guards the CombatClassifier — classifier must not run in combat mode (ADR-0011)."""
 
 
 # ---------------------------------------------------------------------------
@@ -366,6 +374,7 @@ async def build_snapshot(
         rolling_summary=campaign.state.rolling_summary,
         current_turn=current_turn,
         npcs=npc_dicts,
+        session_mode=str(ws.get("mode", "exploration")),
     )
 
 
