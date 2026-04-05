@@ -29,3 +29,6 @@ Thumbs.db
 
 # Mkdocs render
 site/
+
+# Claude Code internal state
+.claude/
