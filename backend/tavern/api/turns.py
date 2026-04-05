@@ -50,6 +50,7 @@ from tavern.core.combat import (
     roll_initiative_order,
 )
 from tavern.core.dice import roll_d20
+from tavern.core.scene import normalise_scene_id
 from tavern.core.spells import resolve_spell
 from tavern.dm.context_builder import TurnContext, build_snapshot
 from tavern.dm.gm_signals import GMSignals, NPCUpdate, safe_default
@@ -513,8 +514,19 @@ async def _process_npc_update(
             changes["disposition"] = update.new_disposition
 
         elif update.event == "location_change" and update.new_location is not None:
-            existing.scene_location = update.new_location
-            changes["scene_location"] = update.new_location
+            try:
+                normalised_location = normalise_scene_id(update.new_location)
+            except ValueError as exc:
+                logger.error(
+                    "GMSignals location_change for NPC %r in campaign %s rejected — "
+                    "invalid scene identifier: %s",
+                    update.npc_name,
+                    campaign_id,
+                    exc,
+                )
+                return
+            existing.scene_location = normalised_location
+            changes["scene_location"] = normalised_location
 
         existing.last_seen_turn = sequence_number
 
@@ -601,6 +613,19 @@ async def _stream_narrative(
             "payload": {"turn_id": str(turn_id), "narrative": full_narrative},
         },
     )
+
+    # Emit suggested actions immediately after narrative_end (ADR-0015)
+    if gm_signals.suggested_actions:
+        await manager.broadcast(
+            campaign_id,
+            {
+                "type": "turn.suggested_actions",
+                "payload": {
+                    "turn_id": str(turn_id),
+                    "suggestions": gm_signals.suggested_actions,
+                },
+            },
+        )
 
     # Persist narrative and process GMSignals (own session)
     async with session_factory() as db:

@@ -75,6 +75,8 @@ class GMSignals:
 
     scene_transition: SceneTransition = field(default_factory=lambda: SceneTransition(type="none"))
     npc_updates: list[NPCUpdate] = field(default_factory=list)
+    suggested_actions: list[str] = field(default_factory=list)
+    """0–3 narrative action suggestions for the active player (ADR-0015)."""
 
 
 # ---------------------------------------------------------------------------
@@ -224,7 +226,32 @@ def parse_gm_signals(raw: str) -> GMSignals:
         )
         npc_updates.append(update)
 
+    # --- Parse suggested_actions (ADR-0015) ---
+    _MAX_SUGGESTIONS = 3
+    _MAX_SUGGESTION_LEN = 80
+
+    suggested_actions_raw = data.get("suggested_actions", [])
+    if not isinstance(suggested_actions_raw, list):
+        logger.warning(
+            "GMSignals suggested_actions is not a list — defaulting to empty. "
+            "suggested_actions=%r",
+            suggested_actions_raw,
+        )
+        suggested_actions_raw = []
+
+    # Truncate to max 3 entries; truncate each entry to 80 chars
+    suggested_actions: list[str] = []
+    for item in suggested_actions_raw[:_MAX_SUGGESTIONS]:
+        if not isinstance(item, str) or not item.strip():
+            logger.warning(
+                "GMSignals suggested_actions item is not a non-empty string — skipping. item=%r",
+                item,
+            )
+            continue
+        suggested_actions.append(item[:_MAX_SUGGESTION_LEN])
+
     return GMSignals(
         scene_transition=scene_transition,
         npc_updates=npc_updates,
+        suggested_actions=suggested_actions,
     )

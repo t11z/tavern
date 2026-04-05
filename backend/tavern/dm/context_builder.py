@@ -173,6 +173,31 @@ no emoji.
 - Dialogue: use quotation marks. Attribute dialogue to the NPC speaking.
 - Do not start responses with "I" or refer to yourself as the DM."""
 
+_SUGGESTED_ACTIONS_INSTRUCTIONS = """\
+After every narrative response, append a GMSignals block. In that block, \
+include a "suggested_actions" field: a JSON array of 0–3 action suggestions \
+for the active player.
+
+Rules for suggested_actions:
+- Default to 2 suggestions. Omit entirely (empty array) only when the scene \
+makes suggestions unnecessary or intrusive — for example, mid-combat turns \
+where the situation speaks for itself, or turns after a major revelation where \
+player reflection is the natural response.
+- Each suggestion must be a first-person action phrase in present tense, \
+5–12 words. Examples: "Slip through the gap before the guards arrive", \
+"Demand the harbormaster explain herself", \
+"Throw your cloak over the lantern and run".
+- Suggestions must be grounded in the specific scene: location, NPCs present, \
+objects described in the narration, and the character's established capabilities.
+- Suggestions must not assume mechanical outcomes. They describe intent, \
+not resolution. Do not write "Attack the guard and roll high".
+- Include at least one non-combat option when combat is not already underway.
+- The third suggestion, when present, should be unexpected — something creative \
+or oblique the player is unlikely to have thought of independently.
+- No mechanical labels ("Cast Fireball"), no parenthetical annotations \
+("(uses a spell slot)"), no numbered prefixes.
+- Maximum 3 entries. Never produce more than 3."""
+
 
 def build_system_prompt(
     dm_persona: str | None,
@@ -206,6 +231,9 @@ def build_system_prompt(
 
     # --- Output rules ---
     parts.append(_OUTPUT_RULES)
+
+    # --- Suggested actions instructions (ADR-0015) ---
+    parts.append(_SUGGESTED_ACTIONS_INSTRUCTIONS)
 
     # --- Multiplayer instructions ---
     if is_multiplayer:
