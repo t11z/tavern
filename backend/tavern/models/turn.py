@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 from sqlalchemy import DateTime, ForeignKey, Integer, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from tavern.models.base import Base
+from tavern.models.base import JSONB, Base
 
 if TYPE_CHECKING:
     from tavern.models.character import Character
@@ -21,6 +21,7 @@ class Turn(Base):
     sequence_number: Mapped[int] = mapped_column(Integer)
     player_action: Mapped[str] = mapped_column(Text)
     rules_result: Mapped[str | None] = mapped_column(Text, nullable=True)
+    mechanical_results = mapped_column(JSONB, nullable=True, default=None)
     narrative_response: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()

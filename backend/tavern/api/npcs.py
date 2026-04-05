@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from tavern.api.dependencies import get_db_session
 from tavern.api.errors import APIError, not_found
+from tavern.core.scene import normalise_scene_id
 from tavern.models.campaign import Campaign
 from tavern.models.npc import NPC
 
@@ -158,6 +159,13 @@ async def create_npc(
     """Create a predefined NPC for a campaign."""
     await _get_campaign_or_404(campaign_id, db)
 
+    try:
+        scene_location = (
+            normalise_scene_id(body.scene_location) if body.scene_location is not None else None
+        )
+    except ValueError as exc:
+        raise APIError(status_code=422, error="invalid_scene_id", message=str(exc)) from exc
+
     npc = NPC(
         campaign_id=campaign_id,
         origin="predefined",
@@ -176,7 +184,7 @@ async def create_npc(
         stat_block_ref=body.stat_block_ref,
         first_appeared_turn=body.first_appeared_turn,
         last_seen_turn=body.last_seen_turn,
-        scene_location=body.scene_location,
+        scene_location=scene_location,
     )
     db.add(npc)
     await db.commit()
@@ -229,6 +237,13 @@ async def update_npc(
         NPC.validate_immutable_update(updates)
     except ValueError as exc:
         raise APIError(status_code=422, error="immutable_field", message=str(exc)) from exc
+
+    # Normalise scene_location if provided
+    if "scene_location" in updates and updates["scene_location"] is not None:
+        try:
+            updates["scene_location"] = normalise_scene_id(updates["scene_location"])
+        except ValueError as exc:
+            raise APIError(status_code=422, error="invalid_scene_id", message=str(exc)) from exc
 
     npc = await _get_npc_or_404(npc_id, campaign_id, db)
 

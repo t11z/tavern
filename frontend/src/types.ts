@@ -84,13 +84,43 @@ export interface CharacterState {
   conditions?: string[]
 }
 
+export interface MechanicalResultEntry {
+  type:
+    | 'attack_roll'
+    | 'saving_throw'
+    | 'ability_check'
+    | 'damage'
+    | 'healing'
+    | 'condition_applied'
+    | 'condition_removed'
+    | 'spell_cast'
+    | 'resource_consumed'
+    | 'reaction_used'
+    | 'initiative_rolled'
+    | 'rest_result'
+    | 'combat_started'
+    | 'combat_ended'
+  [key: string]: unknown
+}
+
+export interface TurnMechanicalGroup {
+  turn_id: string
+  sequence_number: number
+  character_name: string
+  entries: MechanicalResultEntry[]
+  created_at: string
+}
+
 export interface TurnEntry {
   turn_id: string
   sequence_number: number
   character_id: string
+  character_name?: string
   player_action: string
   rules_result: string | null
   narrative: string | null
+  mechanical_results?: MechanicalResultEntry[] | null
+  created_at?: string
 }
 
 export interface SessionScene {
@@ -139,8 +169,11 @@ export interface WsNarrativeEndEvent {
   payload: {
     turn_id: string
     narrative: string
-    mechanical_results: unknown[]
+    mechanical_results: MechanicalResultEntry[] | null
     character_updates: unknown[]
+    sequence_number?: number
+    character_name?: string
+    created_at?: string
   }
 }
 
@@ -179,6 +212,14 @@ export interface WsCombatEndedEvent {
   payload: Record<string, never>
 }
 
+export interface WsSuggestedActionsEvent {
+  event: 'turn.suggested_actions'
+  payload: {
+    turn_id: string
+    suggestions: string[]
+  }
+}
+
 export type WsEvent =
   | WsSessionStateEvent
   | WsNarrativeStartEvent
@@ -188,6 +229,7 @@ export type WsEvent =
   | WsCharacterUpdatedEvent
   | WsCombatStartedEvent
   | WsCombatEndedEvent
+  | WsSuggestedActionsEvent
 
 // ---------------------------------------------------------------------------
 // API request/response shapes
