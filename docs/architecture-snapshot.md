@@ -1,6 +1,6 @@
 # Architecture Snapshot
 
-> Last updated: 2026-04-05 — Wave 1+2: NPC lifecycle (ADR-0013), CombatClassifier (ADR-0011), GMSignals envelope (ADR-0012), Surprise mechanics (ADR-0014)
+> Last updated: 2026-04-05 — Added CharacterSheetOverlay component; extended CharacterState with optional fields (ability_scores, proficiencies, speed, species, spells, inventory, conditions, etc.); added SKILL_ABILITY_MAP and CONDITION_SUMMARIES to constants.ts
 >
 > This document is maintained by Claude Code per the rules in CLAUDE.md.
 > It is consumed by the architecture consultant to inform decisions without
@@ -84,8 +84,8 @@ backend/tavern/
 frontend/src/
 ├── App.tsx             # Screen router: campaigns → campaign detail → character creation → game session
 ├── main.tsx            # Vite entry point
-├── types.ts            # Shared TypeScript types: Campaign, CampaignDetail, CharacterState, SessionState, WsEvent union (incl. character.updated)
-├── constants.ts        # SRD constants: classes, species, backgrounds (with eligible abilities), standard array, tone presets
+├── types.ts            # Shared TypeScript types: Campaign, CampaignDetail, CharacterState (extended with optional fields: species, speed, initiative_modifier, proficiency_bonus, ability_scores, proficiencies, spell_slots_max, spells, inventory, conditions), InventoryItem, SpellEntry, SessionState, WsEvent union (incl. character.updated)
+├── constants.ts        # SRD constants: classes, species, backgrounds (with eligible abilities), standard array, tone presets, SKILL_ABILITY_MAP (18 SRD skills → ability), CONDITION_SUMMARIES (15 SRD conditions → one-line summary)
 ├── index.css           # Tavern design tokens, global resets, blink keyframe
 ├── hooks/
 │   └── useWebSocket.ts     # WS lifecycle, reconnect with configurable delay, JSON parsing
@@ -93,9 +93,10 @@ frontend/src/
     ├── CampaignList.tsx    # Screen 1: campaign list + new campaign form (name, tone preset)
     ├── CampaignDetail.tsx  # Screen 2: campaign view, character list, start/rejoin session button
     ├── CharacterCreation.tsx # Screen 3: 2-step wizard (class/species/background/bonuses → standard array assignment)
-    ├── GameSession.tsx     # Screen 4: game loop with sidebar, chat, WS streaming, end session
+    ├── GameSession.tsx     # Screen 4: game loop with sidebar, chat, WS streaming, end session; characterSheetOpen state drives CharacterSheetOverlay
     ├── CampaignHeader.tsx  # Campaign title, turn count, WS status dot
-    ├── CharacterPanel.tsx  # Character card: HP bar, AC, spell slots; clickable to set active
+    ├── CharacterPanel.tsx  # Character card: HP bar, AC, spell slots; click opens CharacterSheetOverlay (also sets active character); hover border affordance
+    ├── CharacterSheetOverlay.tsx # Full-screen modal over the game session: ability scores, saving throws, skills, spell slots, spells, features, equipment, conditions; read-only; closes on Escape or backdrop click
     ├── ChatLog.tsx         # Turn history with rules_result (monospace) + narrative; streaming cursor
     └── ChatInput.tsx       # Textarea + Act button; disabled while streaming or disconnected
 

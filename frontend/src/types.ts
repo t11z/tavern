@@ -42,16 +42,42 @@ export interface CharacterSummary {
 // In-session state
 // ---------------------------------------------------------------------------
 
+export interface InventoryItem {
+  id?: string
+  name: string
+  damage?: string
+  ac_bonus?: number
+  quantity?: number
+}
+
+export interface SpellEntry {
+  name: string
+  level: number
+  school?: string
+  damage?: string
+}
+
 export interface CharacterState {
   id: string
   name: string
+  species?: string
   class_name: string
   level: number
   hp: number
   max_hp: number
   ac: number
+  speed?: number
+  initiative_modifier?: number
+  proficiency_bonus?: number
+  hit_die?: string
+  ability_scores?: Record<string, number>
+  proficiencies?: string[]
   spell_slots: Record<string, number>
+  spell_slots_max?: Record<string, number>
+  spells?: SpellEntry[]
   features: Record<string, unknown>
+  inventory?: InventoryItem[]
+  conditions?: string[]
 }
 
 export interface TurnEntry {

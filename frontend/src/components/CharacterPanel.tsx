@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { CharacterState } from '../types'
 
 interface Props {
@@ -7,6 +8,8 @@ interface Props {
 }
 
 export function CharacterPanel({ character, isActive, onClick }: Props) {
+  const [hovered, setHovered] = useState(false)
+
   const hpPct = Math.max(0, Math.min(100, (character.hp / character.max_hp) * 100))
   const hpColor =
     hpPct > 60 ? 'var(--color-success)' : hpPct > 30 ? 'var(--color-gold)' : 'var(--color-danger)'
@@ -15,7 +18,13 @@ export function CharacterPanel({ character, isActive, onClick }: Props) {
 
   return (
     <div
-      style={{ ...styles.card, ...(isActive ? styles.active : {}) }}
+      style={{
+        ...styles.card,
+        ...(isActive ? styles.active : {}),
+        ...(!isActive && hovered ? { borderColor: 'var(--color-gold-dim)' } : {}),
+      }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
       onClick={onClick}
       role="button"
       tabIndex={0}
