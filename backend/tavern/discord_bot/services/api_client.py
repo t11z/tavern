@@ -108,6 +108,15 @@ class TavernAPI:
         r = await self._client.patch(f"/api/campaigns/{_id(campaign_id)}", json=allowed)
         return await self._json(r)  # type: ignore[no-any-return]
 
+    async def delete_campaign(self, campaign_id: str | UUID) -> None:
+        """DELETE /api/campaigns/{id} — permanently delete a campaign.
+
+        Returns None on success (204). Raises TavernAPIError if the campaign
+        is active (end the session first) or not found.
+        """
+        r = await self._client.delete(f"/api/campaigns/{_id(campaign_id)}")
+        await self._raise_for_status(r)
+
     async def get_campaign_config(self, campaign_id: str | UUID) -> dict[str, Any]:
         """Return campaign data for config display.
 

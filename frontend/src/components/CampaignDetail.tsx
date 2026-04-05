@@ -14,6 +14,8 @@ export function CampaignDetailView({ campaignId, onCreateChar, onStartSession, o
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [starting, setStarting] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
   const reload = () => {
     setLoading(true)
@@ -33,6 +35,26 @@ export function CampaignDetailView({ campaignId, onCreateChar, onStartSession, o
   }
 
   useEffect(reload, [campaignId])
+
+  const handleDelete = async () => {
+    if (deleting) return
+    setDeleting(true)
+    try {
+      const res = await fetch(`/api/campaigns/${campaignId}`, { method: 'DELETE' })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({})) as { message?: string }
+        setError(body.message ?? 'Failed to delete campaign.')
+        setDeleting(false)
+        setConfirmDelete(false)
+        return
+      }
+      onBack()
+    } catch {
+      setError('Network error.')
+      setDeleting(false)
+      setConfirmDelete(false)
+    }
+  }
 
   const handleStartSession = async () => {
     if (!campaign || starting) return
@@ -80,21 +102,52 @@ export function CampaignDetailView({ campaignId, onCreateChar, onStartSession, o
         <button style={s.backBtn} onClick={onBack}>
           ← Campaigns
         </button>
-        {isActive && (
-          <button style={{ ...s.btn, ...s.btnPrimary }} onClick={onStartSession}>
-            Rejoin Session →
-          </button>
-        )}
-        {!isActive && (
-          <button
-            style={{ ...s.btn, ...s.btnPrimary, opacity: canStart ? 1 : 0.45 }}
-            onClick={handleStartSession}
-            disabled={!canStart || starting}
-            title={!characters.length ? 'Create a character first' : undefined}
-          >
-            {starting ? 'Starting…' : 'Start Session'}
-          </button>
-        )}
+        <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center' }}>
+          {!confirmDelete && !isActive && (
+            <button
+              style={{ ...s.btn, ...s.btnDanger }}
+              onClick={() => setConfirmDelete(true)}
+              disabled={deleting}
+              title="Delete campaign"
+            >
+              Delete
+            </button>
+          )}
+          {confirmDelete && (
+            <>
+              <span style={s.confirmLabel}>Delete all progress?</span>
+              <button
+                style={{ ...s.btn, ...s.btnDanger, opacity: deleting ? 0.5 : 1 }}
+                onClick={handleDelete}
+                disabled={deleting}
+              >
+                {deleting ? 'Deleting…' : 'Confirm'}
+              </button>
+              <button
+                style={{ ...s.btn, ...s.btnSecondary }}
+                onClick={() => setConfirmDelete(false)}
+                disabled={deleting}
+              >
+                Cancel
+              </button>
+            </>
+          )}
+          {isActive && (
+            <button style={{ ...s.btn, ...s.btnPrimary }} onClick={onStartSession}>
+              Rejoin Session →
+            </button>
+          )}
+          {!isActive && (
+            <button
+              style={{ ...s.btn, ...s.btnPrimary, opacity: canStart ? 1 : 0.45 }}
+              onClick={handleStartSession}
+              disabled={!canStart || starting}
+              title={!characters.length ? 'Create a character first' : undefined}
+            >
+              {starting ? 'Starting…' : 'Start Session'}
+            </button>
+          )}
+        </div>
       </div>
 
       <div style={s.body}>
@@ -347,5 +400,15 @@ const s: Record<string, React.CSSProperties> = {
     background: 'transparent',
     border: '1px solid var(--color-gold-dim)',
     color: 'var(--color-gold)',
+  },
+  btnDanger: {
+    background: 'transparent',
+    border: '1px solid #5a1a1a',
+    color: 'var(--color-danger)',
+  },
+  confirmLabel: {
+    fontSize: '0.8rem',
+    color: 'var(--color-parchment-dim)',
+    fontStyle: 'italic',
   },
 }

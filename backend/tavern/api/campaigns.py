@@ -12,8 +12,8 @@ import uuid
 from datetime import UTC, datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, Response
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -29,7 +29,9 @@ from tavern.api.schemas import (
 )
 from tavern.dm.narrator import Narrator
 from tavern.models.campaign import Campaign, CampaignState
+from tavern.models.character import Character, CharacterCondition, InventoryItem
 from tavern.models.session import Session
+from tavern.models.turn import Turn
 
 logger = logging.getLogger(__name__)
 
@@ -339,3 +341,47 @@ async def end_session(
         ended_at=session.ended_at,
         end_reason=session.end_reason,
     )
+
+
+@router.delete("/{campaign_id}", status_code=204)
+async def delete_campaign(
+    campaign_id: uuid.UUID,
+    db: DbSession,
+) -> Response:
+    """Permanently delete a campaign and all associated data.
+
+    Blocked for campaigns in 'active' status — end the session first.
+    Deletes characters, sessions, turns, inventory, conditions, and the
+    campaign state in dependency order before removing the campaign record.
+    NPCs cascade via the database FK (ondelete=CASCADE).
+
+    Returns 204 on success with no body.
+    """
+    result = await db.execute(select(Campaign).where(Campaign.id == campaign_id))
+    campaign = result.scalar_one_or_none()
+    if campaign is None:
+        raise not_found("campaign", campaign_id)
+
+    if campaign.status == "active":
+        raise bad_request(
+            "campaign_active",
+            "End the active session before deleting this campaign.",
+        )
+
+    # Subqueries for child IDs scoped to this campaign
+    session_ids = select(Session.id).where(Session.campaign_id == campaign_id)
+    character_ids = select(Character.id).where(Character.campaign_id == campaign_id)
+
+    # Delete in FK dependency order
+    await db.execute(delete(Turn).where(Turn.session_id.in_(session_ids)))
+    await db.execute(delete(Session).where(Session.campaign_id == campaign_id))
+    await db.execute(delete(InventoryItem).where(InventoryItem.character_id.in_(character_ids)))
+    await db.execute(
+        delete(CharacterCondition).where(CharacterCondition.character_id.in_(character_ids))
+    )
+    await db.execute(delete(Character).where(Character.campaign_id == campaign_id))
+    await db.execute(delete(CampaignState).where(CampaignState.campaign_id == campaign_id))
+    await db.execute(delete(Campaign).where(Campaign.id == campaign_id))
+
+    await db.commit()
+    return Response(status_code=204)

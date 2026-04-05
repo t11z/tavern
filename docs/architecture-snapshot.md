@@ -43,7 +43,7 @@ backend/tavern/
 │   ├── config.py           # BotConfig dataclass; validates required env vars on init
 │   ├── __main__.py         # Entry point: python -m tavern.discord_bot
 │   ├── cogs/               # discord.py Cog modules (one per command group)
-│   │   ├── campaign.py         # /campaign create|info|config|recap|scene; /session start|end
+│   │   ├── campaign.py         # /campaign create|info|config|recap|scene; /session start|end; /tavern delete (with confirmation)
 │   │   ├── character.py        # /character create|sheet|inventory|spells; guided creation threads
 │   │   ├── gameplay.py         # /action, /roll, /pass; WebSocket event → Discord message routing
 │   │   ├── lfg.py              # /lfg — bind a campaign to a Discord text channel
@@ -178,6 +178,7 @@ models/  ──→ (no internal dependencies)
 | POST | /api/campaigns | Create campaign | 201 |
 | GET | /api/campaigns/{id} | Get campaign detail | 200 |
 | PATCH | /api/campaigns/{id} | Update campaign name/status | 200 |
+| DELETE | /api/campaigns/{id} | Delete campaign and all data (blocked if active) | 204 |
 | POST | /api/campaigns/{id}/sessions | Start session (activates campaign) | 201 |
 | POST | /api/campaigns/{id}/sessions/end | End session (pauses campaign) | 200 |
 | GET | /api/campaigns/{id}/characters | List characters | 200 |
