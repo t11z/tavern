@@ -71,11 +71,15 @@ export interface CharacterState {
   proficiency_bonus?: number
   hit_die?: string
   ability_scores?: Record<string, number>
+  ability_modifiers?: Record<string, number>
   proficiencies?: string[]
+  languages?: string[]
+  background?: string
   spell_slots: Record<string, number>
   spell_slots_max?: Record<string, number>
   spells?: SpellEntry[]
   features: Record<string, unknown>
+  class_features?: Record<string, string>
   inventory?: InventoryItem[]
   conditions?: string[]
 }
