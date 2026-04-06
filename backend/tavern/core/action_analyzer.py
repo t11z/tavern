@@ -40,6 +40,10 @@ class ActionAnalysis:
     ability: str | None = None
     """Ability name (e.g. ``"STR"``) if category == ABILITY_CHECK."""
     raw_action: str = field(default="", repr=False)
+    matched_keywords: list[str] | None = None
+    """Keywords from the player's text that triggered the classification."""
+    decision_summary: str | None = None
+    """Human-readable one-liner describing how the action was classified."""
 
 
 # ---------------------------------------------------------------------------
@@ -361,6 +365,11 @@ def _contains_any(text_lower: str, keywords: frozenset[str]) -> bool:
     return any(kw in text_lower for kw in keywords)
 
 
+def _matched_keywords(text_lower: str, keywords: frozenset[str]) -> list[str]:
+    """Return the subset of *keywords* that appear in *text_lower*."""
+    return sorted(kw for kw in keywords if kw in text_lower)
+
+
 def _extract_spell_index(text_lower: str) -> str | None:
     """Return the canonical spell index for the longest spell name found."""
     best: tuple[int, str] | None = None
@@ -421,59 +430,98 @@ def analyze_action(
     # 1. Spell detection (highest specificity)
     if _contains_any(low, _SPELL_KEYWORDS):
         spell_index = _extract_spell_index(low)
+        kws = _matched_keywords(low, _SPELL_KEYWORDS)
+        summary = f"Classified as {ActionCategory.CAST_SPELL} via keywords: {', '.join(kws)}"
+        if spell_index:
+            summary += f"; spell={spell_index}"
         return ActionAnalysis(
             category=ActionCategory.CAST_SPELL,
             target_name=_extract_target(low),
             spell_index=spell_index,
             raw_action=text,
+            matched_keywords=kws,
+            decision_summary=summary,
         )
 
     # 2. Ranged attack
     if _contains_any(low, _RANGED_KEYWORDS):
+        kws = _matched_keywords(low, _RANGED_KEYWORDS)
+        _cat = ActionCategory.RANGED_ATTACK
         return ActionAnalysis(
-            category=ActionCategory.RANGED_ATTACK,
+            category=_cat,
             target_name=_extract_target(low),
             raw_action=text,
+            matched_keywords=kws,
+            decision_summary=f"Classified as {_cat} via keywords: {', '.join(kws)}",
         )
 
     # 3. Melee attack
     if _contains_any(low, _MELEE_KEYWORDS):
+        kws = _matched_keywords(low, _MELEE_KEYWORDS)
+        _cat = ActionCategory.MELEE_ATTACK
         return ActionAnalysis(
-            category=ActionCategory.MELEE_ATTACK,
+            category=_cat,
             target_name=_extract_target(low),
             raw_action=text,
+            matched_keywords=kws,
+            decision_summary=f"Classified as {_cat} via keywords: {', '.join(kws)}",
         )
 
     # 4. Ability check
     if _contains_any(low, _ABILITY_TRIGGER_KEYWORDS):
         ability = _extract_ability(low)
         if ability:
+            kws = _matched_keywords(low, _ABILITY_TRIGGER_KEYWORDS)
+            _cat = ActionCategory.ABILITY_CHECK
+            _kw_str = ", ".join(kws)
             return ActionAnalysis(
-                category=ActionCategory.ABILITY_CHECK,
+                category=_cat,
                 ability=ability,
                 target_name=_extract_target(low),
                 raw_action=text,
+                matched_keywords=kws,
+                decision_summary=(
+                    f"Classified as {_cat} via keywords: {_kw_str}; ability={ability}"
+                ),
             )
 
     # 5. Interaction
     if _contains_any(low, _INTERACTION_KEYWORDS):
+        kws = _matched_keywords(low, _INTERACTION_KEYWORDS)
+        _cat = ActionCategory.INTERACTION
         return ActionAnalysis(
-            category=ActionCategory.INTERACTION,
+            category=_cat,
             target_name=_extract_target(low),
             raw_action=text,
+            matched_keywords=kws,
+            decision_summary=f"Classified as {_cat} via keywords: {', '.join(kws)}",
         )
 
     # 6. Movement
     if _contains_any(low, _MOVEMENT_KEYWORDS):
+        kws = _matched_keywords(low, _MOVEMENT_KEYWORDS)
+        _cat = ActionCategory.MOVEMENT
         return ActionAnalysis(
-            category=ActionCategory.MOVEMENT,
+            category=_cat,
             raw_action=text,
+            matched_keywords=kws,
+            decision_summary=f"Classified as {_cat} via keywords: {', '.join(kws)}",
         )
 
     # 7. Short text with action-like verbs → UNKNOWN rather than NARRATIVE
     words = _tokens(text)
     if len(words) <= 6:
-        return ActionAnalysis(category=ActionCategory.UNKNOWN, raw_action=text)
+        return ActionAnalysis(
+            category=ActionCategory.UNKNOWN,
+            raw_action=text,
+            matched_keywords=[],
+            decision_summary="Classified as unknown — short text with no recognised keywords",
+        )
 
     # 8. Default: treat as pure narrative description
-    return ActionAnalysis(category=ActionCategory.NARRATIVE, raw_action=text)
+    return ActionAnalysis(
+        category=ActionCategory.NARRATIVE,
+        raw_action=text,
+        matched_keywords=[],
+        decision_summary="Classified as narrative — long text with no mechanical trigger keywords",
+    )

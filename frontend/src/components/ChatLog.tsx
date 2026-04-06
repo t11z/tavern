@@ -4,9 +4,10 @@ import type { TurnEntry } from '../types'
 interface Props {
   turns: TurnEntry[]
   streamingNarrative: string | null
+  onSelectTurn?: (turnId: string) => void
 }
 
-export function ChatLog({ turns, streamingNarrative }: Props) {
+export function ChatLog({ turns, streamingNarrative, onSelectTurn }: Props) {
   const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -20,7 +21,15 @@ export function ChatLog({ turns, streamingNarrative }: Props) {
       )}
 
       {turns.map((t) => (
-        <div key={t.turn_id} style={styles.entry}>
+        <div
+          key={t.turn_id}
+          style={{
+            ...styles.entry,
+            ...(onSelectTurn ? styles.entryClickable : {}),
+          }}
+          onClick={onSelectTurn ? () => onSelectTurn(t.turn_id) : undefined}
+          title={onSelectTurn ? 'Click to inspect this turn' : undefined}
+        >
           <p style={styles.action}>&gt; {t.player_action}</p>
           {t.rules_result && (
             <p style={styles.rulesResult}>{t.rules_result}</p>
@@ -62,6 +71,13 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     flexDirection: 'column',
     gap: '0.5rem',
+  },
+  entryClickable: {
+    cursor: 'pointer',
+    borderRadius: '4px',
+    padding: '0.25rem',
+    margin: '-0.25rem',
+    transition: 'background 0.15s',
   },
   action: {
     color: 'var(--color-gold-dim)',

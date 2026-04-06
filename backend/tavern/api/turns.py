@@ -20,8 +20,10 @@ Turn processing pipeline (Task D — full combat lifecycle):
 
 from __future__ import annotations
 
+import json
 import logging
 import os
+import time
 import uuid
 from datetime import UTC, datetime
 from typing import Annotated
@@ -61,6 +63,12 @@ from tavern.models.character import Character
 from tavern.models.npc import NPC
 from tavern.models.session import Session
 from tavern.models.turn import Turn
+from tavern.observability import (
+    LLMCallRecord,
+    PipelineStep,
+    TurnEventLogAccumulator,
+    turn_event_log_to_dict,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -552,7 +560,7 @@ async def _run_combat_start(
 
     # Broadcast
     await manager.broadcast_combat_started(campaign_id, order_payload, surprised_ids)
-    logger.info(
+    logger.debug(
         "Combat started (campaign=%s): %d participants, %d surprised",
         campaign_id,
         len(ordered),
@@ -739,6 +747,8 @@ async def _stream_narrative(
     session_factory: async_sessionmaker,
     world_state: dict,
     mechanical_results: list[dict] | None = None,
+    pre_steps: list[PipelineStep] | None = None,
+    pre_llm_calls: list[LLMCallRecord] | None = None,
 ) -> None:
     """Run the full post-narration pipeline as a background task.
 
@@ -747,23 +757,37 @@ async def _stream_narrative(
     2. Broadcast narrative start / chunk / end events
     3. Process gm_signals.npc_updates (within DB transaction)
     4. Process gm_signals.scene_transition (Engine combat_end takes precedence)
-    5. Persist turn narrative + gm_signals JSON
+    5. Persist turn narrative + gm_signals JSON + event_log
     6. Update rolling summary
 
     Creates its own DB session because the request session is already closed.
     """
     from tavern.api.ws import manager
 
+    # Observability accumulator for this turn's pipeline
+    acc = TurnEventLogAccumulator(turn_id=str(turn_id))
+
+    # Inject pre-background steps/calls captured during the request phase
+    for step in pre_steps or []:
+        acc.add_step(step)
+    for call in pre_llm_calls or []:
+        acc.add_llm_call(call)
+
     full_narrative = ""
     gm_signals: GMSignals = safe_default()
+    llm_meta: dict = {}
+    gm_diag: dict = {"fallback_used": False, "raw_input_truncated": "", "parse_error": None}
 
     await manager.broadcast(
         campaign_id,
         {"event": "turn.narrative_start", "payload": {"turn_id": str(turn_id)}},
     )
 
+    # --- narration step ---
+    narration_start = datetime.now(UTC)
+    narration_start_mono = time.monotonic()
     try:
-        full_narrative, gm_signals = await narrator.narrate_turn_stream(snapshot)
+        full_narrative, gm_signals, llm_meta = await narrator.narrate_turn_stream(snapshot)
     except Exception as exc:
         logger.error("Narrative streaming error for turn %s: %s", turn_id, exc)
         await manager.broadcast(
@@ -775,6 +799,110 @@ async def _stream_narrative(
         )
         full_narrative = full_narrative or "[Narrator error — please retry]"
         gm_signals = safe_default()
+        llm_meta = {}
+        acc.add_error(f"Narrator error: {exc}")
+    narration_duration_ms = int((time.monotonic() - narration_start_mono) * 1000)
+
+    # Record narration LLM call if we have metadata
+    if llm_meta:
+        acc.add_llm_call(
+            LLMCallRecord(
+                call_type=llm_meta.get("call_type", "narration"),
+                model_id=llm_meta.get("model_id", "unknown"),
+                model_tier=llm_meta.get("model_tier", "high"),
+                input_tokens=llm_meta.get("input_tokens", 0),
+                output_tokens=llm_meta.get("output_tokens", 0),
+                cache_read_tokens=llm_meta.get("cache_read_tokens", 0),
+                cache_creation_tokens=llm_meta.get("cache_creation_tokens", 0),
+                latency_ms=llm_meta.get("latency_ms", narration_duration_ms),
+                stream_first_token_ms=llm_meta.get("stream_first_token_ms"),
+                estimated_cost_usd=llm_meta.get("estimated_cost_usd", 0.0),
+                success=llm_meta.get("success", True),
+                error=llm_meta.get("error"),
+            )
+        )
+
+    # model_routing step (extracted from llm_meta)
+    if llm_meta:
+        acc.add_step(
+            PipelineStep(
+                step="model_routing",
+                started_at=narration_start,
+                duration_ms=0,
+                input_summary={"request_type": "narration"},
+                output_summary={
+                    "model_id": llm_meta.get("model_id", "unknown"),
+                    "model_tier": llm_meta.get("model_tier", "high"),
+                },
+                decision=(
+                    f"{llm_meta.get('model_tier', 'high')} tier — "
+                    f"{llm_meta.get('model_id', 'unknown')}"
+                ),
+            )
+        )
+
+    # narration step
+    acc.add_step(
+        PipelineStep(
+            step="narration",
+            started_at=narration_start,
+            duration_ms=narration_duration_ms,
+            input_summary={"snapshot_hash": hash(str(snapshot)) % 100000},
+            output_summary={
+                "narrative_length": len(full_narrative),
+                "stream_duration_ms": llm_meta.get("latency_ms", narration_duration_ms),
+            },
+            decision=(
+                f"Narrated — {len(full_narrative)} chars, "
+                f"{llm_meta.get('latency_ms', narration_duration_ms)}ms stream"
+            ),
+        )
+    )
+
+    # gm_signals_parse step — gm_signals already parsed inside narrate_turn_stream;
+    # we reconstruct diagnostics from what's available on the gm_signals object.
+    # parse_gm_signals is called inside narrator.narrate_turn_stream and the
+    # result is returned as gm_signals.  We can't get the raw diag from there,
+    # so we infer fallback from llm_meta.success being False.
+    if llm_meta.get("success", True) is False:
+        gm_diag = {
+            "fallback_used": True,
+            "raw_input_truncated": "",
+            "parse_error": llm_meta.get("error", "narration error"),
+        }
+    else:
+        gm_diag = {
+            "fallback_used": False,
+            "raw_input_truncated": "",
+            "parse_error": None,
+        }
+
+    if gm_diag["fallback_used"]:
+        acc.add_warning(f"GMSignals parse fallback: {gm_diag['parse_error']}")
+
+    acc.add_step(
+        PipelineStep(
+            step="gm_signals_parse",
+            started_at=narration_start,
+            duration_ms=0,
+            input_summary={"raw_input_length": len(gm_diag.get("raw_input_truncated", ""))},
+            output_summary={
+                "fallback_used": gm_diag["fallback_used"],
+                "has_scene_transition": gm_signals.scene_transition.type != "none",
+                "npc_update_count": len(gm_signals.npc_updates),
+                "suggested_actions_count": len(gm_signals.suggested_actions),
+            },
+            decision=(
+                "Parse failed — safe default used"
+                if gm_diag["fallback_used"]
+                else (
+                    f"Parsed — transition={gm_signals.scene_transition.type}, "
+                    f"npc_updates={len(gm_signals.npc_updates)}, "
+                    f"suggested={len(gm_signals.suggested_actions)}"
+                )
+            ),
+        )
+    )
 
     await manager.broadcast(
         campaign_id,
@@ -807,12 +935,29 @@ async def _stream_narrative(
             },
         )
 
+    # suggested_actions_emit step
+    suggestion_count = len(gm_signals.suggested_actions)
+    acc.add_step(
+        PipelineStep(
+            step="suggested_actions_emit",
+            started_at=datetime.now(UTC),
+            duration_ms=0,
+            input_summary={"raw_count": suggestion_count},
+            output_summary={"emitted": suggestion_count},
+            decision=f"{suggestion_count} suggestions emitted",
+        )
+    )
+
     # Persist narrative and process GMSignals (own session)
     async with session_factory() as db:
         try:
             # -------------------------------------------------------------------
             # Step A: Process npc_updates BEFORE scene_transition
             # -------------------------------------------------------------------
+            npc_spawned = 0
+            npc_updated = 0
+            npc_update_start = datetime.now(UTC)
+            npc_update_start_mono = time.monotonic()
             for npc_update in gm_signals.npc_updates:
                 try:
                     await _process_npc_update(
@@ -821,6 +966,10 @@ async def _stream_narrative(
                         db=db,
                         sequence_number=sequence_number,
                     )
+                    if npc_update.event == "spawn":
+                        npc_spawned += 1
+                    else:
+                        npc_updated += 1
                 except Exception as exc:
                     logger.error(
                         "Failed to process NPCUpdate %r for campaign %s: %s",
@@ -828,6 +977,17 @@ async def _stream_narrative(
                         campaign_id,
                         exc,
                     )
+            npc_update_duration_ms = int((time.monotonic() - npc_update_start_mono) * 1000)
+            acc.add_step(
+                PipelineStep(
+                    step="npc_update_apply",
+                    started_at=npc_update_start,
+                    duration_ms=npc_update_duration_ms,
+                    input_summary={"npc_update_count": len(gm_signals.npc_updates)},
+                    output_summary={"spawned": npc_spawned, "updated": npc_updated},
+                    decision=f"Spawned {npc_spawned}, updated {npc_updated} NPCs",
+                )
+            )
 
             # -------------------------------------------------------------------
             # Step B: Process scene_transition
@@ -846,6 +1006,10 @@ async def _stream_narrative(
             # that submit_turn may have set.  If not set, we rely on Narrator signals.
             engine_combat_end = bool(world_state.get("engine_combat_end", False))
 
+            scene_transition_start = datetime.now(UTC)
+            scene_transition_start_mono = time.monotonic()
+            scene_transition_applied = False
+
             if engine_combat_end and campaign_state is not None:
                 # Engine authority — always transitions to exploration
                 updated_ws = dict(campaign_state.world_state or {})
@@ -857,7 +1021,8 @@ async def _stream_narrative(
                 campaign_state.updated_at = datetime.now(tz=UTC)
                 await db.flush()
                 await manager.broadcast_combat_ended(campaign_id)
-                logger.info("Combat ended (Engine authority) for campaign %s", campaign_id)
+                logger.debug("Combat ended (Engine authority) for campaign %s", campaign_id)
+                scene_transition_applied = True
 
                 if gm_signals.scene_transition.type == "combat_end":
                     logger.info(
@@ -936,6 +1101,7 @@ async def _stream_narrative(
                     potential_surprised=potential_surprised,
                     combat_snapshot=combat_snapshot,
                 )
+                scene_transition_applied = True
 
             elif (
                 gm_signals.scene_transition.type == "combat_end"
@@ -952,7 +1118,30 @@ async def _stream_narrative(
                 campaign_state.updated_at = datetime.now(tz=UTC)
                 await db.flush()
                 await manager.broadcast_combat_ended(campaign_id)
-                logger.info("Combat ended (Narrator signal) for campaign %s", campaign_id)
+                logger.debug("Combat ended (Narrator signal) for campaign %s", campaign_id)
+                scene_transition_applied = True
+
+            if gm_signals.scene_transition.type != "none" or scene_transition_applied:
+                scene_transition_duration_ms = int(
+                    (time.monotonic() - scene_transition_start_mono) * 1000
+                )
+                acc.add_step(
+                    PipelineStep(
+                        step="scene_transition_apply",
+                        started_at=scene_transition_start,
+                        duration_ms=scene_transition_duration_ms,
+                        input_summary={
+                            "transition_type": gm_signals.scene_transition.type,
+                        },
+                        output_summary={
+                            "mode_change": str(gm_signals.scene_transition.type),
+                            "applied": scene_transition_applied,
+                        },
+                        decision=(
+                            gm_signals.scene_transition.reason or gm_signals.scene_transition.type
+                        ),
+                    )
+                )
 
             # -------------------------------------------------------------------
             # Step C: Persist turn narrative and gm_signals JSON
@@ -976,10 +1165,46 @@ async def _stream_narrative(
                     recent_turns=[turn_line],
                     current_summary=current_summary,
                 )
-                new_summary = trim_summary(new_summary)
+                summary_compress_start = datetime.now(UTC)
+                summary_compress_start_mono = time.monotonic()
+                new_summary, trim_meta = trim_summary(new_summary)
+                summary_compress_duration_ms = int(
+                    (time.monotonic() - summary_compress_start_mono) * 1000
+                )
+                acc.add_step(
+                    PipelineStep(
+                        step="summary_compression",
+                        started_at=summary_compress_start,
+                        duration_ms=summary_compress_duration_ms,
+                        input_summary={"before_tokens": trim_meta.get("before_tokens", 0)},
+                        output_summary={"after_tokens": trim_meta.get("after_tokens", 0)},
+                        decision=(
+                            f"Summary {trim_meta.get('before_tokens', 0)}"
+                            f"→{trim_meta.get('after_tokens', 0)} tokens"
+                        ),
+                    )
+                )
             except Exception as exc:
                 logger.warning("Summary update failed: %s — keeping previous summary", exc)
-                new_summary = trim_summary(current_summary)
+                summary_compress_start = datetime.now(UTC)
+                summary_compress_start_mono = time.monotonic()
+                new_summary, trim_meta = trim_summary(current_summary)
+                summary_compress_duration_ms = int(
+                    (time.monotonic() - summary_compress_start_mono) * 1000
+                )
+                acc.add_step(
+                    PipelineStep(
+                        step="summary_compression",
+                        started_at=summary_compress_start,
+                        duration_ms=summary_compress_duration_ms,
+                        input_summary={"before_tokens": trim_meta.get("before_tokens", 0)},
+                        output_summary={"after_tokens": trim_meta.get("after_tokens", 0)},
+                        decision=(
+                            f"Summary {trim_meta.get('before_tokens', 0)}"
+                            f"→{trim_meta.get('after_tokens', 0)} tokens (fallback)"
+                        ),
+                    )
+                )
 
             if campaign_state is not None:
                 campaign_state.rolling_summary = new_summary
@@ -989,10 +1214,188 @@ async def _stream_narrative(
             if camp is not None:
                 camp.last_played_at = datetime.now(tz=UTC)
 
+            # -------------------------------------------------------------------
+            # Step E: Finalize event_log and persist atomically with the turn
+            # -------------------------------------------------------------------
+            event_log_obj = acc.finalize()
+            event_log_dict = turn_event_log_to_dict(event_log_obj)
+
+            json_bytes = json.dumps(event_log_dict).encode()
+            if len(json_bytes) > 20480:
+                logger.warning(
+                    "tavern.api.turns: event_log size %d bytes exceeds 20 KB threshold on turn %s",
+                    len(json_bytes),
+                    str(turn_id),
+                )
+
+            if turn is not None:
+                turn.event_log = event_log_dict
+
             await db.commit()
 
         except Exception as exc:
             logger.error("DB persist failed for turn %s: %s", turn_id, exc)
+            return
+
+    # Emit turn.event_log WebSocket event (after DB commit)
+    pipeline_duration_ms = int(
+        (event_log_obj.pipeline_finished_at - event_log_obj.pipeline_started_at).total_seconds()
+        * 1000
+    )
+    await manager.broadcast(
+        campaign_id,
+        {
+            "type": "turn.event_log",
+            "payload": {
+                "turn_id": str(turn_id),
+                "sequence_number": sequence_number,
+                "pipeline_duration_ms": pipeline_duration_ms,
+                "steps": event_log_dict["steps"],
+                "llm_calls": event_log_dict["llm_calls"],
+                "warnings": event_log_dict["warnings"],
+                "errors": event_log_dict["errors"],
+                "admin_only": True,
+            },
+        },
+    )
+
+    # Emit session.telemetry every 10 turns
+    if sequence_number % 10 == 0:
+        await _emit_session_telemetry(
+            campaign_id=campaign_id,
+            session_factory=session_factory,
+        )
+
+
+async def _emit_session_telemetry(
+    *,
+    campaign_id: uuid.UUID,
+    session_factory: async_sessionmaker,
+) -> None:
+    """Query session telemetry from recent turns and broadcast session.telemetry."""
+    from tavern.api.ws import manager
+
+    try:
+        async with session_factory() as db:
+            query_start = time.monotonic()
+            # Find the open session for this campaign
+            session_result = await db.execute(
+                select(Session).where(
+                    Session.campaign_id == campaign_id,
+                    Session.ended_at.is_(None),
+                )
+            )
+            session = session_result.scalar_one_or_none()
+            if session is None:
+                return
+
+            # Fetch all turns with event_log for this session
+            turns_result = await db.execute(
+                select(Turn).where(
+                    Turn.session_id == session.id,
+                    Turn.event_log.isnot(None),
+                )
+            )
+            turns_with_logs = turns_result.scalars().all()
+            elapsed_ms = (time.monotonic() - query_start) * 1000
+
+            if elapsed_ms > 200:
+                logger.warning(
+                    "tavern.api.turns: session telemetry query took %.0f ms for session %s",
+                    elapsed_ms,
+                    str(session.id),
+                )
+
+            telemetry = _compute_session_telemetry(str(session.id), list(turns_with_logs))
+            await manager.broadcast(
+                campaign_id,
+                {"type": "session.telemetry", "payload": telemetry},
+            )
+    except Exception as exc:
+        logger.warning("Failed to emit session.telemetry for campaign %s: %s", campaign_id, exc)
+
+
+def _compute_session_telemetry(session_id: str, turns_with_logs: list) -> dict:
+    """Compute session telemetry aggregates from a list of Turn records."""
+    turns_processed = len(turns_with_logs)
+    total_cost_usd = 0.0
+    total_input_tokens = 0
+    total_output_tokens = 0
+    total_cache_read_tokens = 0
+    narration_latencies: list[int] = []
+    pipeline_durations: list[int] = []
+    classifier_invocations = 0
+    classifier_low_confidence = 0
+    gm_signals_parse_failures = 0
+    model_tier_distribution: dict[str, int] = {}
+
+    for t in turns_with_logs:
+        if not t.event_log:
+            continue
+        log = t.event_log
+
+        for call in log.get("llm_calls", []):
+            total_cost_usd += call.get("estimated_cost_usd", 0.0)
+            total_input_tokens += call.get("input_tokens", 0)
+            total_output_tokens += call.get("output_tokens", 0)
+            total_cache_read_tokens += call.get("cache_read_tokens", 0)
+            call_type = call.get("call_type", "")
+            tier = call.get("model_tier", "high")
+            if call_type == "classification":
+                classifier_invocations += 1
+            model_tier_distribution[tier] = model_tier_distribution.get(tier, 0) + 1
+
+        for step in log.get("steps", []):
+            step_name = step.get("step", "")
+            if step_name == "narration":
+                out = step.get("output_summary", {})
+                dur = out.get("stream_duration_ms")
+                if dur is not None:
+                    narration_latencies.append(int(dur))
+            if step_name == "gm_signals_parse":
+                out = step.get("output_summary", {})
+                if out.get("fallback_used", False):
+                    gm_signals_parse_failures += 1
+
+        # Pipeline duration from started_at to finished_at in the log
+        started = log.get("pipeline_started_at")
+        finished = log.get("pipeline_finished_at")
+        if started and finished:
+            try:
+                from datetime import datetime as _dt
+
+                s = _dt.fromisoformat(started)
+                f = _dt.fromisoformat(finished)
+                pipeline_durations.append(int((f - s).total_seconds() * 1000))
+            except Exception:
+                pass
+
+    # Cache hit rate = cache_read_tokens / (total_input_tokens + cache_read_tokens)
+    cache_denom = total_input_tokens + total_cache_read_tokens
+    cache_hit_rate = total_cache_read_tokens / cache_denom if cache_denom > 0 else 0.0
+
+    avg_narration_latency_ms = (
+        int(sum(narration_latencies) / len(narration_latencies)) if narration_latencies else 0
+    )
+    avg_pipeline_duration_ms = (
+        int(sum(pipeline_durations) / len(pipeline_durations)) if pipeline_durations else 0
+    )
+
+    return {
+        "session_id": session_id,
+        "turns_processed": turns_processed,
+        "total_cost_usd": round(total_cost_usd, 6),
+        "total_input_tokens": total_input_tokens,
+        "total_output_tokens": total_output_tokens,
+        "cache_hit_rate": round(cache_hit_rate, 4),
+        "avg_narration_latency_ms": avg_narration_latency_ms,
+        "avg_pipeline_duration_ms": avg_pipeline_duration_ms,
+        "classifier_invocations": classifier_invocations,
+        "classifier_low_confidence_count": classifier_low_confidence,
+        "gm_signals_parse_failures": gm_signals_parse_failures,
+        "model_tier_distribution": model_tier_distribution,
+        "admin_only": True,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -1065,9 +1468,58 @@ async def submit_turn(
             f"Character {body.character_id} does not belong to campaign {campaign_id}",
         )
 
+    # Pre-background pipeline steps collected here and forwarded to the background task
+    pre_steps: list[PipelineStep] = []
+    pre_llm_calls: list[LLMCallRecord] = []
+
     # 4. Run Rules Engine: classify action → resolve mechanics → update character state
+    action_text = body.action
+
+    # action_analysis step
+    analysis_start = datetime.now(UTC)
+    analysis_start_mono = time.monotonic()
     try:
-        analysis = analyze_action(body.action, _character_to_caster_state(character))
+        analysis = analyze_action(action_text, _character_to_caster_state(character))
+        analysis_duration_ms = int((time.monotonic() - analysis_start_mono) * 1000)
+        pre_steps.append(
+            PipelineStep(
+                step="action_analysis",
+                started_at=analysis_start,
+                duration_ms=analysis_duration_ms,
+                input_summary={
+                    "action_text_length": len(action_text),
+                    "action_preview": action_text[:80],
+                },
+                output_summary={
+                    "category": analysis.category.value,
+                    "matched_keywords": analysis.matched_keywords,
+                },
+                decision=analysis.decision_summary,
+            )
+        )
+    except Exception as exc:
+        logger.warning("Rules Engine error for turn (campaign=%s): %s", campaign_id, exc)
+        # Create a minimal analysis for the error case
+        analysis = ActionAnalysis(
+            category=ActionCategory.UNKNOWN,
+            raw_action=action_text,
+        )
+        analysis_duration_ms = int((time.monotonic() - analysis_start_mono) * 1000)
+        pre_steps.append(
+            PipelineStep(
+                step="action_analysis",
+                started_at=analysis_start,
+                duration_ms=analysis_duration_ms,
+                input_summary={
+                    "action_text_length": len(action_text),
+                    "action_preview": action_text[:80],
+                },
+                output_summary={"category": "unknown", "matched_keywords": None},
+                decision=f"Error: {exc}",
+            )
+        )
+
+    try:
         rules_result, char_update, mechanical_results = await _resolve_action(
             analysis, character, campaign_id
         )
@@ -1079,10 +1531,29 @@ async def submit_turn(
     sequence_number = campaign.state.turn_count + 1
 
     turn_ctx = TurnContext(player_action=body.action, rules_result=rules_result)
+
+    # snapshot_build step
+    snapshot_start = datetime.now(UTC)
+    snapshot_start_mono = time.monotonic()
     snapshot = await build_snapshot(
         campaign_id=campaign_id,
         current_turn=turn_ctx,
         db_session=db,
+    )
+    snapshot_duration_ms = int((time.monotonic() - snapshot_start_mono) * 1000)
+    pre_steps.append(
+        PipelineStep(
+            step="snapshot_build",
+            started_at=snapshot_start,
+            duration_ms=snapshot_duration_ms,
+            input_summary={"session_mode": snapshot.session_mode},
+            output_summary={"estimated_token_count": snapshot.estimated_token_count},
+            decision=(
+                f"{snapshot.estimated_token_count} tokens"
+                if snapshot.estimated_token_count
+                else None
+            ),
+        )
     )
 
     # 6. [Exploration mode only] CombatClassifier pre-narration check (Flow B)
@@ -1095,13 +1566,50 @@ async def submit_turn(
 
             api_key = os.environ.get("ANTHROPIC_API_KEY", "")
             classifier = CombatClassifier(api_key=api_key)
-            classification = await classifier.classify(body.action, snapshot)
+            classify_start = datetime.now(UTC)
+            classify_start_mono = time.monotonic()
+            classification, classifier_meta = await classifier.classify(body.action, snapshot)
+            classify_duration_ms = int((time.monotonic() - classify_start_mono) * 1000)
             logger.debug(
                 "CombatClassifier result (campaign=%s): combat_starts=%s confidence=%s reason=%s",
                 campaign_id,
                 classification.combat_starts,
                 classification.confidence,
                 classification.reason,
+            )
+
+            pre_steps.append(
+                PipelineStep(
+                    step="combat_classification",
+                    started_at=classify_start,
+                    duration_ms=classify_duration_ms,
+                    input_summary={
+                        "action_text_length": len(body.action),
+                        "session_mode": snapshot.session_mode,
+                    },
+                    output_summary={
+                        "combat_starts": classification.combat_starts,
+                        "confidence": classification.confidence,
+                        "combatants": classification.combatants,
+                    },
+                    decision=classification.reason,
+                )
+            )
+            pre_llm_calls.append(
+                LLMCallRecord(
+                    call_type=classifier_meta.get("call_type", "classification"),
+                    model_id=classifier_meta.get("model_id", "unknown"),
+                    model_tier=classifier_meta.get("model_tier", "low"),
+                    input_tokens=classifier_meta.get("input_tokens", 0),
+                    output_tokens=classifier_meta.get("output_tokens", 0),
+                    cache_read_tokens=classifier_meta.get("cache_read_tokens", 0),
+                    cache_creation_tokens=classifier_meta.get("cache_creation_tokens", 0),
+                    latency_ms=classifier_meta.get("latency_ms", classify_duration_ms),
+                    stream_first_token_ms=classifier_meta.get("stream_first_token_ms"),
+                    estimated_cost_usd=classifier_meta.get("estimated_cost_usd", 0.0),
+                    success=classifier_meta.get("success", True),
+                    error=classifier_meta.get("error"),
+                )
             )
 
             if classification.combat_starts:
@@ -1199,6 +1707,8 @@ async def submit_turn(
         session_factory=session_factory,
         world_state=world_state_copy,
         mechanical_results=mechanical_results,
+        pre_steps=pre_steps,
+        pre_llm_calls=pre_llm_calls,
     )
 
     return TurnSubmitResponse(turn_id=turn.id, sequence_number=sequence_number)

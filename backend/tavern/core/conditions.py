@@ -168,6 +168,8 @@ class AttackRollModifiers:
     advantage_sources: list[str] = field(default_factory=list)
     disadvantage_sources: list[str] = field(default_factory=list)
     d20_penalty: int = 0  # Exhaustion: −2 × level subtracted from roll
+    modifiers_applied: list[str] | None = None
+    """Flat list of all active modifier descriptions for observability."""
 
     @property
     def has_advantage(self) -> bool:
@@ -199,6 +201,8 @@ class AttacksAgainstModifiers:
     advantage_sources: list[str] = field(default_factory=list)
     disadvantage_sources: list[str] = field(default_factory=list)
     melee_auto_crit_within_5ft: bool = False
+    modifiers_applied: list[str] | None = None
+    """Flat list of all active modifier descriptions for observability."""
 
     @property
     def has_advantage(self) -> bool:
@@ -295,10 +299,15 @@ def attack_roll_modifiers(
     exhaustion_level = _get_exhaustion_level(conditions)
     penalty = 2 * exhaustion_level  # SRD p.181: d20 test reduced by 2 × level
 
+    mods: list[str] = list(adv) + list(dis)
+    if penalty:
+        mods.append(f"exhaustion_penalty_-{penalty}")
+
     return AttackRollModifiers(
         advantage_sources=adv,
         disadvantage_sources=dis,
         d20_penalty=penalty,
+        modifiers_applied=mods if mods else None,
     )
 
 
@@ -364,10 +373,15 @@ def attacks_against_modifiers(
         if attacker_within_5ft:
             auto_crit = True
 
+    mods: list[str] = list(adv) + list(dis)
+    if auto_crit:
+        mods.append("melee_auto_crit_within_5ft")
+
     return AttacksAgainstModifiers(
         advantage_sources=adv,
         disadvantage_sources=dis,
         melee_auto_crit_within_5ft=auto_crit,
+        modifiers_applied=mods if mods else None,
     )
 
 
@@ -479,10 +493,15 @@ def initiative_roll_modifiers(conditions: list[ActiveCondition]) -> AttackRollMo
     exhaustion_level = _get_exhaustion_level(conditions)
     penalty = 2 * exhaustion_level
 
+    mods: list[str] = list(adv) + list(dis)
+    if penalty:
+        mods.append(f"exhaustion_penalty_-{penalty}")
+
     return AttackRollModifiers(
         advantage_sources=adv,
         disadvantage_sources=dis,
         d20_penalty=penalty,
+        modifiers_applied=mods if mods else None,
     )
 
 
@@ -555,10 +574,15 @@ def ability_check_modifiers(
     exhaustion_level = _get_exhaustion_level(conditions)
     penalty = 2 * exhaustion_level
 
+    mods: list[str] = list(adv) + list(dis)
+    if penalty:
+        mods.append(f"exhaustion_penalty_-{penalty}")
+
     return AttackRollModifiers(
         advantage_sources=adv,
         disadvantage_sources=dis,
         d20_penalty=penalty,
+        modifiers_applied=mods if mods else None,
     )
 
 

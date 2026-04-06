@@ -232,6 +232,74 @@ export type WsEvent =
   | WsSuggestedActionsEvent
 
 // ---------------------------------------------------------------------------
+// ADR-0018 Observability types
+// ---------------------------------------------------------------------------
+
+export interface PipelineStep {
+  step: string
+  started_at: string  // ISO datetime
+  duration_ms: number
+  input_summary: Record<string, unknown>
+  output_summary: Record<string, unknown>
+  decision: string | null
+}
+
+export interface LLMCallRecord {
+  call_type: string
+  model_id: string
+  model_tier: string
+  input_tokens: number
+  output_tokens: number
+  cache_read_tokens: number
+  cache_creation_tokens: number
+  latency_ms: number
+  stream_first_token_ms: number | null
+  estimated_cost_usd: number
+  success: boolean
+  error: string | null
+}
+
+export interface TurnEventLog {
+  turn_id: string
+  pipeline_started_at: string
+  pipeline_finished_at: string
+  steps: PipelineStep[]
+  llm_calls: LLMCallRecord[]
+  warnings: string[]
+  errors: string[]
+}
+
+export interface SessionTelemetry {
+  session_id: string
+  turns_processed: number
+  total_cost_usd: number
+  total_input_tokens: number
+  total_output_tokens: number
+  cache_hit_rate: number
+  avg_narration_latency_ms: number
+  avg_pipeline_duration_ms: number
+  classifier_invocations: number
+  classifier_low_confidence_count: number
+  gm_signals_parse_failures: number
+  model_tier_distribution: Record<string, number>
+}
+
+// New WsEvent types (use "type" key, not "event")
+export interface WsTurnEventLogEvent {
+  type: 'turn.event_log'
+  payload: TurnEventLog & {
+    sequence_number: number
+    pipeline_duration_ms: number
+    admin_only: boolean
+  }
+}
+
+export interface WsSessionTelemetryEvent {
+  type: 'session.telemetry'
+  payload: SessionTelemetry & { admin_only: boolean }
+}
+
+// ---------------------------------------------------------------------------
 // API request/response shapes
 // ---------------------------------------------------------------------------
 

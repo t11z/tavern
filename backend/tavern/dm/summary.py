@@ -137,7 +137,7 @@ def build_turn_summary_input(
     return ". ".join(parts) + "."
 
 
-def trim_summary(summary: str, max_tokens: int = _BUDGET_SUMMARY_TOKENS) -> str:
+def trim_summary(summary: str, max_tokens: int = _BUDGET_SUMMARY_TOKENS) -> tuple[str, dict]:
     """Trim *summary* to fit within *max_tokens* by dropping the oldest entries.
 
     Splitting strategy:
@@ -156,13 +156,21 @@ def trim_summary(summary: str, max_tokens: int = _BUDGET_SUMMARY_TOKENS) -> str:
         max_tokens: Hard token cap (default: 500, matching _BUDGET_SUMMARY).
 
     Returns:
-        Summary text that fits within the token budget.
-    """
-    if not summary:
-        return summary
+        A tuple of (trimmed_text, diagnostic_dict).
 
-    if _estimate_tokens(summary) <= max_tokens:
-        return summary
+        trimmed_text is the summary text that fits within the token budget.
+
+        diagnostic_dict keys:
+            before_tokens (int): estimated token count before trimming.
+            after_tokens (int): estimated token count after trimming.
+    """
+    before_tokens = _estimate_tokens(summary)
+
+    if not summary:
+        return summary, {"before_tokens": 0, "after_tokens": 0}
+
+    if before_tokens <= max_tokens:
+        return summary, {"before_tokens": before_tokens, "after_tokens": before_tokens}
 
     # Prefer newline-delimited entries (multi-line accumulated format).
     entries = [e.strip() for e in summary.split("\n") if e.strip()]
@@ -175,4 +183,6 @@ def trim_summary(summary: str, max_tokens: int = _BUDGET_SUMMARY_TOKENS) -> str:
     while len(entries) > 1 and _estimate_tokens("\n".join(entries)) > max_tokens:
         entries = entries[1:]
 
-    return "\n".join(entries)
+    result = "\n".join(entries)
+    after_tokens = _estimate_tokens(result)
+    return result, {"before_tokens": before_tokens, "after_tokens": after_tokens}

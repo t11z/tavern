@@ -1,6 +1,6 @@
 # Architecture Snapshot
 
-> Last updated: 2026-04-06 — Fix turn.suggested_actions: correct event key, add character_id to payload
+> Last updated: 2026-04-06 — ADR-0018 Turn Observability Layer: observability.py, api/inspect.py, event_log JSONB on Turn, session.telemetry and turn.event_log WebSocket events
 >
 > This document is maintained by Claude Code per the rules in CLAUDE.md.
 > It is consumed by the architecture consultant to inform decisions without
@@ -24,17 +24,19 @@ backend/tavern/
 │   ├── srd_data.py         # SRD Data Access Layer: three-tier lookup (Campaign Override → Instance Library → SRD Baseline); resolve_npc_stat_block(stat_block_ref: str, campaign_id: UUID) → dict | None (three-tier monster lookup for NPC stat block population; logs warning not error on miss)
 │   └── scene.py            # Scene identifier utilities (ADR-0017): normalise_scene_id(raw: str) -> str (strip/lowercase/replace spaces+hyphens with underscore/strip non-conforming chars/collapse underscores; raises ValueError on empty result or >64 chars); validate_scene_id(scene_id: str) -> bool (returns True if already canonical; does not raise)
 ├── dm/                 # DM layer — Narrator, Context Builder, LLM provider abstraction
-│   ├── narrator.py         # Narrator class; model routing (Sonnet/Haiku); streaming narration and summary compression; GMSignals delimiter buffering (stops forwarding to clients after ---GM_SIGNALS---); parse_gm_signals() integration; narrate_turn_stream() returns tuple[str, GMSignals]
+│   ├── narrator.py         # Narrator class; model routing (Sonnet/Haiku); streaming narration and summary compression; GMSignals delimiter buffering (stops forwarding to clients after ---GM_SIGNALS---); parse_gm_signals() integration; narrate_turn_stream() returns tuple[str, GMSignals, dict] (dict = LLM metadata for observability: call_type, model_id, model_tier, input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens, latency_ms, stream_first_token_ms, estimated_cost_usd, success, error)
 │   ├── context_builder.py  # StateSnapshot, TurnContext; builds and serializes game state for the Narrator; TurnContext.stealth_rolls: dict[str, int] (Path B Surprise, ADR-0014); StateSnapshot.session_mode: str (guards CombatClassifier, ADR-0011); StateSnapshot.npcs: list[dict] (compact NPC records, ADR-0013, scene-scoped and recency-filtered last 10 turns, excludes dead/fled unless plot_significant); build_system_prompt() includes _SUGGESTED_ACTIONS_INSTRUCTIONS block instructing the Narrator to emit 0–3 suggested_actions in the GMSignals envelope (ADR-0015)
 │   ├── summary.py          # Rolling summary helpers: build_turn_summary_input(), trim_summary(); enforces 500-token budget
 │   ├── combat_classifier.py # CombatClassifier — Haiku-based binary LLM classifier for combat initiation detection; classify(action_text: str, snapshot: StateSnapshot) → CombatClassification; called pre-narration in exploration mode only; raises RuntimeError in combat mode (ADR-0011); no dependency on core/
 │   └── gm_signals.py       # GMSignals, SceneTransition, NPCUpdate dataclasses; GM_SIGNALS_DELIMITER = "---GM_SIGNALS---" constant; parse_gm_signals(raw: str) → GMSignals — safe-default on any parse failure; safe_default() → GMSignals; GMSignals fields: scene_transition, npc_updates, suggested_actions: list[str] (0–3 action suggestions for the active player, ADR-0015; truncated to 3 entries, each capped at 80 chars)
+├── observability.py    # Turn pipeline telemetry (ADR-0018): PipelineStep, LLMCallRecord, TurnEventLog dataclasses; TurnEventLogAccumulator (mutable accumulator per turn); turn_event_log_to_dict() for JSONB serialisation. No dm/ or api/ imports — stdlib only.
 ├── api/                # FastAPI REST endpoints and WebSocket handler
 │   ├── campaigns.py        # Campaign CRUD + session lifecycle; calls Narrator for Claude-generated opening scene on create
 │   ├── characters.py       # Character creation and retrieval
-│   ├── turns.py            # Turn submission (202) and retrieval; wires action_analyzer + Rules Engine; broadcasts character.updated; full combat lifecycle: CombatClassifier invoked pre-narration (exploration mode only); GMSignals processed post-narration (npc_updates before scene_transition, mandatory ordering per ADR-0012); engine combat_end takes precedence over Narrator combat_end signal when both fire on same turn; player-initiated (Flow B) and NPC-initiated (Flow A) combat paths both produce identical combat.started WebSocket event; mechanical_results persisted from engine results into Turn.mechanical_results JSONB column and broadcast in turn.narrative_end payload; turn.suggested_actions event emitted (using "type" key, not "event") immediately after turn.narrative_end when GMSignals.suggested_actions is non-empty (ADR-0015)
+│   ├── turns.py            # Turn submission (202) and retrieval; wires action_analyzer + Rules Engine; broadcasts character.updated; full combat lifecycle: CombatClassifier invoked pre-narration (exploration mode only); GMSignals processed post-narration (npc_updates before scene_transition, mandatory ordering per ADR-0012); engine combat_end takes precedence over Narrator combat_end signal when both fire on same turn; player-initiated (Flow B) and NPC-initiated (Flow A) combat paths both produce identical combat.started WebSocket event; mechanical_results persisted from engine results into Turn.mechanical_results JSONB column and broadcast in turn.narrative_end payload; turn.suggested_actions event emitted (using "type" key, not "event") immediately after turn.narrative_end when GMSignals.suggested_actions is non-empty (ADR-0015); TurnEventLogAccumulator instruments every pipeline step and persists event_log JSONB atomically with the turn record; emits turn.event_log WebSocket event after commit; emits session.telemetry every 10 turns (ADR-0018)
+│   ├── inspect.py          # Observability REST endpoints (ADR-0018): GET /campaigns/{id}/turns/{turn_id}/event_log (returns Turn.event_log JSONB); GET /campaigns/{id}/sessions/{session_id}/telemetry (aggregated session metrics from turn event logs; warns if query >200ms)
 │   ├── npcs.py             # NPC roster CRUD for campaign: POST (201), GET list, GET single, PATCH; PATCH enforces immutability — returns 422 if name, species, or appearance in request body; scoped to /api/campaigns/{campaign_id}/npcs
-│   ├── ws.py               # WebSocket endpoint + ConnectionManager; session.state recent_turns payload includes mechanical_results per turn
+│   ├── ws.py               # WebSocket endpoint + ConnectionManager; session.state recent_turns payload includes mechanical_results per turn; sends session.telemetry on connect (ADR-0018)
 │   ├── srd.py              # Custom SRD content: Instance Library CRUD + Campaign Override CRUD
 │   ├── dependencies.py     # Shared FastAPI dependencies (get_db_session, get_narrator, get_session_factory)
 │   ├── schemas.py          # Pydantic request/response schemas
@@ -80,7 +82,8 @@ backend/tavern/
 │       ├── 0003_add_srd_reference_tables.py                   # 15 SRD reference tables (superseded)
 │       ├── 0004_drop_srd_reference_tables.py                  # Drop all SRD PostgreSQL tables (data now in MongoDB)
 │       ├── 0005_add_npcs_table.py                             # NPC table (campaign-scoped roster)
-│       └── 0006_add_mechanical_results_jsonb_to_turns.py      # Add mechanical_results JSONB column to turns
+│       ├── 0006_add_mechanical_results_jsonb_to_turns.py      # Add mechanical_results JSONB column to turns
+│       └── 0007_add_event_log_jsonb_to_turns.py              # Add event_log JSONB column to turns (ADR-0018)
 ├── auth/               # Placeholder — Phase 6 authentication (not yet implemented)
 └── multiplayer/        # Placeholder — future multiplayer support
 
@@ -124,14 +127,16 @@ Infrastructure/
 ## Dependency Graph
 
 ```
-api/     ──→ core/   (including core/action_analyzer.py, core/spells.py, core/combat.py)
+api/     ──→ core/          (including core/action_analyzer.py, core/spells.py, core/combat.py)
 api/     ──→ dm/
 api/     ──→ models/
 api/     ──→ srd_db
+api/     ──→ observability/ (ADR-0018: turns.py, ws.py, inspect.py)
 dm/      ──→ models/
-core/    ──→ srd_db   (via core/srd_data.py)
+core/    ──→ srd_db         (via core/srd_data.py)
 srd_db   ──→ (no internal dependencies)
 models/  ──→ (no internal dependencies)
+observability.py ──→ (no internal dependencies — stdlib only)
 ```
 
 > Constraint: core/ must never import from dm/ (see ADR-0001).
@@ -192,6 +197,8 @@ models/  ──→ (no internal dependencies)
 | POST | /api/campaigns/{id}/turns | Submit player action | 202 |
 | GET | /api/campaigns/{id}/turns | List turns (paginated) | 200 |
 | GET | /api/campaigns/{id}/turns/{turn_id} | Get single turn | 200 |
+| GET | /api/campaigns/{id}/turns/{turn_id}/event_log | Get turn pipeline telemetry (ADR-0018); 404 if no log yet | 200 |
+| GET | /api/campaigns/{id}/sessions/{session_id}/telemetry | Aggregated session telemetry from turn event logs (ADR-0018) | 200 |
 | POST | /api/campaigns/{id}/npcs | Create NPC | 201 |
 | GET | /api/campaigns/{id}/npcs | List NPCs for campaign | 200 |
 | GET | /api/campaigns/{id}/npcs/{npc_id} | Get single NPC | 200 |
@@ -220,10 +227,12 @@ Events currently emitted by the API server:
 | Event | Direction | Payload summary |
 |---|---|---|
 | session.state | server → client | Campaign, characters, scene, recent_turns (on connect) |
+| session.telemetry | server → client | Aggregated cost/latency/token metrics for the session (admin_only: true); emitted on connect and every 10 turns (ADR-0018) |
 | turn.narrative_start | server → client | turn_id (streaming begins) |
 | turn.narrative_chunk | server → client | turn_id, chunk, sequence (token-by-token) |
 | turn.narrative_end | server → client | turn_id, narrative, mechanical_results |
 | turn.suggested_actions | server → client | turn_id, character_id, suggestions: list[str] (emitted only when suggestions non-empty) |
+| turn.event_log | server → client | turn_id, sequence_number, pipeline_duration_ms, steps, llm_calls, warnings, errors, admin_only: true (ADR-0018; emitted after DB commit) |
 | system.error | server → client | message (narrator or system error) |
 | combat.started | server → client | initiative_order: list[dict], surprised: list[str] |
 | combat.ended | server → client | {} |
@@ -252,7 +261,7 @@ Events the discord_bot `gameplay.py` cog is ready to handle (not yet emitted by 
 | Character | characters | belongs to Campaign, has many InventoryItem, has many CharacterCondition, has many Turn |
 | InventoryItem | inventory_items | belongs to Character |
 | CharacterCondition | character_conditions | belongs to Character |
-| Turn | turns | belongs to Session, belongs to Character |
+| Turn | turns | belongs to Session, belongs to Character; event_log JSONB (nullable, set by background task after narration; contains pipeline steps, LLM call records, warnings, errors — ADR-0018) |
 | NPC | npcs | belongs to Campaign (cascade delete); immutable identity fields (name, species, appearance); mutable state fields (hp_current, hp_max, ac, disposition, status, scene_location, motivation, creature_type, stat_block_ref, first_appeared_turn, last_seen_turn); role set at spawn; origin and plot_significant flags |
 
 SRD reference data is no longer stored in PostgreSQL. It is served from the
@@ -306,6 +315,7 @@ Tavern's SRD data comes from `t11z/5e-database`, a fork of `5e-bits/5e-database`
 | 0015 | Narrator-Generated Suggested Actions | Accepted |
 | 0016 | World Object Persistence | Accepted |
 | 0017 | Scene Identifier Convention | Accepted |
+| 0018 | Turn Observability Layer | Accepted |
 
 ## Known Deviations
 

@@ -128,7 +128,7 @@ class TestSubmitTurn:
 
         async def tracking_stream(*args, **kwargs):  # type: ignore[no-untyped-def]
             called_with.append((args, kwargs))
-            return ("The goblin snarls.", safe_default())
+            return ("The goblin snarls.", safe_default(), {})
 
         mock_narrator.narrate_turn_stream = tracking_stream
 

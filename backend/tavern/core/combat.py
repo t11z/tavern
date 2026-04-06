@@ -172,6 +172,12 @@ class AttackResult:
     total_cover: bool = False
     """True when the target has Total Cover — attack cannot be made."""
 
+    modifiers_applied: list[str] | None = None
+    """Modifiers that influenced this attack (e.g. ``["advantage", "cover_half"]``)."""
+
+    decision_summary: str | None = None
+    """Human-readable summary, e.g. ``"Hit — 19 vs AC 15, 2d6+3 slashing"``."""
+
 
 @dataclass
 class InitiativeEntry:
@@ -453,6 +459,8 @@ def resolve_attack(
             effective_ac=target_ac,
             damage=None,
             total_cover=True,
+            modifiers_applied=["total_cover"],
+            decision_summary="No attack — target has Total Cover",
         )
 
     # Cover bonus adds to effective AC (SRD p.15)
@@ -493,6 +501,36 @@ def resolve_attack(
             seed=dmg_seed,
         )
 
+    # Build modifiers_applied list for observability
+    mods: list[str] = []
+    if advantage:
+        mods.append("advantage")
+    if disadvantage:
+        mods.append("disadvantage")
+    if cover_level != CoverLevel.NONE:
+        mods.append(f"cover_{cover_level.name.lower()}")
+    if force_auto_crit:
+        mods.append("force_auto_crit")
+    if is_critical_hit and not force_auto_crit:
+        mods.append("critical_hit")
+    if is_critical_miss:
+        mods.append("critical_miss")
+
+    # Build decision_summary
+    if is_critical_miss:
+        _summary = f"Miss (natural 1) — roll {attack_roll.total} vs AC {effective_ac}"
+    elif hit:
+        _outcome = "Critical Hit" if is_critical_hit else "Hit"
+        if damage is not None:
+            _summary = (
+                f"{_outcome} — {attack_roll.total} vs AC {effective_ac}, "
+                f"{damage.total} {damage.damage_type} damage"
+            )
+        else:
+            _summary = f"{_outcome} — {attack_roll.total} vs AC {effective_ac}"
+    else:
+        _summary = f"Miss — {attack_roll.total} vs AC {effective_ac}"
+
     return AttackResult(
         hit=hit,
         is_critical=is_critical_hit,
@@ -500,6 +538,8 @@ def resolve_attack(
         attack_roll=attack_roll,
         effective_ac=effective_ac,
         damage=damage,
+        modifiers_applied=mods if mods else None,
+        decision_summary=_summary,
     )
 
 

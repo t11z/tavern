@@ -19,12 +19,49 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 from dataclasses import dataclass
 from typing import Literal
 
 import anthropic
 
 from tavern.dm.context_builder import StateSnapshot
+
+# ---------------------------------------------------------------------------
+# Pricing helper (mirrors narrator._estimate_cost — kept local to avoid coupling)
+# ---------------------------------------------------------------------------
+
+_CLASSIFIER_PRICING: dict[str, float] = {
+    # Haiku pricing: input $0.25/MTok, output $1.25/MTok,
+    # cache_read $0.03/MTok, cache_creation $0.30/MTok
+    "input": 0.25,
+    "output": 1.25,
+    "cache_read": 0.03,
+    "cache_creation": 0.30,
+}
+
+
+def _estimate_classification_cost(
+    model_id: str,
+    input_tokens: int,
+    output_tokens: int,
+    cache_read_tokens: int,
+    cache_creation_tokens: int,
+) -> float:
+    """Return estimated cost in USD for one classifier call.
+
+    The classifier always uses Haiku (low tier), so Haiku pricing is used
+    regardless of model_id.  model_id is accepted for forward compatibility.
+    """
+    prices = _CLASSIFIER_PRICING
+    cost = (
+        input_tokens * prices["input"]
+        + output_tokens * prices["output"]
+        + cache_read_tokens * prices["cache_read"]
+        + cache_creation_tokens * prices["cache_creation"]
+    ) / 1_000_000
+    return cost
+
 
 logger = logging.getLogger(__name__)
 
@@ -114,7 +151,7 @@ class CombatClassifier:
         self,
         action_text: str,
         snapshot: StateSnapshot,
-    ) -> CombatClassification:
+    ) -> tuple[CombatClassification, dict]:
         """Classify whether the player action begins combat.
 
         Args:
@@ -123,9 +160,15 @@ class CombatClassifier:
                          Builder. Must be in Exploration mode.
 
         Returns:
-            CombatClassification with the classifier's verdict.
+            A tuple of (CombatClassification, llm_meta_dict).
+
+            CombatClassification carries the classifier's verdict.
             Returns a safe fallback (combat_starts=False, confidence='low')
             on API error or malformed response — never raises.
+
+            llm_meta_dict keys match the narration metadata structure with
+            call_type="classification".  On error, success=False and error
+            contains the exception message.
 
         Raises:
             RuntimeError: If snapshot.session_mode == 'combat'. The classifier
@@ -135,6 +178,39 @@ class CombatClassifier:
             raise RuntimeError("CombatClassifier called in combat mode")
 
         user_message = _build_user_message(action_text, snapshot)
+        call_start = time.monotonic()
+
+        def _meta(
+            *,
+            success: bool,
+            error: str | None,
+            input_tokens: int = 0,
+            output_tokens: int = 0,
+            cache_read_tokens: int = 0,
+            cache_creation_tokens: int = 0,
+            latency_ms: int = 0,
+        ) -> dict:
+            cost = _estimate_classification_cost(
+                _CLASSIFIER_MODEL,
+                input_tokens,
+                output_tokens,
+                cache_read_tokens,
+                cache_creation_tokens,
+            )
+            return {
+                "call_type": "classification",
+                "model_id": _CLASSIFIER_MODEL,
+                "model_tier": "low",
+                "input_tokens": input_tokens,
+                "output_tokens": output_tokens,
+                "cache_read_tokens": cache_read_tokens,
+                "cache_creation_tokens": cache_creation_tokens,
+                "latency_ms": latency_ms,
+                "stream_first_token_ms": None,
+                "estimated_cost_usd": cost,
+                "success": success,
+                "error": error,
+            }
 
         try:
             response = await self._client.messages.create(
@@ -144,15 +220,35 @@ class CombatClassifier:
                 messages=[{"role": "user", "content": user_message}],
             )
         except Exception as exc:
+            latency_ms = int((time.monotonic() - call_start) * 1000)
             logger.error(
                 "CombatClassifier API call failed (returning safe fallback): %s",
                 exc,
             )
-            return _SAFE_FALLBACK
+            return _SAFE_FALLBACK, _meta(
+                success=False,
+                error=str(exc),
+                latency_ms=latency_ms,
+            )
+
+        latency_ms = int((time.monotonic() - call_start) * 1000)
+        usage = getattr(response, "usage", None)
+        input_tokens = getattr(usage, "input_tokens", 0) or 0
+        output_tokens = getattr(usage, "output_tokens", 0) or 0
+        cache_read_tokens = getattr(usage, "cache_read_input_tokens", 0) or 0
+        cache_creation_tokens = getattr(usage, "cache_creation_input_tokens", 0) or 0
 
         if not response.content:
             logger.error("CombatClassifier received empty response (returning safe fallback)")
-            return _SAFE_FALLBACK
+            return _SAFE_FALLBACK, _meta(
+                success=False,
+                error="empty response",
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                cache_read_tokens=cache_read_tokens,
+                cache_creation_tokens=cache_creation_tokens,
+                latency_ms=latency_ms,
+            )
 
         raw = response.content[0].text  # type: ignore[union-attr]
         result = _parse_classification(raw)
@@ -162,7 +258,15 @@ class CombatClassifier:
             result.confidence,
             result.reason,
         )
-        return result
+        return result, _meta(
+            success=True,
+            error=None,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            cache_read_tokens=cache_read_tokens,
+            cache_creation_tokens=cache_creation_tokens,
+            latency_ms=latency_ms,
+        )
 
 
 # ---------------------------------------------------------------------------

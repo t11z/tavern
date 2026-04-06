@@ -27,11 +27,36 @@ Schema notes (t11z/5e-database, 2024 dataset per ADR-0010):
 
 import logging
 import uuid
+from dataclasses import dataclass
 from typing import Any, Final
 
 from tavern.srd_db import get_srd_db
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Resolution tier constants (used by observability layer in api/turns.py)
+# ---------------------------------------------------------------------------
+
+RESOLUTION_TIER_SRD_BASELINE: str = "srd_baseline"
+RESOLUTION_TIER_INSTANCE_LIBRARY: str = "instance_library"
+RESOLUTION_TIER_CAMPAIGN_OVERRIDE: str = "campaign_override"
+
+
+@dataclass
+class SRDLookupResult:
+    """Wraps a raw SRD document with resolution tier metadata.
+
+    Used by the observability layer (api/turns.py) to record which data tier
+    supplied a given document.  Core functions continue to return ``dict | None``
+    directly; callers that need tier information can use
+    ``layered_lookup_with_tier()`` instead.
+    """
+
+    data: dict[str, Any] | None
+    resolution_tier: str | None
+    """One of the ``RESOLUTION_TIER_*`` constants, or ``None`` if not found."""
+
 
 # ---------------------------------------------------------------------------
 # MongoDB collection names (2024 dataset, per ADR-0010)
@@ -121,6 +146,20 @@ async def _layered_lookup(
     Returns the first matching document (stripped of ``_id``), or ``None``
     if no document is found at any tier.
     """
+    result = await _layered_lookup_with_tier(collection_name, index, campaign_id)
+    return result.data
+
+
+async def _layered_lookup_with_tier(
+    collection_name: str,
+    index: str,
+    campaign_id: str | None = None,
+) -> SRDLookupResult:
+    """Perform a three-tier layered lookup and return the document with tier metadata.
+
+    Returns an :class:`SRDLookupResult` whose ``resolution_tier`` is one of the
+    ``RESOLUTION_TIER_*`` constants, or ``None`` if no document is found.
+    """
     db = get_srd_db()
 
     # Entity name without "2024-" prefix — used for custom_ collections
@@ -137,25 +176,33 @@ async def _layered_lookup(
         )
         if result is not None:
             override: dict[str, Any] = result["data"]
-            return override
+            return SRDLookupResult(
+                data=override, resolution_tier=RESOLUTION_TIER_CAMPAIGN_OVERRIDE
+            )
 
     # 2. Instance Library
     custom_result = await db[f"custom_{entity}"].find_one({"index": index})
     if custom_result is not None:
-        return _strip_id(dict(custom_result))
+        return SRDLookupResult(
+            data=_strip_id(dict(custom_result)),
+            resolution_tier=RESOLUTION_TIER_INSTANCE_LIBRARY,
+        )
 
     # 3. SRD Baseline (cached)
     cache_key = (collection_name, index)
     if cache_key in _baseline_cache:
-        return _baseline_cache[cache_key]
+        return SRDLookupResult(
+            data=_baseline_cache[cache_key],
+            resolution_tier=RESOLUTION_TIER_SRD_BASELINE,
+        )
 
     baseline = await db[collection_name].find_one({"index": index})
     if baseline is not None:
         doc = _strip_id(dict(baseline))
         _baseline_cache[cache_key] = doc
-        return doc
+        return SRDLookupResult(data=doc, resolution_tier=RESOLUTION_TIER_SRD_BASELINE)
 
-    return None
+    return SRDLookupResult(data=None, resolution_tier=None)
 
 
 async def _get_level_doc(class_index: str, level: int) -> dict[str, Any] | None:

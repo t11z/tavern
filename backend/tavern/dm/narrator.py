@@ -21,6 +21,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import time
 from collections.abc import AsyncGenerator
 from typing import Literal, Protocol
 
@@ -39,6 +40,56 @@ MODEL_MAP: dict[str, str] = {
     "high": "claude-sonnet-4-20250514",
     "low": "claude-haiku-4-5-20251001",
 }
+
+# ---------------------------------------------------------------------------
+# LLM pricing constants (approximate, per million tokens)
+# Used only for estimated_cost_usd in observability metadata.
+# ---------------------------------------------------------------------------
+
+_PRICING: dict[str, dict[str, float]] = {
+    # Sonnet: input $3/MTok, output $15/MTok, cache_read $0.30/MTok, cache_creation $3.75/MTok
+    "sonnet": {
+        "input": 3.0,
+        "output": 15.0,
+        "cache_read": 0.30,
+        "cache_creation": 3.75,
+    },
+    # Haiku: input $0.25/MTok, output $1.25/MTok, cache_read $0.03/MTok, cache_creation $0.30/MTok
+    "haiku": {
+        "input": 0.25,
+        "output": 1.25,
+        "cache_read": 0.03,
+        "cache_creation": 0.30,
+    },
+}
+
+
+def _estimate_cost(
+    model_id: str,
+    input_tokens: int,
+    output_tokens: int,
+    cache_read_tokens: int,
+    cache_creation_tokens: int,
+) -> float:
+    """Return estimated cost in USD for one LLM call.
+
+    Uses hardcoded pricing constants.  Falls back to Sonnet pricing when the
+    model cannot be identified.
+    """
+    model_lower = model_id.lower()
+    if "haiku" in model_lower:
+        prices = _PRICING["haiku"]
+    else:
+        prices = _PRICING["sonnet"]
+
+    cost = (
+        input_tokens * prices["input"]
+        + output_tokens * prices["output"]
+        + cache_read_tokens * prices["cache_read"]
+        + cache_creation_tokens * prices["cache_creation"]
+    ) / 1_000_000
+    return cost
+
 
 # GMSignals instruction appended to the system prompt for every narration
 # request (ADR-0012, ADR-0013).  The model MUST append the delimiter line and
@@ -346,6 +397,79 @@ class AnthropicProvider:
                 f"Anthropic API rate limit exceeded — retry after a moment: {exc}"
             ) from exc
 
+    async def narrate_stream_with_meta(
+        self,
+        snapshot: StateSnapshot,
+        model_tier: Literal["high", "low"] = "high",
+    ) -> tuple[str, dict]:
+        """Stream narrative from Claude and return full text with usage metadata.
+
+        Unlike narrate_stream (an async generator), this method buffers the
+        complete response and extracts token usage from the final message.
+        This allows the observability layer to record accurate token counts
+        and cost estimates.
+
+        Returns:
+            A tuple of (full_raw_text, usage_dict) where usage_dict contains:
+                input_tokens (int), output_tokens (int),
+                cache_read_tokens (int), cache_creation_tokens (int),
+                stream_first_token_ms (int | None).
+
+        Raises:
+            TimeoutError: If the request times out.
+            RuntimeError: If the API rate limit is exceeded.
+        """
+        serialized = serialize_snapshot(snapshot)
+        system_text: str = serialized["system"]  # type: ignore[assignment]
+        system_text = self._build_system_with_signals(system_text)
+        messages_list = serialized["messages"]  # type: ignore[assignment]
+        user_content: str = messages_list[0]["content"]  # type: ignore[index]
+
+        call_start = time.monotonic()
+        first_token_ms: int | None = None
+        raw = ""
+
+        try:
+            async with self._client.messages.stream(
+                model=MODEL_MAP[model_tier],
+                max_tokens=NARRATION_MAX_TOKENS,
+                temperature=NARRATION_TEMPERATURE,
+                system=[
+                    {
+                        "type": "text",
+                        "text": system_text,
+                        "cache_control": {"type": "ephemeral"},
+                    }
+                ],
+                messages=[{"role": "user", "content": user_content}],
+            ) as stream:
+                async for text in stream.text_stream:
+                    if first_token_ms is None and text:
+                        first_token_ms = int((time.monotonic() - call_start) * 1000)
+                    raw += text
+
+                final_message = await stream.get_final_message()
+                usage = final_message.usage
+                input_tokens = getattr(usage, "input_tokens", 0) or 0
+                output_tokens = getattr(usage, "output_tokens", 0) or 0
+                cache_read = getattr(usage, "cache_read_input_tokens", 0) or 0
+                cache_creation = getattr(usage, "cache_creation_input_tokens", 0) or 0
+
+        except anthropic.APITimeoutError as exc:
+            raise TimeoutError(f"Anthropic API request timed out: {exc}") from exc
+        except anthropic.RateLimitError as exc:
+            raise RuntimeError(
+                f"Anthropic API rate limit exceeded — retry after a moment: {exc}"
+            ) from exc
+
+        return raw, {
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+            "cache_read_tokens": cache_read,
+            "cache_creation_tokens": cache_creation,
+            "stream_first_token_ms": first_token_ms,
+        }
+
     async def generate_campaign_brief(self, name: str, tone: str) -> dict[str, str]:
         """Generate a campaign brief and opening scene using Claude Haiku.
 
@@ -517,18 +641,19 @@ class Narrator:
     async def narrate_turn_stream(
         self,
         snapshot: StateSnapshot,
-    ) -> tuple[str, GMSignals]:
+    ) -> tuple[str, GMSignals, dict]:
         """Collect the full narrative and parse the embedded GMSignals block.
 
         Applies the same tier-routing logic as narrate_turn.  Buffers all
         chunks from the provider stream (or the non-streaming fallback),
         splits the raw output at the GM_SIGNALS_DELIMITER, and returns:
 
-          (narrative_text, gm_signals)
+          (narrative_text, gm_signals, llm_meta)
 
-        where *narrative_text* is everything before the delimiter (stripped)
-        and *gm_signals* is the parsed GMSignals dataclass.  On any parse
-        failure parse_gm_signals() returns safe_default().
+        where *narrative_text* is everything before the delimiter (stripped),
+        *gm_signals* is the parsed GMSignals dataclass (safe_default() on any
+        parse failure), and *llm_meta* is a diagnostic dict with LLM call
+        metadata for the observability layer.
 
         Logs quality warnings on the narrative portion only.
         """
@@ -538,14 +663,45 @@ class Narrator:
         else:
             tier = "high"
 
+        model_id = MODEL_MAP[tier]
+        call_start = time.monotonic()
+        first_token_ms: int | None = None
+        error_msg: str | None = None
+        input_tokens = 0
+        output_tokens = 0
+        cache_read_tokens = 0
+        cache_creation_tokens = 0
+
+        # Prefer narrate_stream_with_meta when available (AnthropicProvider) so
+        # that token usage is captured from the final message.  Fall back to the
+        # plain streaming generator, then to the non-streaming narrate() method.
+        stream_with_meta_fn = getattr(self._provider, "narrate_stream_with_meta", None)
         provider_stream = getattr(self._provider, "narrate_stream", None)
-        if provider_stream is not None:
-            raw = ""
-            async for chunk in provider_stream(snapshot, tier):
-                raw += chunk
-        else:
-            # Non-streaming fallback
-            raw = await self._provider.narrate(snapshot, tier)
+
+        try:
+            if stream_with_meta_fn is not None:
+                raw, usage = await stream_with_meta_fn(snapshot, tier)
+                input_tokens = usage.get("input_tokens", 0)
+                output_tokens = usage.get("output_tokens", 0)
+                cache_read_tokens = usage.get("cache_read_tokens", 0)
+                cache_creation_tokens = usage.get("cache_creation_tokens", 0)
+                first_token_ms = usage.get("stream_first_token_ms")
+            elif provider_stream is not None:
+                raw = ""
+                async for chunk in provider_stream(snapshot, tier):
+                    if first_token_ms is None and chunk:
+                        first_token_ms = int((time.monotonic() - call_start) * 1000)
+                    raw += chunk
+            else:
+                # Non-streaming fallback (used in tests / non-Anthropic providers)
+                raw = await self._provider.narrate(snapshot, tier)
+                if raw:
+                    first_token_ms = int((time.monotonic() - call_start) * 1000)
+        except Exception as exc:
+            error_msg = str(exc)
+            raise
+
+        latency_ms = int((time.monotonic() - call_start) * 1000)
 
         # Split at the delimiter — everything before is narrative prose
         if GM_SIGNALS_DELIMITER in raw:
@@ -555,8 +711,30 @@ class Narrator:
             narrative_text = raw
 
         _check_response_quality(narrative_text)
-        gm_signals = parse_gm_signals(raw)
-        return narrative_text, gm_signals
+        gm_signals, _gm_diag = parse_gm_signals(raw)
+
+        llm_meta: dict = {
+            "call_type": "narration",
+            "model_id": model_id,
+            "model_tier": tier,
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+            "cache_read_tokens": cache_read_tokens,
+            "cache_creation_tokens": cache_creation_tokens,
+            "latency_ms": latency_ms,
+            "stream_first_token_ms": first_token_ms,
+            "estimated_cost_usd": _estimate_cost(
+                model_id,
+                input_tokens,
+                output_tokens,
+                cache_read_tokens,
+                cache_creation_tokens,
+            ),
+            "success": error_msg is None,
+            "error": error_msg,
+        }
+
+        return narrative_text, gm_signals, llm_meta
 
     async def narrate_turn(self, snapshot: StateSnapshot) -> str:
         """Determine model tier, get narration, and validate the response.
