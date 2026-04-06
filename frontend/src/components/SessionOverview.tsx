@@ -1,4 +1,4 @@
-import type { SessionTelemetry, TurnEventLog } from '../types'
+import type { SessionTelemetry } from '../types'
 
 // ---------------------------------------------------------------------------
 // Sparkline
