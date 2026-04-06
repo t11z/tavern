@@ -103,7 +103,7 @@ class TestClassifyAttackAction:
         )
         classifier._client.messages.create = mock_create
 
-        result = await classifier.classify("I attack the guard with my sword", snapshot)
+        result, _meta = await classifier.classify("I attack the guard with my sword", snapshot)
 
         assert result.combat_starts is True
         assert result.confidence == "high"
@@ -149,7 +149,7 @@ class TestClassifyNonCombatActions:
         )
         classifier._client.messages.create = mock_create
 
-        result = await classifier.classify("I draw my sword menacingly", snapshot)
+        result, _meta = await classifier.classify("I draw my sword menacingly", snapshot)
 
         assert result.combat_starts is False
 
@@ -170,7 +170,7 @@ class TestClassifyNonCombatActions:
         )
         classifier._client.messages.create = mock_create
 
-        result = await classifier.classify("I approach the harbormaster", snapshot)
+        result, _meta = await classifier.classify("I approach the harbormaster", snapshot)
 
         assert result.combat_starts is False
 
@@ -184,7 +184,7 @@ class TestClassifyNonCombatActions:
         )
         classifier._client.messages.create = mock_create
 
-        result = await classifier.classify("I look around the room", snapshot)
+        result, _meta = await classifier.classify("I look around the room", snapshot)
 
         assert isinstance(result, CombatClassification)
         assert result.combat_starts is False
@@ -207,7 +207,7 @@ class TestClassifyErrorHandling:
             side_effect=anthropic.APITimeoutError(request=request)
         )
 
-        result = await classifier.classify("I attack the guard", snapshot)
+        result, _meta = await classifier.classify("I attack the guard", snapshot)
 
         assert result.combat_starts is False
         assert result.combatants == []
@@ -228,7 +228,7 @@ class TestClassifyErrorHandling:
             )
         )
 
-        result = await classifier.classify("I attack the guard", snapshot)
+        result, _meta = await classifier.classify("I attack the guard", snapshot)
 
         assert result.combat_starts is False
         assert result.confidence == "low"
@@ -242,7 +242,7 @@ class TestClassifyErrorHandling:
             return_value=_make_api_response("Sorry, I cannot help with that.")
         )
 
-        result = await classifier.classify("I attack the guard", snapshot)
+        result, _meta = await classifier.classify("I attack the guard", snapshot)
 
         assert result.combat_starts is False
         assert result.combatants == []
@@ -256,7 +256,7 @@ class TestClassifyErrorHandling:
         incomplete = json.dumps({"combat_starts": True, "combatants": []})
         classifier._client.messages.create = AsyncMock(return_value=_make_api_response(incomplete))
 
-        result = await classifier.classify("I attack the guard", snapshot)
+        result, _meta = await classifier.classify("I attack the guard", snapshot)
 
         assert result.combat_starts is False
         assert result.confidence == "low"
@@ -276,7 +276,7 @@ class TestClassifyErrorHandling:
         )
         classifier._client.messages.create = AsyncMock(return_value=_make_api_response(bad_schema))
 
-        result = await classifier.classify("I attack the guard", snapshot)
+        result, _meta = await classifier.classify("I attack the guard", snapshot)
 
         assert result.combat_starts is False
         assert result.confidence == "low"
@@ -343,7 +343,7 @@ class TestCombatModeGuard:
         )
         classifier._client.messages.create = mock_create
 
-        result = await classifier.classify("I look around", snapshot)
+        result, _meta = await classifier.classify("I look around", snapshot)
 
         assert isinstance(result, CombatClassification)
 

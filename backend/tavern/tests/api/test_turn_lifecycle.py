@@ -111,12 +111,15 @@ def _session_record(campaign_id: uuid.UUID) -> Session:
     )
 
 
-def _no_combat_classification() -> CombatClassification:
-    return CombatClassification(
-        combat_starts=False,
-        combatants=[],
-        confidence="high",
-        reason="no combat",
+def _no_combat_classification() -> tuple[CombatClassification, dict]:
+    return (
+        CombatClassification(
+            combat_starts=False,
+            combatants=[],
+            confidence="high",
+            reason="no combat",
+        ),
+        {},
     )
 
 
@@ -124,12 +127,12 @@ def _make_mock_narrator(
     narrative: str = "The goblin charges!",
     gm_signals: GMSignals | None = None,
 ) -> MagicMock:
-    """Build a Narrator mock where narrate_turn_stream returns (text, signals)."""
+    """Build a Narrator mock where narrate_turn_stream returns (text, signals, meta)."""
     if gm_signals is None:
         gm_signals = safe_default()
 
     narrator = MagicMock(spec=Narrator)
-    narrator.narrate_turn_stream = AsyncMock(return_value=(narrative, gm_signals))
+    narrator.narrate_turn_stream = AsyncMock(return_value=(narrative, gm_signals, {}))
     narrator.update_summary = AsyncMock(return_value="Updated summary.")
     narrator.generate_campaign_brief = AsyncMock(
         return_value={
@@ -205,7 +208,7 @@ class TestParseGMSignals:
             '{"scene_transition": {"type": "none", "combatants": [], '
             '"potential_surprised_characters": [], "reason": ""}, "npc_updates": []}'
         )
-        signals = parse_gm_signals(raw)
+        signals, _diag = parse_gm_signals(raw)
         assert signals.scene_transition.type == "none"
         assert signals.npc_updates == []
 
@@ -216,7 +219,7 @@ class TestParseGMSignals:
             '{"scene_transition": {"type": "combat_start", "combatants": ["Bandit Leader"], '
             '"potential_surprised_characters": [], "reason": "ambush"}, "npc_updates": []}'
         )
-        signals = parse_gm_signals(raw)
+        signals, _diag = parse_gm_signals(raw)
         assert signals.scene_transition.type == "combat_start"
         assert "Bandit Leader" in signals.scene_transition.combatants
 
@@ -229,20 +232,20 @@ class TestParseGMSignals:
             '"npc_updates": [{"event": "spawn", "npc_name": "Mysterious Stranger", '
             '"disposition": "unknown"}]}'
         )
-        signals = parse_gm_signals(raw)
+        signals, _diag = parse_gm_signals(raw)
         assert len(signals.npc_updates) == 1
         assert signals.npc_updates[0].event == "spawn"
         assert signals.npc_updates[0].npc_name == "Mysterious Stranger"
 
     def test_returns_safe_default_when_delimiter_missing(self) -> None:
         raw = "The goblin snarls. No signals block here."
-        signals = parse_gm_signals(raw)
+        signals, _diag = parse_gm_signals(raw)
         assert signals.scene_transition.type == "none"
         assert signals.npc_updates == []
 
     def test_returns_safe_default_on_invalid_json(self) -> None:
         raw = f"Narrative.\n{GM_SIGNALS_DELIMITER}\nnot valid json {{"
-        signals = parse_gm_signals(raw)
+        signals, _diag = parse_gm_signals(raw)
         assert signals.scene_transition.type == "none"
 
     def test_returns_safe_default_on_invalid_transition_type(self) -> None:
@@ -251,7 +254,7 @@ class TestParseGMSignals:
             f"{GM_SIGNALS_DELIMITER}\n"
             '{"scene_transition": {"type": "invalid_type"}, "npc_updates": []}'
         )
-        signals = parse_gm_signals(raw)
+        signals, _diag = parse_gm_signals(raw)
         assert signals.scene_transition.type == "none"
 
     def test_narrative_text_does_not_contain_delimiter(self) -> None:
@@ -276,7 +279,7 @@ class TestParseGMSignals:
             '{"event": "spawn", "npc_name": "Keep Me"}'
             "]}"
         )
-        signals = parse_gm_signals(raw)
+        signals, _diag = parse_gm_signals(raw)
         assert len(signals.npc_updates) == 1
         assert signals.npc_updates[0].npc_name == "Keep Me"
 
@@ -294,11 +297,14 @@ class TestPlayerInitiatedCombat:
         combat → session transitions to combat mode."""
         cid, char_id = await _setup_campaign_with_char(api_client, "Combat Test")
 
-        mock_classification = CombatClassification(
-            combat_starts=True,
-            combatants=[],
-            confidence="high",
-            reason="direct attack",
+        mock_classification = (
+            CombatClassification(
+                combat_starts=True,
+                combatants=[],
+                confidence="high",
+                reason="direct attack",
+            ),
+            {},
         )
 
         with patch(
@@ -585,7 +591,7 @@ class TestGMSignalsParseFailure:
         # Return narrative text + safe_default (as parse would return on failure)
         mock_narrator = MagicMock(spec=Narrator)
         mock_narrator.narrate_turn_stream = AsyncMock(
-            return_value=("You enter the room.", safe_default())
+            return_value=("You enter the room.", safe_default(), {})
         )
         mock_narrator.update_summary = AsyncMock(return_value="Updated summary.")
 

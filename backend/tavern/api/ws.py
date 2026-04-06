@@ -191,6 +191,9 @@ async def campaign_ws(
         # Send initial session.state
         await _send_session_state(websocket, campaign, db)
 
+        # Send initial session.telemetry (admin-only diagnostics)
+        await _send_session_telemetry(websocket, campaign, db)
+
         # Keep the connection alive waiting for the client to disconnect
         # (events are pushed from the turn submission pipeline)
         try:
@@ -287,5 +290,52 @@ async def _send_session_state(
                 "recent_turns": recent_turns,
                 "combat": combat,
             },
+        }
+    )
+
+
+async def _send_session_telemetry(
+    websocket: WebSocket,
+    campaign: Campaign,
+    db: AsyncSession,
+) -> None:
+    """Send the session.telemetry event with aggregated observability metrics."""
+    import time
+
+    # Find the open session for this campaign
+    session_result = await db.execute(
+        select(Session).where(
+            Session.campaign_id == campaign.id,
+            Session.ended_at.is_(None),
+        )
+    )
+    session = session_result.scalar_one_or_none()
+    if session is None:
+        return
+
+    query_start = time.monotonic()
+    turns_result = await db.execute(
+        select(Turn).where(
+            Turn.session_id == session.id,
+            Turn.event_log.isnot(None),
+        )
+    )
+    turns_with_logs = list(turns_result.scalars().all())
+    elapsed_ms = (time.monotonic() - query_start) * 1000
+
+    if elapsed_ms > 200:
+        logger.warning(
+            "tavern.api.ws: session telemetry query took %.0f ms for session %s",
+            elapsed_ms,
+            str(session.id),
+        )
+
+    from tavern.api.turns import _compute_session_telemetry
+
+    telemetry = _compute_session_telemetry(str(session.id), turns_with_logs)
+    await websocket.send_json(
+        {
+            "type": "session.telemetry",
+            "payload": telemetry,
         }
     )

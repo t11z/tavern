@@ -110,6 +110,12 @@ class SpellResult:
     description: str
     """Human-readable summary for the Context Builder's rules_result field."""
 
+    slot_validation: str | None = None
+    """Slot validation note, e.g. ``"3rd-level slot consumed (2 → 1)"``."""
+
+    decision_summary: str | None = None
+    """Human-readable one-liner, e.g. ``"Fireball resolved as AoE save, DC 15"``."""
+
 
 # ---------------------------------------------------------------------------
 # Condition map — spells that apply conditions (5e-database lacks structured field)
@@ -555,6 +561,25 @@ async def resolve_spell(
         spell_name, has_attack, damages, healings, conditions, first_attack_result
     )
 
+    # ------------------------------------------------------------------
+    # 6. Build observability fields
+    # ------------------------------------------------------------------
+    if is_cantrip:
+        _slot_validation = "Cantrip — no slot consumed"
+    else:
+        _slot_validation = f"Slot level {slot_consumed} consumed"
+
+    if has_attack:
+        _resolution_type = "spell attack roll"
+    elif has_save:
+        dc_type_name = spell.get("dc", {}).get("dc_type", {}).get("name", "")
+        _resolution_type = f"saving throw ({dc_type_name} DC {spell_save_dc})"
+    else:
+        _resolution_type = "auto-hit"
+
+    _conc = ", concentration" if concentration_required else ""
+    _decision_summary = f"{spell_name} resolved as {_resolution_type}{_conc}"
+
     return SpellResult(
         spell_name=spell_name,
         slot_consumed=slot_consumed,
@@ -564,4 +589,6 @@ async def resolve_spell(
         conditions_applied=conditions,
         concentration_required=concentration_required,
         description=description,
+        slot_validation=_slot_validation,
+        decision_summary=_decision_summary,
     )

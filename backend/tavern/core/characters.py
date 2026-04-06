@@ -577,6 +577,11 @@ class ShortRestResult:
     """Individual hit die roll results (before adding CON modifier) for display."""
 
     description: str = ""
+    before_after: dict | None = None
+    """Before/after snapshot, e.g. ``{"hp": {"before": 10, "after": 18}}``."""
+
+    decision_summary: str | None = None
+    """Human-readable one-liner describing the rest outcome."""
 
 
 @dataclass
@@ -600,6 +605,11 @@ class LongRestResult:
     new_hp: int
     new_hit_dice: int
     description: str = ""
+    before_after: dict | None = None
+    """Before/after snapshot, e.g. ``{"hp": {"before": 5, "after": 40}}``."""
+
+    decision_summary: str | None = None
+    """Human-readable one-liner describing the rest outcome."""
 
 
 async def apply_short_rest(
@@ -657,6 +667,19 @@ async def apply_short_rest(
 
     description = _short_rest_description(hit_dice_to_spend, rolls, con_modifier, actual_healed)
 
+    _before_after: dict = {"hp": {"before": current_hp, "after": new_hp}}
+    if hit_dice_to_spend > 0:
+        _before_after["hit_dice"] = {
+            "before": hit_dice_remaining,
+            "after": new_hit_dice,
+        }
+    _decision_summary = (
+        f"Short rest: regained {actual_healed} HP "
+        f"(spent {hit_dice_to_spend} hit {'die' if hit_dice_to_spend == 1 else 'dice'})"
+        if hit_dice_to_spend > 0
+        else "Short rest: no hit dice spent"
+    )
+
     return ShortRestResult(
         hp_regained=actual_healed,
         hit_dice_spent=hit_dice_to_spend,
@@ -664,6 +687,8 @@ async def apply_short_rest(
         new_hp=new_hp,
         rolls=rolls,
         description=description,
+        before_after=_before_after,
+        decision_summary=_decision_summary,
     )
 
 
@@ -712,6 +737,17 @@ async def apply_long_rest(
 
     description = _long_rest_description(hp_restored, spell_slots_restored, actual_dice_restored)
 
+    _before_after: dict = {
+        "hp": {"before": current_hp, "after": new_hp},
+        "hit_dice": {"before": hit_dice_remaining, "after": new_hit_dice},
+    }
+    slot_total = sum(spell_slots_restored.values())
+    _decision_summary = (
+        f"Long rest: restored {hp_restored} HP, "
+        f"{slot_total} spell slot(s), "
+        f"{actual_dice_restored} hit {'die' if actual_dice_restored == 1 else 'dice'}"
+    )
+
     return LongRestResult(
         hp_restored=hp_restored,
         spell_slots_restored=spell_slots_restored,
@@ -719,6 +755,8 @@ async def apply_long_rest(
         new_hp=new_hp,
         new_hit_dice=new_hit_dice,
         description=description,
+        before_after=_before_after,
+        decision_summary=_decision_summary,
     )
 
 

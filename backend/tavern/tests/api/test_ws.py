@@ -60,6 +60,8 @@ class TestWebSocketConnection:
         # TestClient runs the same 'app' object → overrides are honoured.
         with TestClient(app).websocket_connect(f"/api/campaigns/{cid}/ws") as ws:
             data = ws.receive_json()
+            # Consume session.telemetry sent after session.state (ADR-0018)
+            ws.receive_json()
 
         assert data["event"] == "session.state"
         payload = data["payload"]
@@ -86,7 +88,8 @@ class TestWebSocketConnection:
 
         # No exception should propagate
         with TestClient(app).websocket_connect(f"/api/campaigns/{cid}/ws") as ws:
-            ws.receive_json()  # session.state — then context exits cleanly
+            ws.receive_json()  # session.state
+            ws.receive_json()  # session.telemetry (ADR-0018)
 
     async def test_session_state_recent_turns_empty_for_new_campaign(
         self, api_client: AsyncClient
@@ -95,6 +98,7 @@ class TestWebSocketConnection:
 
         with TestClient(app).websocket_connect(f"/api/campaigns/{cid}/ws") as ws:
             data = ws.receive_json()
+            ws.receive_json()  # session.telemetry (ADR-0018)
 
         assert data["payload"]["recent_turns"] == []
 
@@ -105,6 +109,7 @@ class TestWebSocketConnection:
 
         with TestClient(app).websocket_connect(f"/api/campaigns/{cid}/ws") as ws:
             data = ws.receive_json()
+            ws.receive_json()  # session.telemetry (ADR-0018)
 
         assert data["payload"]["campaign"]["turn_count"] == 0
 
@@ -117,6 +122,7 @@ class TestWebSocketConnection:
 
         with TestClient(app).websocket_connect(f"/api/campaigns/{cid}/ws") as ws:
             data = ws.receive_json()
+            ws.receive_json()  # session.telemetry (ADR-0018)
 
         characters = data["payload"]["characters"]
         assert len(characters) == 1

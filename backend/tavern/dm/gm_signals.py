@@ -94,7 +94,7 @@ def safe_default() -> GMSignals:
 # ---------------------------------------------------------------------------
 
 
-def parse_gm_signals(raw: str) -> GMSignals:
+def parse_gm_signals(raw: str) -> tuple[GMSignals, dict]:
     """Parse the GMSignals block from the raw Narrator output.
 
     Expected format::
@@ -104,67 +104,96 @@ def parse_gm_signals(raw: str) -> GMSignals:
         {"scene_transition": {...}, "npc_updates": [...]}
 
     On ANY failure (missing delimiter, JSON error, schema error): logs the
-    error with the raw content and returns safe_default().  Never raises.
+    error with the raw content and returns safe_default() with diagnostic
+    metadata indicating fallback_used=True.  Never raises.
 
     Args:
         raw: The complete raw text returned by the Narrator, including the
             delimiter line and the JSON block.
 
     Returns:
-        Parsed GMSignals, or safe_default() on any error.
+        A tuple of (GMSignals, diagnostic_dict).
+
+        GMSignals is the parsed result, or safe_default() on any error.
+
+        diagnostic_dict keys:
+            fallback_used (bool): True if safe_default was used due to a parse
+                failure.
+            raw_input_truncated (str): raw input truncated to 500 chars for
+                logging / observability.
+            parse_error (str | None): error message when fallback_used is True,
+                otherwise None.
     """
+    raw_truncated = raw[:500]
+
+    def _fallback(error: str) -> tuple[GMSignals, dict]:
+        return safe_default(), {
+            "fallback_used": True,
+            "raw_input_truncated": raw_truncated,
+            "parse_error": error,
+        }
+
+    def _success(signals: GMSignals) -> tuple[GMSignals, dict]:
+        return signals, {
+            "fallback_used": False,
+            "raw_input_truncated": raw_truncated,
+            "parse_error": None,
+        }
+
     if GM_SIGNALS_DELIMITER not in raw:
+        error_msg = "GMSignals delimiter not found in Narrator output"
         logger.error(
-            "GMSignals delimiter not found in Narrator output — using safe default. "
-            "Raw (first 500 chars): %r",
-            raw[:500],
+            "%s — using safe default. Raw (first 500 chars): %r", error_msg, raw_truncated
         )
-        return safe_default()
+        return _fallback(error_msg)
 
     # Split on the first occurrence of the delimiter
     _narrative_part, _, tail = raw.partition(GM_SIGNALS_DELIMITER)
     json_text = tail.strip()
 
     if not json_text:
+        error_msg = "GMSignals delimiter found but no JSON followed"
         logger.error(
-            "GMSignals delimiter found but no JSON followed — using safe default. "
-            "Raw (first 500 chars): %r",
-            raw[:500],
+            "%s — using safe default. Raw (first 500 chars): %r", error_msg, raw_truncated
         )
-        return safe_default()
+        return _fallback(error_msg)
 
     try:
         data = json.loads(json_text)
     except json.JSONDecodeError as exc:
+        error_msg = f"GMSignals JSON parse error: {exc}"
         logger.error(
             "GMSignals JSON parse error (%s) — using safe default. Raw tail (first 500 chars): %r",
             exc,
             json_text[:500],
         )
-        return safe_default()
+        return _fallback(error_msg)
 
     # --- Validate top-level structure ---
     if not isinstance(data, dict):
+        error_msg = f"GMSignals JSON is not an object, got: {type(data).__name__}"
         logger.error("GMSignals JSON is not an object — using safe default. data=%r", data)
-        return safe_default()
+        return _fallback(error_msg)
 
     # --- Parse scene_transition ---
     st_raw = data.get("scene_transition", {})
     if not isinstance(st_raw, dict):
+        error_msg = f"GMSignals scene_transition is not an object: {st_raw!r}"
         logger.error(
             "GMSignals scene_transition is not an object — using safe default. "
             "scene_transition=%r",
             st_raw,
         )
-        return safe_default()
+        return _fallback(error_msg)
 
     st_type = st_raw.get("type", "none")
     if st_type not in ("combat_start", "combat_end", "none"):
+        error_msg = f"GMSignals scene_transition.type invalid value: {st_type!r}"
         logger.error(
             "GMSignals scene_transition.type invalid value %r — using safe default.",
             st_type,
         )
-        return safe_default()
+        return _fallback(error_msg)
 
     scene_transition = SceneTransition(
         type=st_type,  # type: ignore[arg-type]
@@ -176,11 +205,12 @@ def parse_gm_signals(raw: str) -> GMSignals:
     # --- Parse npc_updates ---
     npc_updates_raw = data.get("npc_updates", [])
     if not isinstance(npc_updates_raw, list):
+        error_msg = f"GMSignals npc_updates is not a list: {npc_updates_raw!r}"
         logger.error(
             "GMSignals npc_updates is not a list — using safe default. npc_updates=%r",
             npc_updates_raw,
         )
-        return safe_default()
+        return _fallback(error_msg)
 
     npc_updates: list[NPCUpdate] = []
     for idx, u in enumerate(npc_updates_raw):
@@ -250,8 +280,10 @@ def parse_gm_signals(raw: str) -> GMSignals:
             continue
         suggested_actions.append(item[:_MAX_SUGGESTION_LEN])
 
-    return GMSignals(
-        scene_transition=scene_transition,
-        npc_updates=npc_updates,
-        suggested_actions=suggested_actions,
+    return _success(
+        GMSignals(
+            scene_transition=scene_transition,
+            npc_updates=npc_updates,
+            suggested_actions=suggested_actions,
+        )
     )

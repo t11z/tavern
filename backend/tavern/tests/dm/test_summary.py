@@ -177,10 +177,12 @@ class TestBuildTurnSummaryInput:
 class TestTrimSummary:
     def test_returns_unchanged_when_within_budget(self) -> None:
         short = "Turn 1: Kael attacked the goblin. Turn 2: Mira cast fireball."
-        assert trim_summary(short) == short
+        result, _diag = trim_summary(short)
+        assert result == short
 
     def test_returns_empty_string_unchanged(self) -> None:
-        assert trim_summary("") == ""
+        result, _diag = trim_summary("")
+        assert result == ""
 
     def test_result_within_token_budget(self) -> None:
         # Build a summary that exceeds the budget, then trim it.
@@ -189,7 +191,7 @@ class TestTrimSummary:
             f"The enemy recoiled. Battle continued."
             for i in range(1, 40)
         )
-        trimmed = trim_summary(long_summary)
+        trimmed, _diag = trim_summary(long_summary)
         tokens = len(trimmed) // 4
         assert tokens <= _BUDGET_SUMMARY_TOKENS
 
@@ -197,7 +199,7 @@ class TestTrimSummary:
         # Build 20 turns, check that trim keeps recent and drops old.
         lines = [f"Turn {i}: entry {i}" for i in range(1, 21)]
         long_summary = "\n".join(lines)
-        trimmed = trim_summary(long_summary)
+        trimmed, _diag = trim_summary(long_summary)
         # Most-recent entry must survive; very old entries may be gone.
         assert "Turn 20" in trimmed
 
@@ -213,7 +215,7 @@ class TestTrimSummary:
             for i in range(1, 21)
         ]
         summary = "\n".join(lines)
-        trimmed = trim_summary(summary)
+        trimmed, _diag = trim_summary(summary)
         tokens = len(trimmed) // 4
         assert tokens <= _BUDGET_SUMMARY_TOKENS
 
@@ -227,20 +229,42 @@ class TestTrimSummary:
             "The troll was bloodied. "
             "Everyone moved to the next room. "
         ) * 30  # repeat to force budget overflow
-        trimmed = trim_summary(prose)
+        trimmed, _diag = trim_summary(prose)
         assert len(trimmed) // 4 <= _BUDGET_SUMMARY_TOKENS
 
     def test_preserves_at_least_one_entry(self) -> None:
         # Even a summary that can't be fully trimmed should keep something.
         single_long_line = "word " * 3000
-        trimmed = trim_summary(single_long_line)
+        trimmed, _diag = trim_summary(single_long_line)
         assert len(trimmed) > 0
 
     def test_custom_max_tokens(self) -> None:
         # Build a multi-sentence prose block that exceeds a tight budget.
         sentences = " ".join(f"Sentence {i} happened here and was noted." for i in range(50))
-        assert len(trim_summary(sentences, max_tokens=50)) // 4 <= 50
+        trimmed, _diag = trim_summary(sentences, max_tokens=50)
+        assert len(trimmed) // 4 <= 50
 
     def test_idempotent_when_already_trimmed(self) -> None:
         short = "Turn 19: Kael attacked. Turn 20: Mira healed."
-        assert trim_summary(trim_summary(short)) == trim_summary(short)
+        result1, _diag1 = trim_summary(short)
+        result2, _diag2 = trim_summary(result1)
+        result3, _diag3 = trim_summary(short)
+        assert result2 == result3
+
+    def test_diagnostic_before_tokens_on_unchanged(self) -> None:
+        short = "Turn 1: quick note."
+        _result, diag = trim_summary(short)
+        assert diag["before_tokens"] == len(short) // 4
+        assert diag["after_tokens"] == diag["before_tokens"]
+
+    def test_diagnostic_after_tokens_less_than_before_on_trim(self) -> None:
+        long_summary = "\n".join(
+            f"Turn {i}: Character attacked enemy — hit for {i * 3} damage." for i in range(1, 40)
+        )
+        _result, diag = trim_summary(long_summary)
+        assert diag["before_tokens"] > diag["after_tokens"]
+
+    def test_diagnostic_empty_string_both_zero(self) -> None:
+        _result, diag = trim_summary("")
+        assert diag["before_tokens"] == 0
+        assert diag["after_tokens"] == 0

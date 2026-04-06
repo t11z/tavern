@@ -70,14 +70,14 @@ async def _reset_api_test_db() -> AsyncGenerator[None, None]:
 def mock_narrator() -> Narrator:
     """Narrator mock that never calls the Anthropic API.
 
-    narrate_turn_stream returns (MOCK_NARRATIVE, safe_default()) — matching
-    the updated Narrator.narrate_turn_stream signature (Task D).
+    narrate_turn_stream returns (MOCK_NARRATIVE, safe_default(), {}) — matching
+    the updated Narrator.narrate_turn_stream signature (ADR-0018).
     """
     narrator = MagicMock(spec=Narrator)
     narrator.narrate_turn = AsyncMock(return_value=MOCK_NARRATIVE)
     narrator.update_summary = AsyncMock(return_value=MOCK_SUMMARY)
     narrator.generate_campaign_brief = AsyncMock(return_value=MOCK_CAMPAIGN_BRIEF)
-    narrator.narrate_turn_stream = AsyncMock(return_value=(MOCK_NARRATIVE, safe_default()))
+    narrator.narrate_turn_stream = AsyncMock(return_value=(MOCK_NARRATIVE, safe_default(), {}))
     return narrator  # type: ignore[return-value]
 
 

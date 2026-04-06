@@ -125,6 +125,15 @@ class StateSnapshot:
     """Current session mode: 'exploration' or 'combat'.
     Guards the CombatClassifier — classifier must not run in combat mode (ADR-0011)."""
 
+    estimated_token_count: int | None = field(default=None)
+    """Rough token estimate for the assembled prompt (system + user message).
+
+    Populated by build_snapshot() using the same len(text)//4 heuristic as
+    estimate_tokens().  Used by the observability layer (ADR-0018) to record
+    context size per turn.  None when the snapshot is constructed manually
+    (e.g. in tests).
+    """
+
 
 # ---------------------------------------------------------------------------
 # Token estimation
@@ -401,7 +410,7 @@ async def build_snapshot(
         is_multiplayer=is_multiplayer,
     )
 
-    return StateSnapshot(
+    snapshot = StateSnapshot(
         system_prompt=system_prompt,
         characters=character_states,
         scene=scene,
@@ -410,6 +419,17 @@ async def build_snapshot(
         npcs=npc_dicts,
         session_mode=str(ws.get("mode", "exploration")),
     )
+
+    # Estimate total token count for the assembled prompt (ADR-0018 observability).
+    # We serialise the snapshot and count across system + user message to get a
+    # single budget figure.  This avoids a separate tokeniser dependency.
+    serialized = serialize_snapshot(snapshot)
+    system_text: str = serialized["system"]  # type: ignore[assignment]
+    messages_list = serialized["messages"]  # type: ignore[assignment]
+    user_text: str = messages_list[0]["content"]  # type: ignore[index]
+    snapshot.estimated_token_count = estimate_tokens(system_text) + estimate_tokens(user_text)
+
+    return snapshot
 
 
 # ---------------------------------------------------------------------------
