@@ -177,6 +177,46 @@ class TavernAPI:
         )
         return await self._json(r)  # type: ignore[no-any-return]
 
+    async def list_turns(self, campaign_id: str | UUID, limit: int = 100) -> list[dict[str, Any]]:
+        """GET /api/campaigns/{id}/turns — return up to ``limit`` turns for the campaign.
+
+        Used by /inspect turn to find a turn by sequence_number without a
+        dedicated lookup endpoint.
+        """
+        r = await self._client.get(
+            f"/api/campaigns/{_id(campaign_id)}/turns",
+            params={"page_size": limit, "page": 1},
+        )
+        data: dict[str, Any] = await self._json(r)  # type: ignore[no-any-return]
+        return data.get("turns", [])  # type: ignore[return-value]
+
+    async def get_turn_event_log(
+        self, campaign_id: str | UUID, turn_id: str | UUID
+    ) -> dict[str, Any]:
+        """GET /api/campaigns/{id}/turns/{turn_id}/event_log — ADR-0018."""
+        r = await self._client.get(
+            f"/api/campaigns/{_id(campaign_id)}/turns/{_id(turn_id)}/event_log"
+        )
+        return await self._json(r)  # type: ignore[no-any-return]
+
+    async def get_active_session(self, campaign_id: str | UUID) -> dict[str, Any]:
+        """GET /api/campaigns/{id}/sessions/active — ADR-0018.
+
+        Returns ``{"session_id": ..., "campaign_id": ..., "started_at": ...}``.
+        Raises TavernAPIError(404) if no session is active.
+        """
+        r = await self._client.get(f"/api/campaigns/{_id(campaign_id)}/sessions/active")
+        return await self._json(r)  # type: ignore[no-any-return]
+
+    async def get_session_telemetry(
+        self, campaign_id: str | UUID, session_id: str | UUID
+    ) -> dict[str, Any]:
+        """GET /api/campaigns/{id}/sessions/{session_id}/telemetry — ADR-0018."""
+        r = await self._client.get(
+            f"/api/campaigns/{_id(campaign_id)}/sessions/{_id(session_id)}/telemetry"
+        )
+        return await self._json(r)  # type: ignore[no-any-return]
+
     async def get_recap(self, campaign_id: str | UUID) -> dict[str, Any]:
         """GET /api/campaigns/{id}/recap — narrative recap (M2 endpoint, not yet live).
 

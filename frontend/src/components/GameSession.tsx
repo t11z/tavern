@@ -4,9 +4,13 @@ import type {
   InitiativeEntry,
   MechanicalResultEntry,
   SessionState,
+  SessionTelemetry,
   TurnEntry,
+  TurnEventLog,
   TurnMechanicalGroup,
   WsEvent,
+  WsSessionTelemetryEvent,
+  WsTurnEventLogEvent,
 } from '../types'
 
 // ---------------------------------------------------------------------------
@@ -56,6 +60,7 @@ import { CharacterSheetOverlay } from './CharacterSheetOverlay'
 import { ChatLog } from './ChatLog'
 import { ChatInput } from './ChatInput'
 import { MechanicalLog } from './MechanicalLog'
+import { InspectPanel } from './InspectPanel'
 
 interface Props {
   campaignId: string
@@ -78,6 +83,11 @@ export function GameSession({ campaignId, onEndSession }: Props) {
   const [mechLog, setMechLog] = useState<TurnMechanicalGroup[]>([])
   const [preMigration, setPreMigration] = useState(false)
   const [logTab, setLogTab] = useState<'story' | 'log'>('story')
+  const [eventLogCache, setEventLogCache] = useState<Map<string, TurnEventLog>>(new Map())
+  const [sessionTelemetry, setSessionTelemetry] = useState<SessionTelemetry | null>(null)
+  const [inspectOpen, setInspectOpen] = useState(false)
+  const [inspectTab, setInspectTab] = useState<'turn' | 'session'>('session')
+  const [selectedTurnLog, setSelectedTurnLog] = useState<TurnEventLog | null>(null)
   const { isMobile } = useBreakpoint()
 
   const showToast = (msg: string) => {
@@ -205,11 +215,60 @@ export function GameSession({ campaignId, onEndSession }: Props) {
           setSuggestions(event.payload.suggestions)
           break
       }
+
+      // ADR-0018 observability events use "type" key (not "event")
+      const rawMsg = event as unknown as { type?: string; payload?: unknown }
+      if (rawMsg.type === 'turn.event_log') {
+        const payload = (rawMsg as WsTurnEventLogEvent).payload
+        setEventLogCache((prev) => {
+          const next = new Map(prev)
+          next.set(payload.turn_id, payload as TurnEventLog)
+          // Keep last 50 turns
+          if (next.size > 50) {
+            const firstKey = next.keys().next().value
+            if (firstKey !== undefined) next.delete(firstKey)
+          }
+          return next
+        })
+      }
+      if (rawMsg.type === 'session.telemetry') {
+        const payload = (rawMsg as WsSessionTelemetryEvent).payload
+        setSessionTelemetry(payload as SessionTelemetry)
+      }
     },
     [activeCharId],
   )
 
   const { status: wsStatus } = useWebSocket(campaignId, { onMessage: handleWsMessage })
+
+  const handleSelectTurn = useCallback(
+    async (turnId: string) => {
+      setInspectOpen(true)
+      setInspectTab('turn')
+      const cached = eventLogCache.get(turnId)
+      if (cached) {
+        setSelectedTurnLog(cached)
+        return
+      }
+      // Not in cache — fetch from REST
+      try {
+        const res = await fetch(`/api/campaigns/${campaignId}/turns/${turnId}/event_log`)
+        if (res.ok) {
+          const data = await res.json() as { turn_id: string; event_log: TurnEventLog }
+          const log = { ...data.event_log, turn_id: data.turn_id }
+          setEventLogCache((prev) => {
+            const next = new Map(prev)
+            next.set(turnId, log)
+            return next
+          })
+          setSelectedTurnLog(log)
+        }
+      } catch {
+        // Silently fail — TurnDetail will show "no trace" message
+      }
+    },
+    [campaignId, eventLogCache],
+  )
 
   const handleSubmit = async (action: string) => {
     if (!activeCharId || streaming !== null) return
@@ -327,6 +386,16 @@ export function GameSession({ campaignId, onEndSession }: Props) {
             {isMobile && (
               <button style={s.closeBtn} onClick={() => setSidebarOpen(false)} title="Close">×</button>
             )}
+            {!isMobile && (
+              // TODO: gate on campaign ownership — ADR-0006
+              <button
+                style={{ ...s.btn, ...s.btnSecondary, padding: '0.3rem 0.5rem' }}
+                onClick={() => setInspectOpen((v) => !v)}
+                title={inspectOpen ? 'Close Inspect' : 'Inspect'}
+              >
+                🔍
+              </button>
+            )}
             <button
               style={{ ...s.btn, ...s.btnDanger, opacity: ending ? 0.5 : 1 }}
               onClick={handleEndSession}
@@ -441,7 +510,11 @@ export function GameSession({ campaignId, onEndSession }: Props) {
               display: isMobile && logTab !== 'story' ? 'none' : 'flex',
             }}
           >
-            <ChatLog turns={turns} streamingNarrative={streaming} />
+            <ChatLog
+              turns={turns}
+              streamingNarrative={streaming}
+              onSelectTurn={!isMobile ? handleSelectTurn : undefined}
+            />
             <ChatInput
               disabled={streaming !== null || wsStatus !== 'open'}
               onSubmit={handleSubmit}
@@ -460,6 +533,21 @@ export function GameSession({ campaignId, onEndSession }: Props) {
             <span className="mech-log-label">⚔️ Mechanical Log</span>
             <MechanicalLog turnGroups={mechLog} preMigration={preMigration} />
           </div>
+
+          {/* Inspect panel — desktop only, host-only TODO ADR-0006 */}
+          {!isMobile && inspectOpen && (
+            <div style={s.inspectPane}>
+              <InspectPanel
+                campaignId={campaignId}
+                tab={inspectTab}
+                onTabChange={setInspectTab}
+                eventLogCache={eventLogCache}
+                sessionTelemetry={sessionTelemetry}
+                selectedTurnLog={selectedTurnLog}
+                onSelectTurnLog={setSelectedTurnLog}
+              />
+            </div>
+          )}
         </div>
       </div>
 
@@ -630,6 +718,15 @@ const s: Record<string, React.CSSProperties> = {
     display: 'flex',
     flexDirection: 'column',
     minWidth: 0,
+    overflow: 'hidden',
+  },
+  inspectPane: {
+    width: '24rem',
+    flexShrink: 0,
+    borderLeft: '1px solid var(--color-border)',
+    background: 'var(--color-bg-panel)',
+    display: 'flex',
+    flexDirection: 'column',
     overflow: 'hidden',
   },
   center: {

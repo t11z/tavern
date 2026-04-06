@@ -28,6 +28,38 @@ router = APIRouter(prefix="/campaigns", tags=["inspect"])
 DbSession = Annotated[AsyncSession, Depends(get_db_session)]
 
 
+@router.get("/{campaign_id}/sessions/active")
+async def get_active_session(
+    campaign_id: uuid.UUID,
+    db: DbSession,
+) -> dict:
+    """Return the currently open session for a campaign.
+
+    Used by the Discord bot's /inspect commands to resolve the session_id
+    without requiring it to be cached in bot state.
+    Returns 404 if the campaign has no open session.
+    """
+    campaign_result = await db.execute(select(Campaign).where(Campaign.id == campaign_id))
+    if campaign_result.scalar_one_or_none() is None:
+        raise not_found("campaign", campaign_id)
+
+    session_result = await db.execute(
+        select(Session).where(
+            Session.campaign_id == campaign_id,
+            Session.ended_at.is_(None),
+        )
+    )
+    session = session_result.scalar_one_or_none()
+    if session is None:
+        raise not_found("active_session", campaign_id)
+
+    return {
+        "session_id": str(session.id),
+        "campaign_id": str(session.campaign_id),
+        "started_at": session.started_at.isoformat() if session.started_at else None,
+    }
+
+
 @router.get("/{campaign_id}/turns/{turn_id}/event_log")
 async def get_turn_event_log(
     campaign_id: uuid.UUID,
