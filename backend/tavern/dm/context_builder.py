@@ -21,7 +21,7 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass, field
 
-from sqlalchemy import or_, select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -370,6 +370,12 @@ async def build_snapshot(
             or_(
                 NPC.scene_location == scene_location,
                 NPC.last_seen_turn >= recency_threshold,
+                # ADR-0013 §2: predefined NPCs with no scene_location are always included
+                # so campaign authors don't need to pre-assign scenes
+                and_(
+                    NPC.origin == "predefined",
+                    NPC.scene_location.is_(None),
+                ),
             )
         )
         .where(
