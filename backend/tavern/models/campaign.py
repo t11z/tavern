@@ -48,12 +48,25 @@ class Campaign(Base):
 
 class CampaignState(Base):
     __tablename__ = "campaign_states"
+    _VALID_TIMES = (
+        "'dawn', 'morning', 'midday', 'afternoon', 'dusk', 'evening', 'night', 'late_night'"
+    )
+    __table_args__ = (
+        CheckConstraint(
+            f"time_of_day IN ({_VALID_TIMES})",
+            name="ck_campaign_states_time_of_day",
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     campaign_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("campaigns.id"), unique=True)
     rolling_summary: Mapped[str] = mapped_column(Text)
     scene_context: Mapped[str] = mapped_column(Text)
     world_state: Mapped[dict] = mapped_column(JSONB)
+    current_scene_id: Mapped[str] = mapped_column(Text, default="")
+    """Normalised scene identifier for the party's current location (ADR-0019)."""
+    time_of_day: Mapped[str] = mapped_column(String, default="morning")
+    """Current time of day — one of the eight enumerated values (ADR-0019)."""
     turn_count: Mapped[int] = mapped_column(default=0)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()

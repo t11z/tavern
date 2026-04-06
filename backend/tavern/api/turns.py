@@ -55,7 +55,11 @@ from tavern.core.dice import roll_d20
 from tavern.core.scene import normalise_scene_id
 from tavern.core.spells import resolve_spell
 from tavern.dm.context_builder import TurnContext, build_snapshot
-from tavern.dm.gm_signals import GMSignals, NPCUpdate, safe_default
+from tavern.dm.gm_signals import (
+    GMSignals,
+    NPCUpdate,
+    safe_default,
+)
 from tavern.dm.narrator import Narrator
 from tavern.dm.summary import build_turn_summary_input, trim_summary
 from tavern.models.campaign import Campaign, CampaignState
@@ -585,6 +589,10 @@ async def _process_npc_update(
     Performs name-based lookup (case-insensitive within campaign).
     Broadcasts npc.spawned or npc.updated via WebSocket.
     Does NOT commit — caller is responsible for the transaction boundary.
+
+    Spawned NPCs receive scene_location=NULL. The pipeline's post-signal
+    finalisation step (ADR-0019, Package C) assigns the final current_scene_id
+    to all NULL-location NPCs from this turn after location_change is processed.
     """
     from tavern.api.ws import manager
 
@@ -607,7 +615,11 @@ async def _process_npc_update(
             )
             return
 
-        # Create new NPC record
+        # Create new NPC record.
+        # scene_location is intentionally left NULL here (ADR-0019, Package C).
+        # After all signals are processed, any NULL-location NPCs from this turn
+        # are assigned the final current_scene_id in the post-signal finalisation
+        # step (handles both the no-location-change and location-change cases).
         npc = NPC(
             campaign_id=campaign_id,
             name=update.npc_name,
@@ -619,6 +631,7 @@ async def _process_npc_update(
             disposition=update.disposition or "unknown",
             hp_max=update.hp_max,
             ac=update.ac,
+            scene_location=None,
             first_appeared_turn=sequence_number,
             last_seen_turn=sequence_number,
         )
@@ -755,8 +768,12 @@ async def _stream_narrative(
     Pipeline:
     1. Narrate → (narrative_text, gm_signals)
     2. Broadcast narrative start / chunk / end events
-    3. Process gm_signals.npc_updates (within DB transaction)
-    4. Process gm_signals.scene_transition (Engine combat_end takes precedence)
+    3. (DB session) Process gm_signals in order per ADR-0019 §3:
+       a. npc_updates
+       b. location_change    ← ADR-0019: update current_scene_id; auto-assign NPC locations
+       c. time_progression   ← ADR-0019: update time_of_day
+       d. scene_transition   (Engine combat_end takes precedence)
+    4. Broadcast location_change and time_progression WebSocket events (after narrative_end)
     5. Persist turn narrative + gm_signals JSON + event_log
     6. Update rolling summary
 
@@ -890,6 +907,8 @@ async def _stream_narrative(
                 "fallback_used": gm_diag["fallback_used"],
                 "has_scene_transition": gm_signals.scene_transition.type != "none",
                 "npc_update_count": len(gm_signals.npc_updates),
+                "has_location_change": gm_signals.location_change is not None,
+                "has_time_progression": gm_signals.time_progression is not None,
                 "suggested_actions_count": len(gm_signals.suggested_actions),
             },
             decision=(
@@ -898,6 +917,8 @@ async def _stream_narrative(
                 else (
                     f"Parsed — transition={gm_signals.scene_transition.type}, "
                     f"npc_updates={len(gm_signals.npc_updates)}, "
+                    f"location_change={'yes' if gm_signals.location_change else 'no'}, "
+                    f"time_progression={'yes' if gm_signals.time_progression else 'no'}, "
                     f"suggested={len(gm_signals.suggested_actions)}"
                 )
             ),
@@ -916,43 +937,24 @@ async def _stream_narrative(
         },
     )
 
-    # Emit suggested actions immediately after narrative_end (ADR-0015)
-    logger.debug(
-        "GMSignals suggested_actions after parsing: %r (turn_id=%s)",
-        gm_signals.suggested_actions,
-        turn_id,
-    )
-    if gm_signals.suggested_actions:
-        await manager.broadcast(
-            campaign_id,
-            {
-                "event": "turn.suggested_actions",
-                "payload": {
-                    "turn_id": str(turn_id),
-                    "character_id": str(character_id),
-                    "suggestions": gm_signals.suggested_actions,
-                },
-            },
-        )
-
-    # suggested_actions_emit step
-    suggestion_count = len(gm_signals.suggested_actions)
-    acc.add_step(
-        PipelineStep(
-            step="suggested_actions_emit",
-            started_at=datetime.now(UTC),
-            duration_ms=0,
-            input_summary={"raw_count": suggestion_count},
-            output_summary={"emitted": suggestion_count},
-            decision=f"{suggestion_count} suggestions emitted",
-        )
-    )
+    # WebSocket events for location_change and time_progression are emitted
+    # after narrative_end and before suggested_actions (ADR-0019 §6).
+    # The DB handlers run inside the session block below; we capture the
+    # normalised values here so we can broadcast after the commit.
+    _ws_location_change: str | None = None
+    _ws_time_progression: str | None = None
 
     # Persist narrative and process GMSignals (own session)
     async with session_factory() as db:
         try:
+            # Re-load campaign state (may have been updated by request-phase combat start)
+            state_result = await db.execute(
+                select(CampaignState).where(CampaignState.campaign_id == campaign_id)
+            )
+            campaign_state = state_result.scalar_one_or_none()
+
             # -------------------------------------------------------------------
-            # Step A: Process npc_updates BEFORE scene_transition
+            # Step A: Process npc_updates BEFORE location_change (ADR-0019 §3)
             # -------------------------------------------------------------------
             npc_spawned = 0
             npc_updated = 0
@@ -990,17 +992,138 @@ async def _stream_narrative(
             )
 
             # -------------------------------------------------------------------
-            # Step B: Process scene_transition
+            # Step B: Process location_change (ADR-0019 §3, step 2)
+            # -------------------------------------------------------------------
+            if gm_signals.location_change is not None and campaign_state is not None:
+                lc_start = datetime.now(UTC)
+                lc_start_mono = time.monotonic()
+                try:
+                    new_scene_id = normalise_scene_id(gm_signals.location_change.new_location)
+                    campaign_state.current_scene_id = new_scene_id
+                    campaign_state.updated_at = datetime.now(tz=UTC)
+
+                    # Pre-assign scene_location for NPCs spawned this turn so
+                    # they immediately reflect the new location (ADR-0019 §3 step 2).
+                    # The C+ finalise step below will pick up any that remain NULL.
+                    null_loc_result = await db.execute(
+                        select(NPC).where(
+                            NPC.campaign_id == campaign_id,
+                            NPC.first_appeared_turn == sequence_number,
+                            NPC.scene_location.is_(None),
+                        )
+                    )
+                    auto_assigned = 0
+                    for npc_to_assign in null_loc_result.scalars().all():
+                        npc_to_assign.scene_location = new_scene_id
+                        auto_assigned += 1
+
+                    await db.flush()
+                    _ws_location_change = new_scene_id
+                    lc_duration_ms = int((time.monotonic() - lc_start_mono) * 1000)
+                    acc.add_step(
+                        PipelineStep(
+                            step="location_change_apply",
+                            started_at=lc_start,
+                            duration_ms=lc_duration_ms,
+                            input_summary={
+                                "raw_location": gm_signals.location_change.new_location,
+                            },
+                            output_summary={
+                                "new_scene_id": new_scene_id,
+                                "npcs_auto_assigned": auto_assigned,
+                            },
+                            decision=(
+                                gm_signals.location_change.reason or f"Location → {new_scene_id}"
+                            ),
+                        )
+                    )
+                    logger.info(
+                        "Location changed to %r for campaign %s (%d NPCs auto-assigned)",
+                        new_scene_id,
+                        campaign_id,
+                        auto_assigned,
+                    )
+                except ValueError as exc:
+                    lc_duration_ms = int((time.monotonic() - lc_start_mono) * 1000)
+                    acc.add_warning(f"location_change rejected — invalid scene identifier: {exc}")
+                    acc.add_step(
+                        PipelineStep(
+                            step="location_change_apply",
+                            started_at=lc_start,
+                            duration_ms=lc_duration_ms,
+                            input_summary={
+                                "raw_location": gm_signals.location_change.new_location,
+                            },
+                            output_summary={"rejected": True},
+                            decision=f"Rejected — {exc}",
+                        )
+                    )
+                    logger.error(
+                        "location_change for campaign %s rejected — invalid scene identifier: %s",
+                        campaign_id,
+                        exc,
+                    )
+
+            # -------------------------------------------------------------------
+            # Step C: Process time_progression (ADR-0019 §3, step 3)
+            # -------------------------------------------------------------------
+            if gm_signals.time_progression is not None and campaign_state is not None:
+                tp_start = datetime.now(UTC)
+                tp_start_mono = time.monotonic()
+                campaign_state.time_of_day = gm_signals.time_progression.new_time_of_day
+                campaign_state.updated_at = datetime.now(tz=UTC)
+                await db.flush()
+                _ws_time_progression = gm_signals.time_progression.new_time_of_day
+                tp_duration_ms = int((time.monotonic() - tp_start_mono) * 1000)
+                acc.add_step(
+                    PipelineStep(
+                        step="time_progression_apply",
+                        started_at=tp_start,
+                        duration_ms=tp_duration_ms,
+                        input_summary={
+                            "new_time_of_day": gm_signals.time_progression.new_time_of_day,
+                        },
+                        output_summary={
+                            "time_of_day": gm_signals.time_progression.new_time_of_day,
+                        },
+                        decision=(
+                            gm_signals.time_progression.reason
+                            or f"Time → {gm_signals.time_progression.new_time_of_day}"
+                        ),
+                    )
+                )
+                logger.info(
+                    "Time of day advanced to %r for campaign %s",
+                    gm_signals.time_progression.new_time_of_day,
+                    campaign_id,
+                )
+
+            # -------------------------------------------------------------------
+            # Step C+: Finalise NPC scene_location for NPCs spawned this turn
+            # (ADR-0019, Package C).  Any NPCs spawned in step A that still
+            # have scene_location = NULL are assigned the final current_scene_id
+            # (which may have been updated by the location_change handler above).
+            # -------------------------------------------------------------------
+            if campaign_state is not None and npc_spawned > 0:
+                final_scene_id = campaign_state.current_scene_id
+                if final_scene_id:
+                    null_loc_result = await db.execute(
+                        select(NPC).where(
+                            NPC.campaign_id == campaign_id,
+                            NPC.first_appeared_turn == sequence_number,
+                            NPC.scene_location.is_(None),
+                        )
+                    )
+                    for npc_to_finalise in null_loc_result.scalars().all():
+                        npc_to_finalise.scene_location = final_scene_id
+                    await db.flush()
+
+            # -------------------------------------------------------------------
+            # Step D: Process scene_transition (ADR-0019 §3, step 4)
             # -------------------------------------------------------------------
             current_mode = str(world_state.get("mode", "exploration"))
 
-            # Re-load campaign state to get latest world_state (may have been
-            # updated by the request-phase combat start)
-            state_result = await db.execute(
-                select(CampaignState).where(CampaignState.campaign_id == campaign_id)
-            )
-            campaign_state = state_result.scalar_one_or_none()
-
+            # campaign_state was loaded at the top of this block.
             # Check whether the Rules Engine ended combat (all NPCs at 0 HP).
             # For M1 we detect this via the world_state "engine_combat_end" flag
             # that submit_turn may have set.  If not set, we rely on Narrator signals.
@@ -1236,6 +1359,66 @@ async def _stream_narrative(
         except Exception as exc:
             logger.error("DB persist failed for turn %s: %s", turn_id, exc)
             return
+
+    # Emit location_change and time_progression events after narrative_end,
+    # before suggested_actions (ADR-0019 §6 emission sequence)
+    if _ws_location_change is not None:
+        await manager.broadcast(
+            campaign_id,
+            {
+                "event": "turn.location_change",
+                "payload": {
+                    "turn_id": str(turn_id),
+                    "campaign_id": str(campaign_id),
+                    "new_location": _ws_location_change,
+                },
+            },
+        )
+
+    if _ws_time_progression is not None:
+        await manager.broadcast(
+            campaign_id,
+            {
+                "event": "turn.time_progression",
+                "payload": {
+                    "turn_id": str(turn_id),
+                    "campaign_id": str(campaign_id),
+                    "new_time_of_day": _ws_time_progression,
+                },
+            },
+        )
+
+    # Emit suggested actions after location/time events (ADR-0019 §6, ADR-0015)
+    logger.debug(
+        "GMSignals suggested_actions after parsing: %r (turn_id=%s)",
+        gm_signals.suggested_actions,
+        turn_id,
+    )
+    if gm_signals.suggested_actions:
+        await manager.broadcast(
+            campaign_id,
+            {
+                "event": "turn.suggested_actions",
+                "payload": {
+                    "turn_id": str(turn_id),
+                    "character_id": str(character_id),
+                    "suggestions": gm_signals.suggested_actions,
+                },
+            },
+        )
+
+    # suggested_actions_emit step
+    suggestion_count = len(gm_signals.suggested_actions)
+    acc.add_step(
+        PipelineStep(
+            step="suggested_actions_emit",
+            started_at=datetime.now(UTC),
+            duration_ms=0,
+            input_summary={"raw_count": suggestion_count},
+            output_summary={"emitted": suggestion_count},
+            decision=f"{suggestion_count} suggestions emitted",
+        )
+    )
 
     # Emit turn.event_log WebSocket event (after DB commit)
     pipeline_duration_ms = int(

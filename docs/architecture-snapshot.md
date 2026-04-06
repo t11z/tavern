@@ -1,6 +1,6 @@
 # Architecture Snapshot
 
-> Last updated: 2026-04-06 — ADR-0018 Turn Observability Layer: observability.py, api/inspect.py, event_log JSONB on Turn, session.telemetry and turn.event_log WebSocket events
+> Last updated: 2026-04-06 — ADR-0019 Exploration State Signals: LocationChange/TimeProgression dataclasses, current_scene_id and time_of_day columns on CampaignState, location_change_apply and time_progression_apply pipeline steps, turn.location_change and turn.time_progression WebSocket events, NPC scene_location auto-assignment on spawn
 >
 > This document is maintained by Claude Code per the rules in CLAUDE.md.
 > It is consumed by the architecture consultant to inform decisions without
@@ -24,16 +24,16 @@ backend/tavern/
 │   ├── srd_data.py         # SRD Data Access Layer: three-tier lookup (Campaign Override → Instance Library → SRD Baseline); resolve_npc_stat_block(stat_block_ref: str, campaign_id: UUID) → dict | None (three-tier monster lookup for NPC stat block population; logs warning not error on miss)
 │   └── scene.py            # Scene identifier utilities (ADR-0017): normalise_scene_id(raw: str) -> str (strip/lowercase/replace spaces+hyphens with underscore/strip non-conforming chars/collapse underscores; raises ValueError on empty result or >64 chars); validate_scene_id(scene_id: str) -> bool (returns True if already canonical; does not raise)
 ├── dm/                 # DM layer — Narrator, Context Builder, LLM provider abstraction
-│   ├── narrator.py         # Narrator class; model routing (Sonnet/Haiku); streaming narration and summary compression; GMSignals delimiter buffering (stops forwarding to clients after ---GM_SIGNALS---); parse_gm_signals() integration; narrate_turn_stream() returns tuple[str, GMSignals, dict] (dict = LLM metadata for observability: call_type, model_id, model_tier, input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens, latency_ms, stream_first_token_ms, estimated_cost_usd, success, error)
-│   ├── context_builder.py  # StateSnapshot, TurnContext; builds and serializes game state for the Narrator; TurnContext.stealth_rolls: dict[str, int] (Path B Surprise, ADR-0014); StateSnapshot.session_mode: str (guards CombatClassifier, ADR-0011); StateSnapshot.npcs: list[dict] (compact NPC records, ADR-0013, scene-scoped and recency-filtered last 10 turns, excludes dead/fled unless plot_significant); build_system_prompt() includes _SUGGESTED_ACTIONS_INSTRUCTIONS block instructing the Narrator to emit 0–3 suggested_actions in the GMSignals envelope (ADR-0015)
+│   ├── narrator.py         # Narrator class; model routing (Sonnet/Haiku); streaming narration and summary compression; GMSignals delimiter buffering (stops forwarding to clients after ---GM_SIGNALS---); parse_gm_signals() integration; narrate_turn_stream() returns tuple[str, GMSignals, dict] (dict = LLM metadata); system prompt includes _GM_SIGNALS_INSTRUCTION (all 5 GMSignals fields), _NPC_CONSISTENCY_INSTRUCTION (ADR-0013), _LOCATION_CHANGE_INSTRUCTIONS (ADR-0019 — when/how to emit location_change), _TIME_PROGRESSION_INSTRUCTIONS (ADR-0019 — 8-value enum, no rest mechanics)
+│   ├── context_builder.py  # StateSnapshot, TurnContext; builds and serializes game state for the Narrator; TurnContext.stealth_rolls: dict[str, int] (Path B Surprise, ADR-0014); StateSnapshot.session_mode: str (guards CombatClassifier, ADR-0011); StateSnapshot.npcs: list[dict] (compact NPC records, ADR-0013, scene-scoped via current_scene_id column and recency-filtered last 10 turns, excludes dead/fled unless plot_significant); build_system_prompt() includes _SUGGESTED_ACTIONS_INSTRUCTIONS (ADR-0015); serialised scene block uses "Scene:" label (current_scene_id) and always-present "Time:" field (time_of_day) per ADR-0019 §5
 │   ├── summary.py          # Rolling summary helpers: build_turn_summary_input(), trim_summary(); enforces 500-token budget
 │   ├── combat_classifier.py # CombatClassifier — Haiku-based binary LLM classifier for combat initiation detection; classify(action_text: str, snapshot: StateSnapshot) → CombatClassification; called pre-narration in exploration mode only; raises RuntimeError in combat mode (ADR-0011); no dependency on core/
-│   └── gm_signals.py       # GMSignals, SceneTransition, NPCUpdate dataclasses; GM_SIGNALS_DELIMITER = "---GM_SIGNALS---" constant; parse_gm_signals(raw: str) → GMSignals — safe-default on any parse failure; safe_default() → GMSignals; GMSignals fields: scene_transition, npc_updates, suggested_actions: list[str] (0–3 action suggestions for the active player, ADR-0015; truncated to 3 entries, each capped at 80 chars)
+│   └── gm_signals.py       # GMSignals, SceneTransition, NPCUpdate, LocationChange, TimeProgression dataclasses; GM_SIGNALS_DELIMITER = "---GM_SIGNALS---" constant; parse_gm_signals(raw: str) → GMSignals — safe-default on any parse failure; safe_default() → GMSignals; GMSignals fields: scene_transition, npc_updates, suggested_actions: list[str] (0–3 suggestions, ADR-0015), location_change: LocationChange | None (ADR-0019 — new_location raw str + optional reason), time_progression: TimeProgression | None (ADR-0019 — new_time_of_day from 8-value enum + optional reason)
 ├── observability.py    # Turn pipeline telemetry (ADR-0018): PipelineStep, LLMCallRecord, TurnEventLog dataclasses; TurnEventLogAccumulator (mutable accumulator per turn); turn_event_log_to_dict() for JSONB serialisation. No dm/ or api/ imports — stdlib only.
 ├── api/                # FastAPI REST endpoints and WebSocket handler
-│   ├── campaigns.py        # Campaign CRUD + session lifecycle; calls Narrator for Claude-generated opening scene on create
+│   ├── campaigns.py        # Campaign CRUD + session lifecycle; calls Narrator for Claude-generated opening scene on create; sets current_scene_id (normalised via normalise_scene_id()) and time_of_day on CampaignState at creation (ADR-0019); world_state["location"] still written but deprecated
 │   ├── characters.py       # Character creation and retrieval
-│   ├── turns.py            # Turn submission (202) and retrieval; wires action_analyzer + Rules Engine; broadcasts character.updated; full combat lifecycle: CombatClassifier invoked pre-narration (exploration mode only); GMSignals processed post-narration (npc_updates before scene_transition, mandatory ordering per ADR-0012); engine combat_end takes precedence over Narrator combat_end signal when both fire on same turn; player-initiated (Flow B) and NPC-initiated (Flow A) combat paths both produce identical combat.started WebSocket event; mechanical_results persisted from engine results into Turn.mechanical_results JSONB column and broadcast in turn.narrative_end payload; turn.suggested_actions event emitted (using "type" key, not "event") immediately after turn.narrative_end when GMSignals.suggested_actions is non-empty (ADR-0015); TurnEventLogAccumulator instruments every pipeline step and persists event_log JSONB atomically with the turn record; emits turn.event_log WebSocket event after commit; emits session.telemetry every 10 turns (ADR-0018)
+│   ├── turns.py            # Turn submission (202) and retrieval; wires action_analyzer + Rules Engine; broadcasts character.updated; full combat lifecycle: CombatClassifier invoked pre-narration (exploration mode only); GMSignals processed post-narration in order: (1) npc_updates — spawned NPCs get scene_location=NULL, (2) location_change_apply — normalises new_location → current_scene_id, auto-assigns NULL-location NPCs from this turn, (3) time_progression_apply — updates time_of_day, (4) scene_transition — combat mode changes, (5) NPC location finalise — assigns final current_scene_id to any remaining NULL-location NPCs from this turn (ADR-0019); engine combat_end takes precedence over Narrator; turn.location_change and turn.time_progression events emitted after narrative_end before suggested_actions (ADR-0019 §6); TurnEventLogAccumulator instruments every step; emits turn.event_log and session.telemetry (ADR-0018)
 │   ├── inspect.py          # Observability REST endpoints (ADR-0018): GET /campaigns/{id}/turns/{turn_id}/event_log (returns Turn.event_log JSONB); GET /campaigns/{id}/sessions/{session_id}/telemetry (aggregated session metrics from turn event logs; warns if query >200ms)
 │   ├── npcs.py             # NPC roster CRUD for campaign: POST (201), GET list, GET single, PATCH; PATCH enforces immutability — returns 422 if name, species, or appearance in request body; scoped to /api/campaigns/{campaign_id}/npcs
 │   ├── ws.py               # WebSocket endpoint + ConnectionManager; session.state recent_turns payload includes mechanical_results per turn; sends session.telemetry on connect (ADR-0018)
@@ -83,7 +83,8 @@ backend/tavern/
 │       ├── 0004_drop_srd_reference_tables.py                  # Drop all SRD PostgreSQL tables (data now in MongoDB)
 │       ├── 0005_add_npcs_table.py                             # NPC table (campaign-scoped roster)
 │       ├── 0006_add_mechanical_results_jsonb_to_turns.py      # Add mechanical_results JSONB column to turns
-│       └── 0007_add_event_log_jsonb_to_turns.py              # Add event_log JSONB column to turns (ADR-0018)
+│       ├── 0007_add_event_log_jsonb_to_turns.py              # Add event_log JSONB column to turns (ADR-0018)
+│       └── 0008_add_current_scene_id_and_time_of_day.py     # Add current_scene_id and time_of_day columns to campaign_states (ADR-0019)
 ├── auth/               # Placeholder — Phase 6 authentication (not yet implemented)
 └── multiplayer/        # Placeholder — future multiplayer support
 
@@ -231,6 +232,8 @@ Events currently emitted by the API server:
 | turn.narrative_start | server → client | turn_id (streaming begins) |
 | turn.narrative_chunk | server → client | turn_id, chunk, sequence (token-by-token) |
 | turn.narrative_end | server → client | turn_id, narrative, mechanical_results |
+| turn.location_change | server → client | turn_id, campaign_id, new_location: str (normalised scene_id; emitted only when location changed, ADR-0019) |
+| turn.time_progression | server → client | turn_id, campaign_id, new_time_of_day: str (8-value enum; emitted only when time advanced, ADR-0019) |
 | turn.suggested_actions | server → client | turn_id, character_id, suggestions: list[str] (emitted only when suggestions non-empty) |
 | turn.event_log | server → client | turn_id, sequence_number, pipeline_duration_ms, steps, llm_calls, warnings, errors, admin_only: true (ADR-0018; emitted after DB commit) |
 | system.error | server → client | message (narrator or system error) |
@@ -256,7 +259,7 @@ Events the discord_bot `gameplay.py` cog is ready to handle (not yet emitted by 
 | Model | Table | Key relations |
 |---|---|---|
 | Campaign | campaigns | has one CampaignState, has many Session, has many Character |
-| CampaignState | campaign_states | belongs to Campaign (unique FK) |
+| CampaignState | campaign_states | belongs to Campaign (unique FK); current_scene_id TEXT NOT NULL (normalised scene identifier, ADR-0019); time_of_day TEXT NOT NULL (8-value enum: dawn/morning/midday/afternoon/dusk/evening/night/late_night, CHECK constraint, ADR-0019) |
 | Session | sessions | belongs to Campaign, has many Turn |
 | Character | characters | belongs to Campaign, has many InventoryItem, has many CharacterCondition, has many Turn |
 | InventoryItem | inventory_items | belongs to Character |
@@ -316,6 +319,7 @@ Tavern's SRD data comes from `t11z/5e-database`, a fork of `5e-bits/5e-database`
 | 0016 | World Object Persistence | Accepted |
 | 0017 | Scene Identifier Convention | Accepted |
 | 0018 | Turn Observability Layer | Accepted |
+| 0019 | Exploration State Signals | Accepted |
 
 ## Known Deviations
 

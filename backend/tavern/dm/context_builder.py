@@ -301,21 +301,21 @@ def _build_scene_context(state: CampaignState) -> SceneContext:
     """Extract SceneContext from CampaignState.
 
     ``scene_context`` (Text column) holds the 2-3 sentence location description.
-    Structured scene fields are read from ``world_state`` (JSONB):
-      - location     (str)
+    ``current_scene_id`` (Text column) is the authoritative party location (ADR-0019).
+    ``time_of_day`` (String column) is the authoritative time of day (ADR-0019).
+    Remaining scene fields are read from ``world_state`` (JSONB):
       - npcs         (list[str])
       - environment  (str)
       - threats      (list[str])
-      - time_of_day  (str)
     """
     ws = state.world_state or {}
     return SceneContext(
-        location=str(ws.get("location", "Unknown location")),
+        location=state.current_scene_id or str(ws.get("location", "unknown")),
         description=state.scene_context.strip(),
         npcs=list(ws.get("npcs", [])),
         environment=str(ws.get("environment", "")),
         threats=list(ws.get("threats", [])),
-        time_of_day=str(ws.get("time_of_day", "")),
+        time_of_day=state.time_of_day or str(ws.get("time_of_day", "morning")),
     )
 
 
@@ -370,7 +370,10 @@ async def build_snapshot(
     # Query NPCs relevant to the current scene / recent turns (ADR-0013)
     current_turn_number = campaign.state.turn_count
     recency_threshold = max(0, current_turn_number - 10)
-    scene_location = str((campaign.state.world_state or {}).get("location", ""))
+    # Use current_scene_id (ADR-0019) as the authoritative location for NPC scoping
+    scene_location = campaign.state.current_scene_id or str(
+        (campaign.state.world_state or {}).get("location", "")  # DEPRECATED: ADR-0019 fallback
+    )
 
     npc_result = await db_session.execute(
         select(NPC)
@@ -505,12 +508,21 @@ def _serialize_character(char: CharacterState) -> str:
 
 
 def _serialize_scene(scene: SceneContext) -> str:
-    """Render the scene context as plain text."""
-    parts: list[str] = [f"Location: {scene.location}"]
+    """Render the scene context as plain text.
+
+    Format (ADR-0019 §5):
+      Scene: <current_scene_id>   — normalised identifier; Narrator references this in
+                                    location_change signals
+      Time: <time_of_day>         — always present
+      <description prose>
+      Environment: ...
+      ...
+    """
+    parts: list[str] = [f"Scene: {scene.location}"]
+    # Time is always present so the Narrator has reliable context (ADR-0019 §5)
+    parts.append(f"Time: {scene.time_of_day or 'morning'}")
     if scene.description:
         parts.append(scene.description)
-    if scene.time_of_day:
-        parts.append(f"Time: {scene.time_of_day}")
     if scene.environment:
         parts.append(f"Environment: {scene.environment}")
     if scene.npcs:

@@ -27,8 +27,10 @@ from tavern.dm.combat_classifier import CombatClassification
 from tavern.dm.gm_signals import (
     GM_SIGNALS_DELIMITER,
     GMSignals,
+    LocationChange,
     NPCUpdate,
     SceneTransition,
+    TimeProgression,
     parse_gm_signals,
     safe_default,
 )
@@ -64,12 +66,13 @@ def _campaign_state(campaign_id: uuid.UUID, mode: str = "exploration") -> Campai
         scene_context="A dimly lit crossroads.",
         world_state={
             "location": "Forest Crossroads",
-            "time_of_day": "dusk",
             "environment": "misty",
             "npcs": [],
             "threats": [],
             "mode": mode,
         },
+        current_scene_id="forest_crossroads",
+        time_of_day="dusk",
         turn_count=0,
     )
 
@@ -660,3 +663,388 @@ class TestNarrativeTextClean:
             assert GM_SIGNALS_DELIMITER not in narrative, (
                 f"narrative_text must not contain GMSignals delimiter: {narrative!r}"
             )
+
+
+# ---------------------------------------------------------------------------
+# ADR-0019: location_change signal processing
+# ---------------------------------------------------------------------------
+
+
+class TestLocationChangeSignal:
+    async def test_location_change_updates_current_scene_id(self, api_client: AsyncClient) -> None:
+        """A location_change signal updates CampaignState.current_scene_id."""
+        cid, char_id = await _setup_campaign_with_char(api_client, "Location Change Test")
+
+        signals = GMSignals(
+            scene_transition=SceneTransition(type="none"),
+            npc_updates=[],
+            location_change=LocationChange(
+                new_location="harborside_supply",
+                reason="Player entered the shop",
+            ),
+        )
+        mock_narrator = _make_mock_narrator(
+            narrative="You step into Harborside Supply.",
+            gm_signals=signals,
+        )
+
+        broadcast_events: list[dict] = []
+
+        async def capture(campaign_id_arg, event):  # type: ignore[no-untyped-def]
+            broadcast_events.append(event)
+
+        original_broadcast = ws_mod.manager.broadcast
+        ws_mod.manager.broadcast = AsyncMock(side_effect=capture)
+
+        try:
+            with patch(
+                "tavern.dm.combat_classifier.CombatClassifier.classify",
+                new=AsyncMock(return_value=_no_combat_classification()),
+            ):
+                app.dependency_overrides[get_narrator_dep] = lambda: mock_narrator
+                resp = await api_client.post(
+                    f"/api/campaigns/{cid}/turns",
+                    json={"character_id": char_id, "action": "I walk into the shop."},
+                )
+        finally:
+            ws_mod.manager.broadcast = original_broadcast
+            app.dependency_overrides.pop(get_narrator_dep, None)
+
+        assert resp.status_code == 202
+
+        async with _TEST_SESSION_FACTORY() as db:
+            state_result = await db.execute(
+                select(CampaignState).where(CampaignState.campaign_id == uuid.UUID(cid))
+            )
+            state = state_result.scalar_one_or_none()
+            assert state is not None
+            assert state.current_scene_id == "harborside_supply"
+
+    async def test_location_change_emits_websocket_event(self, api_client: AsyncClient) -> None:
+        """A location_change signal causes a turn.location_change WebSocket event."""
+        cid, char_id = await _setup_campaign_with_char(api_client, "Location WS Test")
+
+        signals = GMSignals(
+            scene_transition=SceneTransition(type="none"),
+            npc_updates=[],
+            location_change=LocationChange(new_location="dungeon_entrance"),
+        )
+        mock_narrator = _make_mock_narrator(
+            narrative="You descend into the dungeon.",
+            gm_signals=signals,
+        )
+
+        broadcast_events: list[dict] = []
+
+        async def capture(campaign_id_arg, event):  # type: ignore[no-untyped-def]
+            broadcast_events.append(event)
+
+        original_broadcast = ws_mod.manager.broadcast
+        ws_mod.manager.broadcast = AsyncMock(side_effect=capture)
+
+        try:
+            with patch(
+                "tavern.dm.combat_classifier.CombatClassifier.classify",
+                new=AsyncMock(return_value=_no_combat_classification()),
+            ):
+                app.dependency_overrides[get_narrator_dep] = lambda: mock_narrator
+                resp = await api_client.post(
+                    f"/api/campaigns/{cid}/turns",
+                    json={"character_id": char_id, "action": "I descend."},
+                )
+        finally:
+            ws_mod.manager.broadcast = original_broadcast
+            app.dependency_overrides.pop(get_narrator_dep, None)
+
+        assert resp.status_code == 202
+
+        lc_events = [e for e in broadcast_events if e.get("event") == "turn.location_change"]
+        assert len(lc_events) == 1
+        assert lc_events[0]["payload"]["new_location"] == "dungeon_entrance"
+
+    async def test_location_change_normalises_raw_identifier(
+        self, api_client: AsyncClient
+    ) -> None:
+        """Raw location identifiers with spaces/capitals are normalised before write."""
+        cid, char_id = await _setup_campaign_with_char(api_client, "Normalise Test")
+
+        signals = GMSignals(
+            scene_transition=SceneTransition(type="none"),
+            npc_updates=[],
+            location_change=LocationChange(new_location="Harborside Supply"),
+        )
+        mock_narrator = _make_mock_narrator(gm_signals=signals)
+
+        try:
+            with patch(
+                "tavern.dm.combat_classifier.CombatClassifier.classify",
+                new=AsyncMock(return_value=_no_combat_classification()),
+            ):
+                app.dependency_overrides[get_narrator_dep] = lambda: mock_narrator
+                await api_client.post(
+                    f"/api/campaigns/{cid}/turns",
+                    json={"character_id": char_id, "action": "I enter."},
+                )
+        finally:
+            app.dependency_overrides.pop(get_narrator_dep, None)
+
+        async with _TEST_SESSION_FACTORY() as db:
+            state_result = await db.execute(
+                select(CampaignState).where(CampaignState.campaign_id == uuid.UUID(cid))
+            )
+            state = state_result.scalar_one_or_none()
+            assert state is not None
+            assert state.current_scene_id == "harborside_supply"
+
+    async def test_location_change_after_narrative_end_before_suggested_actions(
+        self, api_client: AsyncClient
+    ) -> None:
+        """turn.location_change event is emitted after narrative_end, before suggested_actions."""
+        cid, char_id = await _setup_campaign_with_char(api_client, "Event Order Test")
+
+        signals = GMSignals(
+            scene_transition=SceneTransition(type="none"),
+            npc_updates=[],
+            location_change=LocationChange(new_location="new_place"),
+            suggested_actions=["Look around"],
+        )
+        mock_narrator = _make_mock_narrator(gm_signals=signals)
+
+        broadcast_events: list[dict] = []
+
+        async def capture(campaign_id_arg, event):  # type: ignore[no-untyped-def]
+            broadcast_events.append(event)
+
+        original_broadcast = ws_mod.manager.broadcast
+        ws_mod.manager.broadcast = AsyncMock(side_effect=capture)
+
+        try:
+            with patch(
+                "tavern.dm.combat_classifier.CombatClassifier.classify",
+                new=AsyncMock(return_value=_no_combat_classification()),
+            ):
+                app.dependency_overrides[get_narrator_dep] = lambda: mock_narrator
+                resp = await api_client.post(
+                    f"/api/campaigns/{cid}/turns",
+                    json={"character_id": char_id, "action": "I move."},
+                )
+        finally:
+            ws_mod.manager.broadcast = original_broadcast
+            app.dependency_overrides.pop(get_narrator_dep, None)
+
+        assert resp.status_code == 202
+
+        event_names = [e.get("event") or e.get("type") for e in broadcast_events]
+        narrative_end_idx = next(
+            (i for i, n in enumerate(event_names) if n == "turn.narrative_end"), None
+        )
+        location_change_idx = next(
+            (i for i, n in enumerate(event_names) if n == "turn.location_change"), None
+        )
+        suggested_idx = next(
+            (i for i, n in enumerate(event_names) if n == "turn.suggested_actions"), None
+        )
+        assert narrative_end_idx is not None
+        assert location_change_idx is not None
+        assert suggested_idx is not None
+        assert narrative_end_idx < location_change_idx < suggested_idx
+
+
+# ---------------------------------------------------------------------------
+# ADR-0019: time_progression signal processing
+# ---------------------------------------------------------------------------
+
+
+class TestTimeProgressionSignal:
+    async def test_time_progression_updates_time_of_day(self, api_client: AsyncClient) -> None:
+        """A time_progression signal updates CampaignState.time_of_day."""
+        cid, char_id = await _setup_campaign_with_char(api_client, "Time Progression Test")
+
+        signals = GMSignals(
+            scene_transition=SceneTransition(type="none"),
+            npc_updates=[],
+            time_progression=TimeProgression(
+                new_time_of_day="evening",
+                reason="Hours of travel",
+            ),
+        )
+        mock_narrator = _make_mock_narrator(
+            narrative="The sun dips below the horizon.",
+            gm_signals=signals,
+        )
+
+        try:
+            with patch(
+                "tavern.dm.combat_classifier.CombatClassifier.classify",
+                new=AsyncMock(return_value=_no_combat_classification()),
+            ):
+                app.dependency_overrides[get_narrator_dep] = lambda: mock_narrator
+                resp = await api_client.post(
+                    f"/api/campaigns/{cid}/turns",
+                    json={"character_id": char_id, "action": "We travel."},
+                )
+        finally:
+            app.dependency_overrides.pop(get_narrator_dep, None)
+
+        assert resp.status_code == 202
+
+        async with _TEST_SESSION_FACTORY() as db:
+            state_result = await db.execute(
+                select(CampaignState).where(CampaignState.campaign_id == uuid.UUID(cid))
+            )
+            state = state_result.scalar_one_or_none()
+            assert state is not None
+            assert state.time_of_day == "evening"
+
+    async def test_time_progression_emits_websocket_event(self, api_client: AsyncClient) -> None:
+        """A time_progression signal causes a turn.time_progression WebSocket event."""
+        cid, char_id = await _setup_campaign_with_char(api_client, "Time WS Test")
+
+        signals = GMSignals(
+            scene_transition=SceneTransition(type="none"),
+            npc_updates=[],
+            time_progression=TimeProgression(new_time_of_day="night"),
+        )
+        mock_narrator = _make_mock_narrator(gm_signals=signals)
+
+        broadcast_events: list[dict] = []
+
+        async def capture(campaign_id_arg, event):  # type: ignore[no-untyped-def]
+            broadcast_events.append(event)
+
+        original_broadcast = ws_mod.manager.broadcast
+        ws_mod.manager.broadcast = AsyncMock(side_effect=capture)
+
+        try:
+            with patch(
+                "tavern.dm.combat_classifier.CombatClassifier.classify",
+                new=AsyncMock(return_value=_no_combat_classification()),
+            ):
+                app.dependency_overrides[get_narrator_dep] = lambda: mock_narrator
+                resp = await api_client.post(
+                    f"/api/campaigns/{cid}/turns",
+                    json={"character_id": char_id, "action": "Night falls."},
+                )
+        finally:
+            ws_mod.manager.broadcast = original_broadcast
+            app.dependency_overrides.pop(get_narrator_dep, None)
+
+        assert resp.status_code == 202
+
+        tp_events = [e for e in broadcast_events if e.get("event") == "turn.time_progression"]
+        assert len(tp_events) == 1
+        assert tp_events[0]["payload"]["new_time_of_day"] == "night"
+
+
+# ---------------------------------------------------------------------------
+# ADR-0019: NPC spawn location auto-assignment (Package C)
+# ---------------------------------------------------------------------------
+
+
+class TestNPCSpawnLocationAutoAssign:
+    async def test_spawned_npc_gets_current_scene_id(self, api_client: AsyncClient) -> None:
+        """Spawned NPC without explicit location gets scene_location = current_scene_id."""
+        cid, char_id = await _setup_campaign_with_char(api_client, "NPC Spawn Location Test")
+
+        # Set the campaign's current_scene_id before the turn
+        async with _TEST_SESSION_FACTORY() as db:
+            state_result = await db.execute(
+                select(CampaignState).where(CampaignState.campaign_id == uuid.UUID(cid))
+            )
+            state = state_result.scalar_one_or_none()
+            if state is not None:
+                state.current_scene_id = "harborside_supply"
+                await db.commit()
+
+        signals = GMSignals(
+            scene_transition=SceneTransition(type="none"),
+            npc_updates=[
+                NPCUpdate(
+                    event="spawn",
+                    npc_name="Vara",
+                    species="Human",
+                    appearance="A woman with sun-darkened skin.",
+                    role="Shopkeeper",
+                    motivation="To earn a living",
+                    disposition="neutral",
+                )
+            ],
+        )
+        mock_narrator = _make_mock_narrator(gm_signals=signals)
+
+        try:
+            with patch(
+                "tavern.dm.combat_classifier.CombatClassifier.classify",
+                new=AsyncMock(return_value=_no_combat_classification()),
+            ):
+                app.dependency_overrides[get_narrator_dep] = lambda: mock_narrator
+                resp = await api_client.post(
+                    f"/api/campaigns/{cid}/turns",
+                    json={"character_id": char_id, "action": "I enter the shop."},
+                )
+        finally:
+            app.dependency_overrides.pop(get_narrator_dep, None)
+
+        assert resp.status_code == 202
+
+        async with _TEST_SESSION_FACTORY() as db:
+            npc_result = await db.execute(
+                select(NPC).where(
+                    NPC.campaign_id == uuid.UUID(cid),
+                    NPC.name == "Vara",
+                )
+            )
+            vara = npc_result.scalar_one_or_none()
+            assert vara is not None
+            assert vara.scene_location == "harborside_supply"
+
+    async def test_spawn_plus_location_change_auto_assigns_new_scene(
+        self, api_client: AsyncClient
+    ) -> None:
+        """When spawn + location_change fire on same turn, NPC gets the new location."""
+        cid, char_id = await _setup_campaign_with_char(api_client, "Spawn+Location Test")
+
+        signals = GMSignals(
+            scene_transition=SceneTransition(type="none"),
+            npc_updates=[
+                NPCUpdate(
+                    event="spawn",
+                    npc_name="Dock Master",
+                    species="Human",
+                    appearance="A grizzled man with a pipe.",
+                    role="Dock Master",
+                    motivation="Keep the docks running",
+                    disposition="neutral",
+                )
+            ],
+            location_change=LocationChange(new_location="dock_district"),
+        )
+        mock_narrator = _make_mock_narrator(gm_signals=signals)
+
+        try:
+            with patch(
+                "tavern.dm.combat_classifier.CombatClassifier.classify",
+                new=AsyncMock(return_value=_no_combat_classification()),
+            ):
+                app.dependency_overrides[get_narrator_dep] = lambda: mock_narrator
+                resp = await api_client.post(
+                    f"/api/campaigns/{cid}/turns",
+                    json={"character_id": char_id, "action": "I head to the docks."},
+                )
+        finally:
+            app.dependency_overrides.pop(get_narrator_dep, None)
+
+        assert resp.status_code == 202
+
+        async with _TEST_SESSION_FACTORY() as db:
+            npc_result = await db.execute(
+                select(NPC).where(
+                    NPC.campaign_id == uuid.UUID(cid),
+                    NPC.name == "Dock Master",
+                )
+            )
+            npc = npc_result.scalar_one_or_none()
+            assert npc is not None
+            # NPC was spawned before location_change processed; auto-assignment
+            # sets scene_location to the new current_scene_id
+            assert npc.scene_location == "dock_district"
