@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react'
 import type {
   CharacterState,
-  InitiativeEntry,
+  CombatState,
   MechanicalResultEntry,
   SessionState,
   SessionTelemetry,
@@ -75,7 +75,7 @@ export function GameSession({ campaignId, onEndSession }: Props) {
   const [error, setError] = useState<string | null>(null)
   const [ending, setEnding] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
-  const [combat, setCombat] = useState<{ initiative_order: InitiativeEntry[]; surprised: string[] } | null>(null)
+  const [combat, setCombat] = useState<CombatState | null>(null)
   const [suggestions, setSuggestions] = useState<string[]>([])
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [characterSheetOpen, setCharacterSheetOpen] = useState(false)
@@ -111,7 +111,15 @@ export function GameSession({ campaignId, onEndSession }: Props) {
               narrative: t.narrative ?? null,
             })),
           )
-          setCombat(s.combat ?? null)
+          setCombat(s.combat
+            ? {
+                initiativeOrder: s.combat.initiative_order,
+                surprised: s.combat.surprised,
+                currentRound: 1,
+                currentTurnIndex: 0,
+              }
+            : null,
+          )
           if (s.characters.length > 0 && !activeCharId) {
             setActiveCharId(s.characters[0].id)
           }
@@ -178,6 +186,15 @@ export function GameSession({ campaignId, onEndSession }: Props) {
               ]
             })
           }
+          // Advance combat turn index after every turn.narrative_end
+          setCombat((prev) => {
+            if (!prev) return prev
+            const nextIndex = prev.currentTurnIndex + 1
+            if (nextIndex >= prev.initiativeOrder.length) {
+              return { ...prev, currentTurnIndex: 0, currentRound: prev.currentRound + 1 }
+            }
+            return { ...prev, currentTurnIndex: nextIndex }
+          })
           break
         }
         case 'character.updated': {
@@ -204,8 +221,10 @@ export function GameSession({ campaignId, onEndSession }: Props) {
         // combat UI only updated after reconnect (which delivers session.state).
         case 'combat.started':
           setCombat({
-            initiative_order: event.payload.initiative_order,
+            initiativeOrder: event.payload.initiative_order,
             surprised: event.payload.surprised,
+            currentRound: 1,
+            currentTurnIndex: 0,
           })
           break
         case 'combat.ended':
@@ -444,19 +463,23 @@ export function GameSession({ campaignId, onEndSession }: Props) {
         {/* Combat panel */}
         {combat && (
           <div style={s.combatPanel}>
-            <span style={s.combatBadge}>COMBAT</span>
+            <span style={s.combatBadge}>COMBAT · Round {combat.currentRound}</span>
             <div style={s.initiativeHeader}>
               <span style={s.initiativeRank}>#</span>
               <span style={{ ...s.initiativeName, color: 'var(--color-parchment-dim)', fontSize: '0.65rem', letterSpacing: '0.08em' }}>Name</span>
               <span style={{ ...s.initiativeRoll, color: 'var(--color-parchment-dim)', fontSize: '0.65rem', letterSpacing: '0.08em' }}>Init</span>
             </div>
-            {combat.initiative_order.map((entry, i) => {
+            {combat.initiativeOrder.map((entry, i) => {
               const char = session.characters.find((c) => c.id === entry.character_id)
               const name = char?.name ?? entry.character_id
-              const isSurprised = combat.surprised.includes(entry.character_id)
+              const isSurprised = combat.currentRound === 1 && combat.surprised.includes(entry.character_id)
+              const isActive = i === combat.currentTurnIndex
               return (
-                <div key={entry.character_id} style={s.initiativeEntry}>
-                  <span style={s.initiativeRank}>{i + 1}.</span>
+                <div key={entry.character_id} style={{
+                  ...s.initiativeEntry,
+                  ...(isActive ? { color: 'var(--color-parchment)', background: 'rgba(192,57,43,0.1)', borderRadius: '3px', paddingLeft: '0.25rem', marginLeft: '-0.25rem' } : {}),
+                }}>
+                  <span style={{ ...s.initiativeRank, ...(isActive ? { color: 'var(--color-danger)' } : {}) }}>{i + 1}.</span>
                   <span style={s.initiativeName}>
                     {name}
                     {isSurprised && <span style={s.surprisedMark}> !</span>}
@@ -483,7 +506,23 @@ export function GameSession({ campaignId, onEndSession }: Props) {
         {isMobile && (
           <button style={s.menuBtn} onClick={() => setSidebarOpen(true)} title="Characters">☰</button>
         )}
-        <CampaignHeader campaign={session.campaign} wsStatus={wsStatus} />
+        <CampaignHeader
+          campaign={session.campaign}
+          wsStatus={wsStatus}
+          combatDisplay={combat ? {
+            currentRound: combat.currentRound,
+            currentTurnIndex: combat.currentTurnIndex,
+            entries: combat.initiativeOrder.map((entry) => {
+              const char = session.characters.find((c) => c.id === entry.character_id)
+              return {
+                id: entry.character_id,
+                name: char?.name ?? entry.character_id,
+                initiative: entry.initiative_result,
+                surprised: combat.currentRound === 1 && combat.surprised.includes(entry.character_id),
+              }
+            }),
+          } : null}
+        />
 
         {/* Mobile tab bar */}
         <div className="log-tab-bar">

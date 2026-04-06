@@ -212,6 +212,13 @@ export interface WsCombatEndedEvent {
   payload: Record<string, never>
 }
 
+export interface CombatState {
+  initiativeOrder: InitiativeEntry[]
+  surprised: string[]
+  currentRound: number
+  currentTurnIndex: number
+}
+
 export interface WsSuggestedActionsEvent {
   event: 'turn.suggested_actions'
   payload: {
