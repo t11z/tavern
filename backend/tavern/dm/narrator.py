@@ -65,6 +65,34 @@ _GM_SIGNALS_INSTRUCTION = (
     "full rules. Always include all three top-level keys."
 )
 
+# NPC lifecycle behavioral instructions appended to the system prompt (ADR-0013).
+# Plain text only — no Markdown, no HTML (ADR-0002 §5).
+_NPC_CONSISTENCY_INSTRUCTION = (
+    "\n\nNPC CONSISTENCY RULES:\n"
+    "- The NPCs: section lists all NPCs currently in the scene. Each entry shows the NPC's\n"
+    "  canonical name, species, appearance, role, disposition, and status.\n"
+    "- These attributes are AUTHORITATIVE. When describing or referencing an NPC listed in the\n"
+    "  NPCs: section, you MUST use their canonical name, species, and appearance exactly as\n"
+    "  given.\n"
+    "  Do not invent alternative descriptions, change gender, alter physical features, or\n"
+    "  rename NPCs that already exist in the NPCs: section.\n"
+    "- When introducing a NEW character not present in the NPCs: section, emit a spawn event\n"
+    "  in your GMSignals npc_updates. Provide: npc_name (unique within the campaign),\n"
+    "  species, appearance (1-3 sentences of physical description), role, motivation,\n"
+    "  disposition. Optionally provide stat_block_ref for SRD creatures (e.g. goblin,\n"
+    "  bandit, veteran).\n"
+    "- BEFORE emitting a spawn event, check the NPCs: section. If an NPC with that name already\n"
+    "  exists, reference them by name — do not spawn a duplicate.\n"
+    "- For NPCs you spawn: the name, species, and appearance you provide become permanent and\n"
+    "  immutable. Choose carefully — you cannot change them later.\n"
+    "- You may update an existing NPC's disposition, status, or location via npc_updates\n"
+    "  events (disposition_change, status_change, location_change). Use the NPC's canonical\n"
+    "  name in the npc_name field.\n"
+    "- Crowd characters (unnamed bystanders, generic guards) do not require spawn events.\n"
+    "  Only emit spawn events for characters the players interact with meaningfully or who\n"
+    "  have narrative significance."
+)
+
 NARRATION_MAX_TOKENS: int = 1024
 NARRATION_TEMPERATURE: float = 0.8
 SUMMARY_MAX_TOKENS: int = 500
@@ -224,8 +252,8 @@ class AnthropicProvider:
         self._client = anthropic.AsyncAnthropic(api_key=api_key)
 
     def _build_system_with_signals(self, system_text: str) -> str:
-        """Append the GMSignals instruction to the system prompt."""
-        return system_text + _GM_SIGNALS_INSTRUCTION
+        """Append the GMSignals and NPC consistency instructions to the system prompt."""
+        return system_text + _GM_SIGNALS_INSTRUCTION + _NPC_CONSISTENCY_INSTRUCTION
 
     async def narrate(
         self,

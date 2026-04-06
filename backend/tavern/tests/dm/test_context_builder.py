@@ -25,6 +25,7 @@ from tavern.dm.context_builder import (
 )
 from tavern.models.campaign import Campaign, CampaignState
 from tavern.models.character import Character, CharacterCondition, InventoryItem
+from tavern.models.npc import NPC
 
 # ---------------------------------------------------------------------------
 # Fixture helpers
@@ -93,6 +94,29 @@ def _character(
         ability_scores={"str": 16, "dex": 12, "con": 14, "int": 10, "wis": 11, "cha": 10},
         spell_slots=spell_slots or {},
         features={},
+    )
+
+
+def _npc(
+    campaign_id: uuid.UUID,
+    name: str = "Aldara",
+    *,
+    origin: str = "predefined",
+    scene_location: str | None = None,
+    last_seen_turn: int | None = None,
+    status: str = "alive",
+    plot_significant: bool = False,
+) -> NPC:
+    return NPC(
+        id=uuid.uuid4(),
+        campaign_id=campaign_id,
+        name=name,
+        origin=origin,
+        status=status,
+        disposition="neutral",
+        plot_significant=plot_significant,
+        scene_location=scene_location,
+        last_seen_turn=last_seen_turn,
     )
 
 
@@ -446,6 +470,87 @@ class TestBuildSnapshot:
         snapshot = await build_snapshot(campaign.id, turn, db_session)
 
         assert snapshot.characters[0].key_inventory == []
+
+    # -----------------------------------------------------------------------
+    # NPC inclusion / exclusion (ADR-0013 §2)
+    # -----------------------------------------------------------------------
+
+    async def test_snapshot_includes_predefined_npc_with_no_scene_location(
+        self, db_session: AsyncSession
+    ) -> None:
+        """ADR-0013 §2: predefined NPC with scene_location=None is always included."""
+        campaign, _, _ = await _populate_basic(db_session)
+        npc = _npc(campaign.id, "Aldara", origin="predefined", scene_location=None)
+        db_session.add(npc)
+        await db_session.commit()
+
+        turn = TurnContext(player_action="I look around.", rules_result=None)
+        snapshot = await build_snapshot(campaign.id, turn, db_session)
+
+        npc_names = [n["name"] for n in snapshot.npcs]
+        assert "Aldara" in npc_names
+
+    async def test_snapshot_excludes_narrator_spawned_npc_with_no_scene_location(
+        self, db_session: AsyncSession
+    ) -> None:
+        """Only predefined NPCs get the scene_location=None fallback; narrator-spawned do not."""
+        campaign, _, _ = await _populate_basic(db_session)
+        npc = _npc(
+            campaign.id,
+            "Spawned Bandit",
+            origin="narrator_spawned",
+            scene_location=None,
+            last_seen_turn=None,
+        )
+        db_session.add(npc)
+        await db_session.commit()
+
+        turn = TurnContext(player_action="I look around.", rules_result=None)
+        snapshot = await build_snapshot(campaign.id, turn, db_session)
+
+        npc_names = [n["name"] for n in snapshot.npcs]
+        assert "Spawned Bandit" not in npc_names
+
+    async def test_snapshot_excludes_predefined_npc_in_other_scene(
+        self, db_session: AsyncSession
+    ) -> None:
+        """Predefined NPC assigned to a different scene is not included (scene-scoped)."""
+        campaign, _, _ = await _populate_basic(db_session)
+        # The campaign state location is "Phandalin"; assign NPC to a different scene
+        npc = _npc(
+            campaign.id,
+            "Distant Guard",
+            origin="predefined",
+            scene_location="Castle Neverwinter",
+            last_seen_turn=None,
+        )
+        db_session.add(npc)
+        await db_session.commit()
+
+        turn = TurnContext(player_action="I look around.", rules_result=None)
+        snapshot = await build_snapshot(campaign.id, turn, db_session)
+
+        npc_names = [n["name"] for n in snapshot.npcs]
+        assert "Distant Guard" not in npc_names
+
+    async def test_snapshot_includes_npc_in_current_scene(self, db_session: AsyncSession) -> None:
+        """NPC whose scene_location matches the current scene is included."""
+        campaign, _, _ = await _populate_basic(db_session)
+        # _populate_basic sets world_state location to "Phandalin"
+        npc = _npc(
+            campaign.id,
+            "Local Merchant",
+            origin="narrator_spawned",
+            scene_location="Phandalin",
+        )
+        db_session.add(npc)
+        await db_session.commit()
+
+        turn = TurnContext(player_action="I look around.", rules_result=None)
+        snapshot = await build_snapshot(campaign.id, turn, db_session)
+
+        npc_names = [n["name"] for n in snapshot.npcs]
+        assert "Local Merchant" in npc_names
 
 
 # ---------------------------------------------------------------------------
