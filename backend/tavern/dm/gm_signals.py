@@ -7,6 +7,7 @@ broadcasting narrative text to clients.
 
 ADR-0012: NPC-initiated combat
 ADR-0013: NPC lifecycle
+ADR-0019: Exploration state signals (LocationChange, TimeProgression)
 """
 
 from __future__ import annotations
@@ -69,6 +70,33 @@ class NPCUpdate:
     new_location: str | None = None
 
 
+_VALID_TIMES_OF_DAY = frozenset(
+    {"dawn", "morning", "midday", "afternoon", "dusk", "evening", "night", "late_night"}
+)
+
+
+@dataclass
+class LocationChange:
+    """An exploration-mode party location change signalled by the Narrator (ADR-0019)."""
+
+    new_location: str
+    """Raw location identifier; normalised via normalise_scene_id() before write."""
+
+    reason: str = ""
+    """One sentence for logging — never player-facing."""
+
+
+@dataclass
+class TimeProgression:
+    """A time-of-day advancement signalled by the Narrator (ADR-0019)."""
+
+    new_time_of_day: Literal[
+        "dawn", "morning", "midday", "afternoon", "dusk", "evening", "night", "late_night"
+    ]
+    reason: str = ""
+    """One sentence for logging — never player-facing."""
+
+
 @dataclass
 class GMSignals:
     """Complete GM signal envelope appended to every Narrator response."""
@@ -77,6 +105,10 @@ class GMSignals:
     npc_updates: list[NPCUpdate] = field(default_factory=list)
     suggested_actions: list[str] = field(default_factory=list)
     """0–3 narrative action suggestions for the active player (ADR-0015)."""
+    location_change: LocationChange | None = None
+    """Party location change signal (ADR-0019). None means no location change this turn."""
+    time_progression: TimeProgression | None = None
+    """Time-of-day advancement signal (ADR-0019). None means no time change this turn."""
 
 
 # ---------------------------------------------------------------------------
@@ -280,10 +312,63 @@ def parse_gm_signals(raw: str) -> tuple[GMSignals, dict]:
             continue
         suggested_actions.append(item[:_MAX_SUGGESTION_LEN])
 
+    # --- Parse location_change (ADR-0019) ---
+    location_change: LocationChange | None = None
+    lc_raw = data.get("location_change")
+    if lc_raw is not None:
+        if not isinstance(lc_raw, dict):
+            logger.warning(
+                "GMSignals location_change is not an object — ignoring. value=%r", lc_raw
+            )
+        else:
+            new_loc = lc_raw.get("new_location")
+            if not new_loc or not isinstance(new_loc, str):
+                logger.warning(
+                    "GMSignals location_change.new_location missing or not a string — "
+                    "ignoring. value=%r",
+                    new_loc,
+                )
+            else:
+                location_change = LocationChange(
+                    new_location=new_loc,
+                    reason=str(lc_raw.get("reason", "")),
+                )
+
+    # --- Parse time_progression (ADR-0019) ---
+    time_progression: TimeProgression | None = None
+    tp_raw = data.get("time_progression")
+    if tp_raw is not None:
+        if not isinstance(tp_raw, dict):
+            logger.warning(
+                "GMSignals time_progression is not an object — ignoring. value=%r", tp_raw
+            )
+        else:
+            new_time = tp_raw.get("new_time_of_day")
+            if not new_time or not isinstance(new_time, str):
+                logger.warning(
+                    "GMSignals time_progression.new_time_of_day missing or not a string — "
+                    "ignoring. value=%r",
+                    new_time,
+                )
+            elif new_time not in _VALID_TIMES_OF_DAY:
+                logger.warning(
+                    "GMSignals time_progression.new_time_of_day invalid value %r — "
+                    "ignoring. Valid values: %s",
+                    new_time,
+                    ", ".join(sorted(_VALID_TIMES_OF_DAY)),
+                )
+            else:
+                time_progression = TimeProgression(
+                    new_time_of_day=new_time,  # type: ignore[arg-type]
+                    reason=str(tp_raw.get("reason", "")),
+                )
+
     return _success(
         GMSignals(
             scene_transition=scene_transition,
             npc_updates=npc_updates,
             suggested_actions=suggested_actions,
+            location_change=location_change,
+            time_progression=time_progression,
         )
     )

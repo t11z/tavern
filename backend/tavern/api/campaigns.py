@@ -27,6 +27,7 @@ from tavern.api.schemas import (
     CampaignUpdateRequest,
     SessionResponse,
 )
+from tavern.core.scene import normalise_scene_id
 from tavern.dm.narrator import Narrator
 from tavern.models.campaign import Campaign, CampaignState
 from tavern.models.character import Character, CharacterCondition, InventoryItem
@@ -158,15 +159,44 @@ async def create_campaign(
     # Fallback values — overwritten on successful brief generation
     world_seed: str = preset["world_seed"] or ""
     scene_context: str = _FALLBACK_SCENE_CONTEXT
+    current_scene_id: str = "unknown"
+    time_of_day: str = "morning"
 
     # Attempt to generate a Claude-authored brief and opening scene (Haiku, non-blocking failure)
     try:
         brief = await narrator.generate_campaign_brief(name=body.name, tone=body.tone)
         world_seed = brief["campaign_brief"]
         scene_context = brief["opening_scene"]
-        world_state["location"] = brief["location"]
+        world_state["location"] = brief["location"]  # DEPRECATED: ADR-0019
         world_state["environment"] = brief["environment"]
-        world_state["time_of_day"] = brief["time_of_day"]
+        world_state["time_of_day"] = brief["time_of_day"]  # DEPRECATED: ADR-0019
+
+        # Derive current_scene_id from the brief's location (ADR-0019)
+        try:
+            current_scene_id = normalise_scene_id(brief["location"])
+        except ValueError:
+            logger.warning(
+                "Campaign brief location %r could not be normalised — defaulting to 'unknown'",
+                brief["location"],
+            )
+            current_scene_id = "unknown"
+
+        # Validate time_of_day from brief (ADR-0019)
+        _VALID_TIMES = {
+            "dawn",
+            "morning",
+            "midday",
+            "afternoon",
+            "dusk",
+            "evening",
+            "night",
+            "late_night",
+        }
+        if brief.get("time_of_day") in _VALID_TIMES:
+            time_of_day = brief["time_of_day"]
+        else:
+            time_of_day = "morning"
+
     except Exception as exc:
         logger.warning(
             "Campaign brief generation failed for %r (tone=%r) — using fallback: %s",
@@ -189,6 +219,8 @@ async def create_campaign(
         rolling_summary="",
         scene_context=scene_context,
         world_state=world_state,
+        current_scene_id=current_scene_id,
+        time_of_day=time_of_day,
         turn_count=0,
     )
     db.add(state)

@@ -8,7 +8,12 @@ from __future__ import annotations
 
 import json
 
-from tavern.dm.gm_signals import GM_SIGNALS_DELIMITER, GMSignals, parse_gm_signals, safe_default
+from tavern.dm.gm_signals import (
+    GM_SIGNALS_DELIMITER,
+    GMSignals,
+    parse_gm_signals,
+    safe_default,
+)
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -292,3 +297,310 @@ class TestDiagnosticFallback:
         _signals, diag = parse_gm_signals("No delimiter here.")
         assert diag["fallback_used"] is True
         assert _signals == safe_default()
+
+
+# ---------------------------------------------------------------------------
+# LocationChange — happy path
+# ---------------------------------------------------------------------------
+
+
+class TestLocationChangeValid:
+    def test_valid_snake_case_identifier_parsed(self):
+        raw = _make_raw(
+            {
+                "scene_transition": {"type": "none"},
+                "npc_updates": [],
+                "suggested_actions": [],
+                "location_change": {"new_location": "harborside_supply", "reason": "Entered shop"},
+            }
+        )
+        result, _diag = parse_gm_signals(raw)
+        assert result.location_change is not None
+        assert result.location_change.new_location == "harborside_supply"
+        assert result.location_change.reason == "Entered shop"
+
+    def test_location_requiring_normalisation_preserved_raw(self):
+        """Parser stores the raw value; normalisation is the pipeline's responsibility."""
+        raw = _make_raw(
+            {
+                "scene_transition": {"type": "none"},
+                "npc_updates": [],
+                "suggested_actions": [],
+                "location_change": {"new_location": "Harborside Supply"},
+            }
+        )
+        result, _diag = parse_gm_signals(raw)
+        assert result.location_change is not None
+        assert result.location_change.new_location == "Harborside Supply"
+
+    def test_location_change_reason_defaults_to_empty(self):
+        raw = _make_raw(
+            {
+                "scene_transition": {"type": "none"},
+                "npc_updates": [],
+                "suggested_actions": [],
+                "location_change": {"new_location": "dungeon_level_2"},
+            }
+        )
+        result, _diag = parse_gm_signals(raw)
+        assert result.location_change is not None
+        assert result.location_change.reason == ""
+
+    def test_null_location_change_parses_to_none(self):
+        raw = _make_raw(
+            {
+                "scene_transition": {"type": "none"},
+                "npc_updates": [],
+                "suggested_actions": [],
+                "location_change": None,
+            }
+        )
+        result, _diag = parse_gm_signals(raw)
+        assert result.location_change is None
+
+    def test_missing_location_change_parses_to_none(self):
+        raw = _make_raw(
+            {
+                "scene_transition": {"type": "none"},
+                "npc_updates": [],
+                "suggested_actions": [],
+            }
+        )
+        result, _diag = parse_gm_signals(raw)
+        assert result.location_change is None
+
+
+# ---------------------------------------------------------------------------
+# LocationChange — malformed
+# ---------------------------------------------------------------------------
+
+
+class TestLocationChangeMalformed:
+    def test_string_instead_of_dict_ignored(self):
+        raw = _make_raw(
+            {
+                "scene_transition": {"type": "none"},
+                "npc_updates": [],
+                "suggested_actions": [],
+                "location_change": "harborside_supply",
+            }
+        )
+        result, _diag = parse_gm_signals(raw)
+        assert result.location_change is None
+
+    def test_missing_new_location_key_ignored(self):
+        raw = _make_raw(
+            {
+                "scene_transition": {"type": "none"},
+                "npc_updates": [],
+                "suggested_actions": [],
+                "location_change": {"reason": "went somewhere"},
+            }
+        )
+        result, _diag = parse_gm_signals(raw)
+        assert result.location_change is None
+
+    def test_integer_new_location_ignored(self):
+        raw = _make_raw(
+            {
+                "scene_transition": {"type": "none"},
+                "npc_updates": [],
+                "suggested_actions": [],
+                "location_change": {"new_location": 42},
+            }
+        )
+        result, _diag = parse_gm_signals(raw)
+        assert result.location_change is None
+
+    def test_malformed_location_change_does_not_affect_other_fields(self):
+        """Other GMSignals fields must parse correctly even if location_change is malformed."""
+        raw = _make_raw(
+            {
+                "scene_transition": {"type": "none"},
+                "npc_updates": [],
+                "suggested_actions": ["Do something"],
+                "location_change": "not-a-dict",
+            }
+        )
+        result, _diag = parse_gm_signals(raw)
+        assert result.location_change is None
+        assert result.suggested_actions == ["Do something"]
+        assert _diag["fallback_used"] is False
+
+
+# ---------------------------------------------------------------------------
+# TimeProgression — happy path
+# ---------------------------------------------------------------------------
+
+
+class TestTimeProgressionValid:
+    def test_all_eight_valid_values_parse(self):
+        valid_values = [
+            "dawn",
+            "morning",
+            "midday",
+            "afternoon",
+            "dusk",
+            "evening",
+            "night",
+            "late_night",
+        ]
+        for value in valid_values:
+            raw = _make_raw(
+                {
+                    "scene_transition": {"type": "none"},
+                    "npc_updates": [],
+                    "suggested_actions": [],
+                    "time_progression": {"new_time_of_day": value},
+                }
+            )
+            result, _diag = parse_gm_signals(raw)
+            assert result.time_progression is not None, f"Failed for value: {value}"
+            assert result.time_progression.new_time_of_day == value
+
+    def test_time_progression_with_reason(self):
+        raw = _make_raw(
+            {
+                "scene_transition": {"type": "none"},
+                "npc_updates": [],
+                "suggested_actions": [],
+                "time_progression": {"new_time_of_day": "evening", "reason": "Hours of travel"},
+            }
+        )
+        result, _diag = parse_gm_signals(raw)
+        assert result.time_progression is not None
+        assert result.time_progression.new_time_of_day == "evening"
+        assert result.time_progression.reason == "Hours of travel"
+
+    def test_null_time_progression_parses_to_none(self):
+        raw = _make_raw(
+            {
+                "scene_transition": {"type": "none"},
+                "npc_updates": [],
+                "suggested_actions": [],
+                "time_progression": None,
+            }
+        )
+        result, _diag = parse_gm_signals(raw)
+        assert result.time_progression is None
+
+    def test_missing_time_progression_parses_to_none(self):
+        raw = _make_raw(
+            {
+                "scene_transition": {"type": "none"},
+                "npc_updates": [],
+                "suggested_actions": [],
+            }
+        )
+        result, _diag = parse_gm_signals(raw)
+        assert result.time_progression is None
+
+
+# ---------------------------------------------------------------------------
+# TimeProgression — malformed
+# ---------------------------------------------------------------------------
+
+
+class TestTimeProgressionMalformed:
+    def test_invalid_time_value_ignored(self):
+        raw = _make_raw(
+            {
+                "scene_transition": {"type": "none"},
+                "npc_updates": [],
+                "suggested_actions": [],
+                "time_progression": {"new_time_of_day": "noon"},
+            }
+        )
+        result, _diag = parse_gm_signals(raw)
+        assert result.time_progression is None
+
+    def test_string_instead_of_dict_ignored(self):
+        raw = _make_raw(
+            {
+                "scene_transition": {"type": "none"},
+                "npc_updates": [],
+                "suggested_actions": [],
+                "time_progression": "morning",
+            }
+        )
+        result, _diag = parse_gm_signals(raw)
+        assert result.time_progression is None
+
+    def test_missing_new_time_of_day_key_ignored(self):
+        raw = _make_raw(
+            {
+                "scene_transition": {"type": "none"},
+                "npc_updates": [],
+                "suggested_actions": [],
+                "time_progression": {"reason": "time passed"},
+            }
+        )
+        result, _diag = parse_gm_signals(raw)
+        assert result.time_progression is None
+
+    def test_malformed_time_progression_does_not_affect_other_fields(self):
+        raw = _make_raw(
+            {
+                "scene_transition": {"type": "none"},
+                "npc_updates": [],
+                "suggested_actions": ["Do something"],
+                "time_progression": {"new_time_of_day": "high_noon"},
+            }
+        )
+        result, _diag = parse_gm_signals(raw)
+        assert result.time_progression is None
+        assert result.suggested_actions == ["Do something"]
+        assert _diag["fallback_used"] is False
+
+
+# ---------------------------------------------------------------------------
+# Combined — all five fields populated
+# ---------------------------------------------------------------------------
+
+
+class TestAllFieldsCombined:
+    def test_all_five_fields_populated(self):
+        raw = _make_raw(
+            {
+                "scene_transition": {"type": "none"},
+                "npc_updates": [
+                    {
+                        "event": "spawn",
+                        "npc_name": "Vara",
+                        "species": "Human",
+                        "appearance": "A woman with sun-darkened skin.",
+                        "role": "Shopkeeper",
+                        "motivation": "To make a living",
+                        "disposition": "neutral",
+                    }
+                ],
+                "location_change": {"new_location": "harborside_supply", "reason": "Entered shop"},
+                "time_progression": {"new_time_of_day": "midday"},
+                "suggested_actions": ["Ask about the diving equipment"],
+            }
+        )
+        result, diag = parse_gm_signals(raw)
+        assert diag["fallback_used"] is False
+        assert result.scene_transition.type == "none"
+        assert len(result.npc_updates) == 1
+        assert result.npc_updates[0].npc_name == "Vara"
+        assert result.location_change is not None
+        assert result.location_change.new_location == "harborside_supply"
+        assert result.time_progression is not None
+        assert result.time_progression.new_time_of_day == "midday"
+        assert result.suggested_actions == ["Ask about the diving equipment"]
+
+
+# ---------------------------------------------------------------------------
+# safe_default — new fields
+# ---------------------------------------------------------------------------
+
+
+class TestSafeDefaultNewFields:
+    def test_safe_default_location_change_is_none(self):
+        result = safe_default()
+        assert result.location_change is None
+
+    def test_safe_default_time_progression_is_none(self):
+        result = safe_default()
+        assert result.time_progression is None

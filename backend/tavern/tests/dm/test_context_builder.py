@@ -53,10 +53,11 @@ def _campaign_state(
     rolling_summary: str = "The party has just arrived in Phandalin.",
     scene_context: str = "You stand in the dusty main street of Phandalin.",
     world_state: dict | None = None,
+    current_scene_id: str = "phandalin",
+    time_of_day: str = "midday",
 ) -> CampaignState:
     ws = world_state or {
         "location": "Phandalin",
-        "time_of_day": "midday",
         "environment": "sunny",
         "npcs": ["Gundren Rockseeker — friendly"],
         "threats": [],
@@ -67,6 +68,8 @@ def _campaign_state(
         rolling_summary=rolling_summary,
         scene_context=scene_context,
         world_state=ws,
+        current_scene_id=current_scene_id,
+        time_of_day=time_of_day,
         turn_count=1,
     )
 
@@ -260,13 +263,15 @@ class TestBuildSnapshot:
         assert snapshot.scene.description == state.scene_context.strip()
 
     async def test_snapshot_loads_scene_world_state_fields(self, db_session: AsyncSession) -> None:
-        """Scene context fields are read from world_state JSONB."""
+        """Scene location from current_scene_id column (ADR-0019)."""
         campaign, state, _ = await _populate_basic(db_session)
         turn = TurnContext(player_action="I look around.", rules_result=None)
 
         snapshot = await build_snapshot(campaign.id, turn, db_session)
 
-        assert snapshot.scene.location == "Phandalin"
+        # location now reads from current_scene_id column (ADR-0019)
+        assert snapshot.scene.location == "phandalin"
+        # time_of_day now reads from time_of_day column (ADR-0019)
         assert snapshot.scene.time_of_day == "midday"
         assert snapshot.scene.environment == "sunny"
         assert "Gundren Rockseeker — friendly" in snapshot.scene.npcs
@@ -534,14 +539,14 @@ class TestBuildSnapshot:
         assert "Distant Guard" not in npc_names
 
     async def test_snapshot_includes_npc_in_current_scene(self, db_session: AsyncSession) -> None:
-        """NPC whose scene_location matches the current scene is included."""
+        """NPC whose scene_location matches current_scene_id is included (ADR-0019)."""
         campaign, _, _ = await _populate_basic(db_session)
-        # _populate_basic sets world_state location to "Phandalin"
+        # _populate_basic sets current_scene_id to "phandalin" (normalised)
         npc = _npc(
             campaign.id,
             "Local Merchant",
             origin="narrator_spawned",
-            scene_location="Phandalin",
+            scene_location="phandalin",
         )
         db_session.add(npc)
         await db_session.commit()
@@ -630,12 +635,21 @@ class TestSerializeSnapshot:
         content = messages[0]["content"]
         assert "Aldric" in content
 
-    def test_user_message_contains_location(self) -> None:
+    def test_user_message_contains_scene_identifier(self) -> None:
+        """Scene field uses 'Scene:' label (ADR-0019 §5)."""
         result = serialize_snapshot(self._minimal_snapshot())
         messages = result["messages"]
         assert isinstance(messages, list)
         content = messages[0]["content"]
-        assert "Phandalin" in content
+        assert "Scene: Phandalin" in content
+
+    def test_user_message_contains_time_field(self) -> None:
+        """Time field is always present in the scene block (ADR-0019 §5)."""
+        result = serialize_snapshot(self._minimal_snapshot())
+        messages = result["messages"]
+        assert isinstance(messages, list)
+        content = messages[0]["content"]
+        assert "Time: noon" in content
 
     def test_user_message_contains_rolling_summary(self) -> None:
         result = serialize_snapshot(self._minimal_snapshot())
@@ -670,10 +684,10 @@ class TestSerializeSnapshot:
         assert isinstance(messages, list)
         content = messages[0]["content"]
         char_pos = content.index("Aldric")
-        location_pos = content.index("Phandalin")
+        scene_pos = content.index("Scene: Phandalin")
         summary_pos = content.index("The party arrived")
         action_pos = content.index("I look around the town")
-        assert char_pos < location_pos < summary_pos < action_pos
+        assert char_pos < scene_pos < summary_pos < action_pos
 
     def test_no_markdown_in_user_message(self) -> None:
         """ADR-0002: Plain text output — no Markdown formatting in the prompt."""
@@ -718,3 +732,126 @@ class TestSerializeSnapshot:
         assert isinstance(messages, list)
         content = messages[0]["content"]
         assert "Rules Engine result" not in content
+
+    def test_scene_label_not_location_label(self) -> None:
+        """ADR-0019 §5: serialised scene block uses 'Scene:' not 'Location:'."""
+        result = serialize_snapshot(self._minimal_snapshot())
+        messages = result["messages"]
+        assert isinstance(messages, list)
+        content = messages[0]["content"]
+        assert "Scene:" in content
+        assert "Location:" not in content
+
+    def test_time_always_present_even_empty(self) -> None:
+        """ADR-0019 §5: Time field is always included, defaulting to 'morning'."""
+        snapshot = self._minimal_snapshot()
+        snapshot.scene.time_of_day = ""
+        result = serialize_snapshot(snapshot)
+        messages = result["messages"]
+        assert isinstance(messages, list)
+        content = messages[0]["content"]
+        assert "Time: morning" in content
+
+
+# ---------------------------------------------------------------------------
+# ADR-0019: current_scene_id and time_of_day columns in build_snapshot
+# ---------------------------------------------------------------------------
+
+
+class TestBuildSnapshotADR0019:
+    async def test_snapshot_location_reads_current_scene_id_column(
+        self, db_session: AsyncSession
+    ) -> None:
+        """scene.location comes from CampaignState.current_scene_id column (ADR-0019)."""
+        campaign = _campaign()
+        db_session.add(campaign)
+        await db_session.flush()
+        state = _campaign_state(
+            campaign.id,
+            current_scene_id="harborside_supply",
+            world_state={"location": "Old Tavern", "environment": ""},
+        )
+        db_session.add(state)
+        db_session.add(_character(campaign.id))
+        await db_session.commit()
+
+        turn = TurnContext(player_action="Look around.", rules_result=None)
+        snapshot = await build_snapshot(campaign.id, turn, db_session)
+
+        assert snapshot.scene.location == "harborside_supply"
+
+    async def test_snapshot_time_reads_time_of_day_column(self, db_session: AsyncSession) -> None:
+        """scene.time_of_day comes from CampaignState.time_of_day column (ADR-0019)."""
+        campaign = _campaign()
+        db_session.add(campaign)
+        await db_session.flush()
+        state = _campaign_state(
+            campaign.id,
+            time_of_day="dusk",
+            world_state={"location": "Town", "environment": ""},
+        )
+        db_session.add(state)
+        db_session.add(_character(campaign.id))
+        await db_session.commit()
+
+        turn = TurnContext(player_action="Look around.", rules_result=None)
+        snapshot = await build_snapshot(campaign.id, turn, db_session)
+
+        assert snapshot.scene.time_of_day == "dusk"
+
+    async def test_npc_query_uses_current_scene_id(self, db_session: AsyncSession) -> None:
+        """NPCs are scoped to current_scene_id, not world_state['location'] (ADR-0019)."""
+        campaign = _campaign()
+        db_session.add(campaign)
+        await db_session.flush()
+        state = _campaign_state(
+            campaign.id,
+            current_scene_id="harborside_supply",
+            world_state={"location": "Old Tavern", "environment": ""},
+        )
+        db_session.add(state)
+        db_session.add(_character(campaign.id))
+
+        # NPC at the new location
+        npc_at_shop = _npc(
+            campaign.id,
+            "Shopkeeper Vara",
+            origin="narrator_spawned",
+            scene_location="harborside_supply",
+        )
+        # NPC at the old location (world_state["location"])
+        npc_at_tavern = _npc(
+            campaign.id,
+            "Barkeep Korven",
+            origin="narrator_spawned",
+            scene_location="old_tavern",
+        )
+        db_session.add(npc_at_shop)
+        db_session.add(npc_at_tavern)
+        await db_session.commit()
+
+        turn = TurnContext(player_action="Look around.", rules_result=None)
+        snapshot = await build_snapshot(campaign.id, turn, db_session)
+
+        npc_names = [n["name"] for n in snapshot.npcs]
+        assert "Shopkeeper Vara" in npc_names
+        assert "Barkeep Korven" not in npc_names
+
+    async def test_serialised_scene_block_has_scene_label(self, db_session: AsyncSession) -> None:
+        """Serialised scene block uses 'Scene:' label (ADR-0019 §5)."""
+        campaign, _, _ = await _populate_basic(db_session)
+        turn = TurnContext(player_action="Look.", rules_result=None)
+        snapshot = await build_snapshot(campaign.id, turn, db_session)
+        serialized = serialize_snapshot(snapshot)
+        content = serialized["messages"][0]["content"]  # type: ignore[index]
+        assert "Scene:" in content
+        assert "Location:" not in content
+
+    async def test_serialised_scene_block_has_time_field(self, db_session: AsyncSession) -> None:
+        """Serialised scene block always has 'Time:' field (ADR-0019 §5)."""
+        campaign, _, _ = await _populate_basic(db_session)
+        turn = TurnContext(player_action="Look.", rules_result=None)
+        snapshot = await build_snapshot(campaign.id, turn, db_session)
+        serialized = serialize_snapshot(snapshot)
+        content = serialized["messages"][0]["content"]  # type: ignore[index]
+        assert "Time:" in content

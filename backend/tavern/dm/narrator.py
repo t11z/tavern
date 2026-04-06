@@ -92,9 +92,9 @@ def _estimate_cost(
 
 
 # GMSignals instruction appended to the system prompt for every narration
-# request (ADR-0012, ADR-0013).  The model MUST append the delimiter line and
-# JSON block after every narrative response so the turn pipeline can extract
-# structured signals without player-facing text being contaminated.
+# request (ADR-0012, ADR-0013, ADR-0019).  The model MUST append the delimiter
+# line and JSON block after every narrative response so the turn pipeline can
+# extract structured signals without player-facing text being contaminated.
 _GM_SIGNALS_INSTRUCTION = (
     "\n\nAfter your narrative response, you MUST always append a GMSignals block "
     "on a new line. The delimiter must appear on its own line with no leading or "
@@ -104,6 +104,7 @@ _GM_SIGNALS_INSTRUCTION = (
     f"{GM_SIGNALS_DELIMITER}\n"
     '{"scene_transition": {"type": "none", "combatants": [], '
     '"potential_surprised_characters": [], "reason": ""}, "npc_updates": [], '
+    '"location_change": null, "time_progression": null, '
     '"suggested_actions": ["Slip through the gap before the guards arrive", '
     '"Demand the harbormaster explain herself"]}\n\n'
     'Rules for scene_transition.type: must be exactly "none", "combat_start", or '
@@ -111,9 +112,59 @@ _GM_SIGNALS_INSTRUCTION = (
     'Use "combat_end" only when all hostile NPCs are defeated or fled. '
     '"npc_updates" must be a list (may be empty). Each entry needs "event" '
     '(spawn|status_change|disposition_change|location_change) and "npc_name". '
+    '"location_change" is an object with "new_location" (snake_case identifier) and '
+    'optional "reason", or null if the party has not changed location this turn. '
+    '"time_progression" is an object with "new_time_of_day" and optional "reason", '
+    "or null if time has not advanced this turn. "
     '"suggested_actions" must be a JSON array of 0–3 first-person action phrases '
     "(5–12 words each). Default to 2 suggestions. See earlier instructions for "
-    "full rules. Always include all three top-level keys."
+    "full rules. Always include all five top-level keys."
+)
+
+# Location change behavioral instructions (ADR-0019).
+_LOCATION_CHANGE_INSTRUCTIONS = (
+    "\n\nLOCATION CHANGE RULES:\n"
+    "When the party moves to a new location — entering a building, leaving a town,\n"
+    "descending into a dungeon, traveling to a new area — emit a location_change in\n"
+    "your GMSignals block.\n"
+    "\n"
+    "The new_location value must be a snake_case identifier: lowercase letters, digits,\n"
+    "and underscores only. Use the same identifier consistently for the same physical\n"
+    "location. Examples: harborside_supply, the_drowned_anchor, dungeon_level_2.\n"
+    "\n"
+    "Emit location_change only when the party's physical location changes. Do not emit\n"
+    "it for movement within the same location (walking across a tavern, moving to a\n"
+    "different table).\n"
+    "\n"
+    "If the party returns to a previously visited location, reuse the same identifier.\n"
+    "Your current location is shown in the Scene: field of your context — reference it\n"
+    "if you are unsure what identifier to use for the current location.\n"
+    "\n"
+    "When location_change is null, the party's location is unchanged."
+)
+
+# Time progression behavioral instructions (ADR-0019).
+_TIME_PROGRESSION_INSTRUCTIONS = (
+    "\n\nTIME PROGRESSION RULES:\n"
+    "When significant time passes in the narrative — hours of travel, waiting until\n"
+    "nightfall, the passage of an afternoon — emit a time_progression in your GMSignals\n"
+    "block.\n"
+    "\n"
+    "The new_time_of_day value must be one of exactly eight values:\n"
+    "  dawn, morning, midday, afternoon, dusk, evening, night, late_night\n"
+    "\n"
+    "Your current time of day is shown in the Time: field of your context. Advance time\n"
+    "consistently: if it is currently morning and the party travels for several hours,\n"
+    "the new time should be midday or afternoon, not night.\n"
+    "\n"
+    "Do not emit time_progression on every turn. Most turns occur within a single time\n"
+    "period. Emit it only when the narrative describes meaningful time passing.\n"
+    "\n"
+    "Do not emit time_progression for Short Rests or Long Rests — those are mechanical\n"
+    "events handled by the Rules Engine. Only emit it for narrative time passage outside\n"
+    "of rest mechanics.\n"
+    "\n"
+    "When time_progression is null, the time of day is unchanged."
 )
 
 # NPC lifecycle behavioral instructions appended to the system prompt (ADR-0013).
@@ -303,8 +354,14 @@ class AnthropicProvider:
         self._client = anthropic.AsyncAnthropic(api_key=api_key)
 
     def _build_system_with_signals(self, system_text: str) -> str:
-        """Append the GMSignals and NPC consistency instructions to the system prompt."""
-        return system_text + _GM_SIGNALS_INSTRUCTION + _NPC_CONSISTENCY_INSTRUCTION
+        """Append the GMSignals, NPC consistency, and exploration state instructions."""
+        return (
+            system_text
+            + _GM_SIGNALS_INSTRUCTION
+            + _NPC_CONSISTENCY_INSTRUCTION
+            + _LOCATION_CHANGE_INSTRUCTIONS
+            + _TIME_PROGRESSION_INSTRUCTIONS
+        )
 
     async def narrate(
         self,
